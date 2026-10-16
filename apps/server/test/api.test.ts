@@ -103,6 +103,18 @@ describe("REST API", () => {
     expect((await call("user", "POST", `/api/notices/${id}/ack`)).body.state).toBe("acked");
   });
 
+  it("returns everything needed to connect tools", async () => {
+    const { body } = await call("user", "GET", "/api/connect-info");
+    expect(body.mcp_url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mcp$/);
+    expect(body.account).toMatchObject({ email: "alice@example.com", admin: false });
+    expect(body.projects.map((p: { slug: string }) => p.slug)).toEqual(["merchant-portal", "order-service"]);
+    expect(body.projects[1].components).toEqual(["backend", "frontend"]);
+    expect(body.catalog.tools).toHaveLength(23);
+    expect(body.catalog.prompts.map((p: { name: string }) => p.name)).toContain("start-coding");
+    expect(body.catalog.instructions).toMatch(/search_knowledge first/);
+    expect(body.has_connected).toBe(false);
+  });
+
   it("returns JSON 404 for unknown API routes and audits API calls", async () => {
     const res = await call("user", "GET", "/api/nope");
     expect(res).toEqual({ status: 404, body: { error: "not found" } });

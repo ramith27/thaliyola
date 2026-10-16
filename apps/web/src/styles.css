@@ -221,3 +221,20 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent-soft
 .choice { display: flex; gap: 0.6rem; align-items: flex-start; padding: 0.7rem 0.8rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); cursor: pointer; max-width: 560px; }
 .choice > span { display: flex; flex-direction: column; }
 .choice input { margin-top: 0.25rem; }
+
+/* Connect page */
+.connect .step { border: 1px solid var(--border); background: var(--panel); border-radius: var(--radius); padding: 0.4rem 1.2rem 1rem; margin: 1rem 0; }
+.connect .step h2 { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.9rem; }
+.step-no { display: inline-grid; place-items: center; width: 1.6rem; height: 1.6rem; border-radius: 50%; background: var(--accent); color: var(--panel); font-size: 0.85rem; }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.4rem 1.2rem; margin: 0.6rem 0; }
+.facts dt { color: var(--muted); font-size: 0.9rem; }
+.facts dd { margin: 0; overflow-wrap: anywhere; }
+.copy-block { position: relative; margin: 0.5rem 0; }
+.copy-block .code-block { padding-right: 4.5rem; white-space: pre; overflow-x: auto; user-select: text; }
+.copy-btn { position: absolute; top: 0.4rem; right: 0.4rem; }
+.copy-block .copy-label + .code-block + .copy-btn { top: 1.75rem; }
+.copy-label { font-size: 0.82rem; color: var(--muted); margin-bottom: 0.2rem; }
+.get-started { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; padding: 0.9rem 1rem; margin-bottom: 1rem;
+  border: 1px solid var(--accent); border-radius: var(--radius); background: var(--accent-soft); }
+.get-started p { margin: 0.2rem 0 0; }
+@media (max-width: 860px) { .facts { grid-template-columns: 1fr; } .facts dt { margin-top: 0.4rem; } }

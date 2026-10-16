@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Web UI: Connect page with the user's access and roles, inline token creation, and ready-to-copy setup for Claude Code (global and per repository), claude.ai and other MCP clients, plus the live list of prompts and tools; getting-started banner for users who haven't connected yet
+- Support for running behind a reverse proxy and an authentication gateway (nginx config, public-origin aware same-origin checks)
+
 - Search fuses normalized keyword and semantic scores instead of ranks, so the current-project boost can't lift a weak match over a much stronger one (found by the Docker CI job)
 - Fix: `docker compose up` no longer requires a Cloudflare tunnel token when the tunnel profile is off
 

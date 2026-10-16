@@ -1,4 +1,5 @@
 import type { Folder, Me, Notice as NoticeT, ScopeInfo, SearchHit } from "../api";
+import { GetStartedBanner } from "./connect";
 import { NewProjectForm } from "./settings";
 import { api } from "../api";
 import { ErrorBox, formatDate, itemHref, Loading, Notice, ScopeBadge, Snippet, StatusBadge, TypeBadge } from "../components/ui";
@@ -13,6 +14,7 @@ export function HomePage({ scopes, me }: { scopes: ScopeInfo[]; me: Me }) {
   );
   return (
     <div className="page">
+      <GetStartedBanner />
       <h1>Team knowledge</h1>
       <p className="lead">
         Systems, metrics, runbooks, project designs and shared library items, plus what the team learned from past investigations.

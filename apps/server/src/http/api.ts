@@ -18,6 +18,7 @@ import { addSourceLinkTo, LINK_KINDS, linkEntries, promoteFinding, shareToLibrar
 import { ARTICLE_TEMPLATES, templateFor } from "../core/templates.js";
 import type { Embedder } from "../core/embeddings.js";
 import type { Db } from "../db/pool.js";
+import { mcpCatalog } from "../mcp/catalog.js";
 
 const ARTICLE_TYPES = Object.keys(ARTICLE_TEMPLATES) as [string, ...string[]];
 const FINDING_TYPES = ["incident", "rca", "known_issue", "data_gotcha", "query_recipe"] as const;
@@ -90,6 +91,43 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
       must_change_password: !!ctx.actor.mustChangePassword,
       auth_mode: settings.authMode,
     })),
+  );
+
+  // Everything a newly signed-in person needs to connect their tools.
+  router.get(
+    "/connect-info",
+    handle("connect_info", async (ctx, req) => {
+      const origin = settings.publicUrl ?? `${req.protocol}://${req.header("host")}`;
+      const readable = await readableScopes(ctx);
+      const memberships = await ctx.db.query(
+        `SELECT s.slug, s.name, s.kind, m.role FROM scope_members m JOIN scopes s ON s.id = m.scope_id
+          WHERE m.user_id = $1 ORDER BY s.kind, s.name`,
+        [ctx.actor.id],
+      );
+      const projects = await ctx.db.query(
+        `SELECT s.slug, s.name, s.visibility,
+                coalesce((SELECT json_agg(c.slug ORDER BY c.slug) FROM components c WHERE c.scope_id = s.id), '[]') AS components
+           FROM scopes s WHERE s.kind = 'project' AND s.status = 'active' AND ($1::uuid[] IS NULL OR s.id = ANY($1))
+          ORDER BY s.name`,
+        [readable],
+      );
+      const tokens = await ctx.db.query<{ n: number }>("SELECT count(*)::int AS n FROM api_tokens WHERE user_id = $1 AND revoked_at IS NULL", [ctx.actor.id]);
+      const connections = await ctx.db.query<{ n: number }>(
+        "SELECT count(DISTINCT client_id)::int AS n FROM oauth_tokens WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()",
+        [ctx.actor.id],
+      );
+      return {
+        mcp_url: `${origin}/mcp`,
+        origin,
+        auth_mode: settings.authMode,
+        oauth_enabled: settings.authMode === "local" && !!settings.publicUrl,
+        account: { email: ctx.actor.email, admin: isAdmin(ctx), kind: ctx.actor.kind },
+        memberships: memberships.rows,
+        projects: projects.rows,
+        has_connected: tokens.rows[0]!.n > 0 || connections.rows[0]!.n > 0,
+        catalog: await mcpCatalog(ctx),
+      };
+    }),
   );
 
   // ---- Reading -------------------------------------------------------------

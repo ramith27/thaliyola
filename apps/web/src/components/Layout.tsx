@@ -37,6 +37,9 @@ export function Layout({ me, scopes, route, children }: { me: Me; scopes: ScopeI
           <input type="search" placeholder="Search knowledge…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" />
         </form>
         <nav className="top-links">
+          <a href={href("/connect")} className={route.path[0] === "connect" ? "active" : ""}>
+            Connect
+          </a>
           <a href={href("/review")} className={route.path[0] === "review" ? "active" : ""}>
             Review{pending.data?.revisions.length ? <span className="count">{pending.data.revisions.length}</span> : null}
           </a>

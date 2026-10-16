@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, ApiError, authApi, getToken, setToken, type Me, type ScopeInfo } from "./api";
 import { AccountPage, ForcedPasswordChange, LoginPage, UsersPage } from "./pages/account";
 import { ScopeSettingsPage } from "./pages/settings";
+import { ConnectPage } from "./pages/connect";
 import { Layout } from "./components/Layout";
 import { ErrorBox, Loading } from "./components/ui";
 import { HomePage, ProjectPage, ScopePage, SearchPage } from "./pages/browse";
@@ -104,6 +105,9 @@ export function App() {
         ) : (
           <NewArticlePage route={route} scopes={boot.scopes} articleTypes={boot.articleTypes} />
         );
+      break;
+    case "connect":
+      page = <ConnectPage />;
       break;
     case "account":
       page = <AccountPage me={boot.me} />;
