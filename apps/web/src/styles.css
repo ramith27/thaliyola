@@ -215,3 +215,9 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent-soft
 @media (min-width: 861px) {
   .body { background: linear-gradient(to right, var(--panel) 259px, var(--border) 259px, var(--border) 260px, transparent 260px); }
 }
+
+/* Settings */
+.choices { border: 0; padding: 0; margin: 0 0 0.8rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.choice { display: flex; gap: 0.6rem; align-items: flex-start; padding: 0.7rem 0.8rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); cursor: pointer; max-width: 560px; }
+.choice > span { display: flex; flex-direction: column; }
+.choice input { margin-top: 0.25rem; }

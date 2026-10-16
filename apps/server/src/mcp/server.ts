@@ -185,7 +185,7 @@ export function buildMcpServer(ctx: RequestContext): McpServer {
       inputSchema: { include_archived: z.boolean().optional() },
       annotations: { readOnlyHint: true },
     },
-    (args) => run("list_projects", null, async () => ({ projects: await listProjects(ctx.db, args.include_archived) })),
+    (args) => run("list_projects", null, async () => ({ projects: await listProjects(ctx, args.include_archived) })),
   );
 
   server.registerTool(

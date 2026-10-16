@@ -1,7 +1,7 @@
 import { createComponent, createScope } from "./bootstrap.js";
 import { ValidationError, type RequestContext } from "./context.js";
 import { assertAdmin } from "./permissions.js";
-import { getScopeBySlug } from "./scopes.js";
+import { getReadableScope, getScopeBySlug } from "./scopes.js";
 
 const SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
@@ -50,11 +50,23 @@ export async function adminSetMember(ctx: RequestContext, scopeSlug: string, ema
 }
 
 export async function listMembers(ctx: RequestContext, scopeSlug: string) {
-  const scope = await getScopeBySlug(ctx.db, scopeSlug);
+  const scope = await getReadableScope(ctx, scopeSlug);
   const { rows } = await ctx.db.query(
     `SELECT coalesce(u.email, u.subject) AS email, m.role FROM scope_members m JOIN users u ON u.id = m.user_id
       WHERE m.scope_id = $1 ORDER BY m.role, email`,
     [scope.id],
   );
   return { scope: scope.slug, members: rows };
+}
+
+export async function adminUpdateScope(ctx: RequestContext, slug: string, patch: { visibility?: "team" | "members"; name?: string; description?: string }) {
+  assertAdmin(ctx);
+  const scope = await getScopeBySlug(ctx.db, slug);
+  if (patch.visibility === "members" && scope.kind !== "project") throw new ValidationError("only projects can be members-only");
+  const { rows } = await ctx.db.query(
+    `UPDATE scopes SET visibility = coalesce($2, visibility), name = coalesce($3, name), description = coalesce($4, description)
+      WHERE id = $1 RETURNING kind, slug, name, description, visibility`,
+    [scope.id, patch.visibility ?? null, patch.name?.trim() || null, patch.description ?? null],
+  );
+  return rows[0];
 }

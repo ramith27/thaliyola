@@ -4,8 +4,8 @@ import { audit } from "./audit.js";
 import { reindexArticle, reindexFinding, replaceSection } from "./chunking.js";
 import { ConflictError, NotFoundError, ValidationError, type RequestContext } from "./context.js";
 import { getArticle, getFinding } from "./items.js";
-import { assertCanApprove } from "./permissions.js";
-import { getScopeBySlug } from "./scopes.js";
+import { assertCanApprove, assertCanRead, canApprove, readableScopes } from "./permissions.js";
+import { getReadableScope } from "./scopes.js";
 import { findItem } from "./writes.js";
 
 interface RevisionRow {
@@ -22,7 +22,8 @@ interface RevisionRow {
 }
 
 export async function listReviewQueue(ctx: RequestContext, opts: { scope?: string; state?: string; mine?: boolean; limit?: number } = {}) {
-  const scopeId = opts.scope ? (await getScopeBySlug(ctx.db, opts.scope)).id : null;
+  const scopeId = opts.scope ? (await getReadableScope(ctx, opts.scope)).id : null;
+  const readable = await readableScopes(ctx);
   const { rows } = await ctx.db.query(
     `SELECT r.id, r.op, r.state, r.summary, r.redactions, r.base_version, r.created_at, r.decided_at, r.reason,
             r.target_kind, r.target_id, coalesce(a.title, f.title) AS target_title, coalesce(a.type, f.type) AS target_type,
@@ -34,9 +35,10 @@ export async function listReviewQueue(ctx: RequestContext, opts: { scope?: strin
        LEFT JOIN articles a ON r.target_kind = 'article' AND a.id = r.target_id
        LEFT JOIN findings f ON r.target_kind = 'finding' AND f.id = r.target_id
       WHERE r.state = $1 AND ($2::uuid IS NULL OR r.scope_id = $2) AND (NOT $3 OR r.author_id = $4)
+        AND ($6::uuid[] IS NULL OR (r.scope_id = ANY($6) AND (r.op = 'share' OR coalesce(a.scope_id, f.scope_id) = ANY($6))))
       ORDER BY r.created_at ${opts.state && opts.state !== "pending" ? "DESC" : "ASC"}
       LIMIT $5`,
-    [opts.state ?? "pending", scopeId, !!opts.mine, ctx.actor.id, Math.min(opts.limit ?? 50, 200)],
+    [opts.state ?? "pending", scopeId, !!opts.mine, ctx.actor.id, Math.min(opts.limit ?? 50, 200), readable],
   );
   return rows;
 }
@@ -44,7 +46,11 @@ export async function listReviewQueue(ctx: RequestContext, opts: { scope?: strin
 /** A revision with the item's current state and, for article edits, the body it would produce. */
 export async function getRevision(ctx: RequestContext, id: string) {
   const r = await loadRevision(ctx.db, id);
-  const current = r.target_kind === "article" ? await getArticle(ctx, r.target_id) : await getFinding(ctx, r.target_id);
+  // Library owners review what a members-only project proposes to publish, so they may see that item.
+  const skipReadCheck = r.op === "share" && (await canApprove(ctx, r.scope_id));
+  if (!skipReadCheck) await assertCanRead(ctx, r.scope_id, `revision ${id}`);
+  const current =
+    r.target_kind === "article" ? await getArticle(ctx, r.target_id, undefined, { skipReadCheck }) : await getFinding(ctx, r.target_id, { skipReadCheck });
   let proposed: unknown = r.payload;
   if (r.target_kind === "article" && (r.op === "update" || r.op === "promote")) {
     const body = (current as { body_md: string }).body_md;

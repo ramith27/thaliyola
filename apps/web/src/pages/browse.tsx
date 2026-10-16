@@ -1,11 +1,12 @@
-import type { Folder, Notice as NoticeT, ScopeInfo, SearchHit } from "../api";
+import type { Folder, Me, Notice as NoticeT, ScopeInfo, SearchHit } from "../api";
+import { NewProjectForm } from "./settings";
 import { api } from "../api";
 import { ErrorBox, formatDate, itemHref, Loading, Notice, ScopeBadge, Snippet, StatusBadge, TypeBadge } from "../components/ui";
 import { useApi } from "../hooks";
 import { href, type Route } from "../router";
 import { useState } from "react";
 
-export function HomePage({ scopes }: { scopes: ScopeInfo[] }) {
+export function HomePage({ scopes, me }: { scopes: ScopeInfo[]; me: Me }) {
   const projects = scopes.filter((s) => s.kind === "project");
   const mine = useApi<{ revisions: { id: string; summary: string; state: string; target_title: string; scope: string }[] }>(
     "/revisions?mine=true&state=pending&limit=10",
@@ -31,14 +32,21 @@ export function HomePage({ scopes }: { scopes: ScopeInfo[] }) {
         <div className="cards">
           {projects.map((p) => (
             <a key={p.slug} className="card" href={href(`/project/${p.slug}`)}>
-              <h3>{p.name}</h3>
+              <h3>
+                {p.name} {p.visibility === "members" && <span className="badge">members only</span>}
+              </h3>
               <p className="muted">{p.description}</p>
               <p className="small">{p.components.map((c) => c.slug).join(" · ")}</p>
             </a>
           ))}
         </div>
       ) : (
-        <p className="muted">No projects yet. Admins create them through the API.</p>
+        <p className="muted">No projects yet.</p>
+      )}
+      {me.admin && (
+        <div className="actions">
+          <NewProjectForm />
+        </div>
       )}
       <NeedsAttention />
       {mine.data && mine.data.revisions.length > 0 && (
@@ -148,7 +156,7 @@ function HitList({ title, hits }: { title: string; hits: SearchHit[] }) {
   );
 }
 
-export function ScopePage({ slug, scopes }: { slug: string; scopes: ScopeInfo[] }) {
+export function ScopePage({ slug, scopes, me }: { slug: string; scopes: ScopeInfo[]; me: Me }) {
   const scope = scopes.find((s) => s.slug === slug);
   const { data, error } = useApi<{ tree: Folder }>(`/scopes/${encodeURIComponent(slug)}/tree`);
   return (
@@ -162,6 +170,11 @@ export function ScopePage({ slug, scopes }: { slug: string; scopes: ScopeInfo[] 
         <a className="btn" href={href("/new/finding", { scope: slug })}>
           New finding
         </a>
+        {me.admin && (
+          <a className="btn" href={href(`/scope/${slug}/settings`)}>
+            Settings
+          </a>
+        )}
       </div>
       <ErrorBox error={error} />
       {data ? <TreeTable folder={data.tree} path="" /> : !error && <Loading />}
@@ -204,7 +217,7 @@ interface ProjectContext {
   open_known_issues: { id: string; title: string; status: string; updated_at: string }[];
 }
 
-export function ProjectPage({ slug, route }: { slug: string; route: Route }) {
+export function ProjectPage({ slug, route, me }: { slug: string; route: Route; me: Me }) {
   const component = route.query.get("component") ?? undefined;
   const path = `/projects/${encodeURIComponent(slug)}/context${component ? `?component=${encodeURIComponent(component)}` : ""}`;
   const { data, error, reload } = useApi<ProjectContext>(path);
@@ -272,6 +285,11 @@ export function ProjectPage({ slug, route }: { slug: string; route: Route }) {
         <a className="btn" href={href("/new/finding", { scope: slug })}>
           New finding
         </a>
+        {me.admin && (
+          <a className="btn" href={href(`/scope/${slug}/settings`)}>
+            Settings
+          </a>
+        )}
       </div>
 
       {data.contracts && (

@@ -1,7 +1,7 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
 import type { Settings } from "../config.js";
-import { adminAddComponent, adminCreateProject, adminSetMember, listMembers } from "../core/admin.js";
+import { adminAddComponent, adminCreateProject, adminSetMember, adminUpdateScope, listMembers } from "../core/admin.js";
 import { ASSET_MIME_TYPES, deleteAsset, getAsset, uploadAsset } from "../core/assets.js";
 import { audit } from "../core/audit.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError, type Actor, type RequestContext } from "../core/context.js";
@@ -10,7 +10,7 @@ import { needsAttention } from "../core/freshness.js";
 import { listSuggestions } from "../core/suggestions.js";
 import { browseKb, getArticle, getFinding } from "../core/items.js";
 import { ackNotice, listImpactNotices } from "../core/notices.js";
-import { isAdmin } from "../core/permissions.js";
+import { isAdmin, readableScopes } from "../core/permissions.js";
 import { getProjectContext } from "../core/projects.js";
 import { approveRevision, getRevision, listReviewQueue, rejectRevision } from "../core/review.js";
 import { searchKnowledge } from "../core/search.js";
@@ -97,12 +97,14 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
   router.get(
     "/scopes",
     handle("list_scopes", async (ctx) => {
+      const readable = await readableScopes(ctx);
       const { rows } = await ctx.db.query(
-        `SELECT s.kind, s.slug, s.name, s.description, s.status,
+        `SELECT s.kind, s.slug, s.name, s.description, s.status, s.visibility,
                 coalesce((SELECT json_agg(json_build_object('slug', c.slug, 'kind', c.kind, 'repo_url', c.repo_url) ORDER BY c.slug)
                             FROM components c WHERE c.scope_id = s.id), '[]') AS components
-           FROM scopes s WHERE s.status = 'active'
+           FROM scopes s WHERE s.status = 'active' AND ($1::uuid[] IS NULL OR s.id = ANY($1))
           ORDER BY CASE s.kind WHEN 'team' THEN 0 WHEN 'library' THEN 1 ELSE 2 END, s.name`,
+        [readable],
       );
       return { scopes: rows, article_types: ARTICLE_TYPES, finding_types: FINDING_TYPES };
     }),
@@ -351,6 +353,16 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
         z
           .object({ slug: z.string(), kind: z.enum(["backend", "frontend", "mobile", "data", "infra", "other"]), repo_url: z.string().url().optional() })
           .parse(req.body),
+      ),
+    ),
+  );
+  router.patch(
+    "/scopes/:slug",
+    handle("admin_update_scope", (ctx, req) =>
+      adminUpdateScope(
+        ctx,
+        String(req.params.slug),
+        z.object({ visibility: z.enum(["team", "members"]).optional(), name: z.string().max(200).optional(), description: z.string().max(2000).optional() }).parse(req.body),
       ),
     ),
   );

@@ -1,4 +1,5 @@
 import { NotFoundError, ValidationError, type RequestContext } from "./context.js";
+import { assertCanRead } from "./permissions.js";
 import { getComponent, resolveProject } from "./scopes.js";
 
 /** Open upstream changes for a project, or for one of its components (plus project-wide ones). */
@@ -27,6 +28,12 @@ export async function listImpactNotices(ctx: RequestContext, opts: { project?: s
 }
 
 export async function ackNotice(ctx: RequestContext, id: string) {
+  const owner = await ctx.db.query<{ scope_id: string }>(
+    "SELECT coalesce(n.scope_id, c.scope_id) AS scope_id FROM impact_notices n LEFT JOIN components c ON c.id = n.component_id WHERE n.id = $1",
+    [id],
+  );
+  if (!owner.rows[0]) throw new NotFoundError(`impact notice ${id}`);
+  await assertCanRead(ctx, owner.rows[0].scope_id, `impact notice ${id}`);
   const { rows } = await ctx.db.query(
     `UPDATE impact_notices SET state = 'acked', acked_by = $2, acked_at = now()
       WHERE id = $1 RETURNING id, state, acked_at`,

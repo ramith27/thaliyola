@@ -1,6 +1,7 @@
 import type { RequestContext } from "./context.js";
 import { ValidationError } from "./context.js";
 import { toPgVector } from "./embeddings.js";
+import { readableScopes } from "./permissions.js";
 import { resolveScopeFilter } from "./scopes.js";
 
 export interface SearchInput {
@@ -70,6 +71,8 @@ export async function searchKnowledge(ctx: RequestContext, input: SearchInput): 
     }
     where.push(`(c.scope_id = ANY(${scopeIds}::uuid[]) OR ${usesLinked})`);
   }
+  const readable = await readableScopes(ctx);
+  if (readable !== null) where.push(`c.scope_id = ANY(${p(readable)}::uuid[])`);
   where.push(`coalesce(a.status, f.status) = ANY(${p(input.statuses?.length ? input.statuses : DEFAULT_STATUSES)}::text[])`);
   if (input.types?.length) where.push(`coalesce(a.type, f.type) = ANY(${p(input.types)}::text[])`);
   if (input.tags?.length) where.push(`coalesce(a.tags, f.tags) && ${p(input.tags)}::text[]`);

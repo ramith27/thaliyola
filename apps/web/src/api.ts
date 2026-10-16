@@ -80,6 +80,7 @@ export interface ScopeInfo {
   slug: string;
   name: string;
   description: string;
+  visibility: "team" | "members";
   components: { slug: string; kind: string; repo_url: string | null }[];
 }
 

@@ -2,10 +2,10 @@ import { withTx, type Queryable } from "../db/pool.js";
 import { addSourceLink, insertArticle, insertFinding, relate } from "./bootstrap.js";
 import { ConflictError, NotFoundError, ValidationError, type RequestContext } from "./context.js";
 import { getArticle, getFinding } from "./items.js";
-import { assertCanPropose } from "./permissions.js";
+import { assertCanPropose, assertCanRead } from "./permissions.js";
 import { onlyRedacted, redactFields, type Redaction } from "./redaction.js";
 import { toPgVector } from "./embeddings.js";
-import { getComponent, getScopeBySlug, resolveProject, type Scope } from "./scopes.js";
+import { getComponent, getReadableScope, getScopeBySlug, resolveProject, type Scope } from "./scopes.js";
 import { linkEntities, normalizeTags, type EntityRef } from "./tags.js";
 import { missingSections } from "./templates.js";
 
@@ -48,9 +48,16 @@ export async function findItem(db: Queryable, id: string, lock = false): Promise
   throw new NotFoundError(`article or finding ${id}`);
 }
 
+/** An item the caller may read; unreadable items look missing. */
+export async function findItemFor(ctx: RequestContext, id: string): Promise<ItemRow> {
+  const item = await findItem(ctx.db, id);
+  await assertCanRead(ctx, item.scope_id, `article or finding ${id}`);
+  return item;
+}
+
 /** Where a new item goes: an explicit scope slug, else the current project. */
 async function targetScope(ctx: RequestContext, scope?: string, project?: string): Promise<Scope> {
-  if (scope) return getScopeBySlug(ctx.db, scope);
+  if (scope) return getReadableScope(ctx, scope);
   const p = await resolveProject(ctx, project);
   if (!p) throw new ValidationError("pass `scope` ('team', 'library' or a project slug) or set the X-Cairn-Project header");
   return p;
@@ -223,7 +230,7 @@ export async function proposeFinding(ctx: RequestContext, input: ProposeFindingI
   checkLength("title", fields.title, LIMITS.title);
   for (const f of ["symptoms", "root_cause", "fix"] as const) checkLength(f, fields[f], LIMITS.field);
   const components = await componentIds(ctx.db, scope, input.components);
-  for (const id of input.related_ids ?? []) await findItem(ctx.db, id);
+  for (const id of input.related_ids ?? []) await findItemFor(ctx, id);
 
   if (!input.force_new) {
     const duplicates = await findDuplicateFindings(
@@ -292,7 +299,7 @@ export interface UpdateFindingInput {
 }
 
 export async function updateFinding(ctx: RequestContext, input: UpdateFindingInput) {
-  const item = await findItem(ctx.db, input.id);
+  const item = await findItemFor(ctx, input.id);
   if (item.kind !== "finding") throw new ValidationError(`${input.id} is an article; use propose_article_edit`);
   await assertCanPropose(ctx, item.scope_id);
   assertEditable(item);
@@ -351,7 +358,7 @@ export async function createArticle(ctx: RequestContext, input: CreateArticleInp
   checkLength("body_md", fields.body_md, LIMITS.body);
   const path = fields.path.split("/").map((p) => p.trim()).filter(Boolean).join("/");
   const components = await componentIds(ctx.db, scope, input.components);
-  for (const id of input.uses_ids ?? []) await findItem(ctx.db, id);
+  for (const id of input.uses_ids ?? []) await findItemFor(ctx, id);
 
   return withTx(ctx.db, async (db) => {
     const id = await insertArticle(db, {
@@ -407,7 +414,7 @@ export interface ArticleEditInput {
 }
 
 export async function proposeArticleEdit(ctx: RequestContext, input: ArticleEditInput) {
-  const item = await findItem(ctx.db, input.id);
+  const item = await findItemFor(ctx, input.id);
   if (item.kind !== "article") throw new ValidationError(`${input.id} is a finding; use update_finding`);
   await assertCanPropose(ctx, item.scope_id);
   assertEditable(item);
@@ -438,8 +445,8 @@ export async function proposeArticleEdit(ctx: RequestContext, input: ArticleEdit
 }
 
 export async function promoteFinding(ctx: RequestContext, input: { finding_id: string; article_id: string; version: number; section?: string }) {
-  const finding = await findItem(ctx.db, input.finding_id);
-  const article = await findItem(ctx.db, input.article_id);
+  const finding = await findItemFor(ctx, input.finding_id);
+  const article = await findItemFor(ctx, input.article_id);
   if (finding.kind !== "finding" || article.kind !== "article") throw new ValidationError("promote a finding into an article");
   if (finding.status !== "published" && finding.status !== "possibly_stale") throw new ValidationError("only published findings can be promoted");
   await assertCanPropose(ctx, article.scope_id);
@@ -466,7 +473,7 @@ export async function promoteFinding(ctx: RequestContext, input: { finding_id: s
 
 /** Evidence and design links (Figma frame, PR, Sentry issue) are metadata and apply directly. */
 export async function addSourceLinkTo(ctx: RequestContext, id: string, link: SourceLinkInput) {
-  const item = await findItem(ctx.db, id);
+  const item = await findItemFor(ctx, id);
   await assertCanPropose(ctx, item.scope_id);
   if (!/^https?:\/\//.test(link.url)) throw new ValidationError("links must be http(s)");
   await addLinks(ctx.db, { kind: item.kind, id: item.id }, [link]);
@@ -482,7 +489,7 @@ export async function addSourceLinkTo(ctx: RequestContext, id: string, link: Sou
  * project starts `uses`-linking the shared copy (see review.ts).
  */
 export async function shareToLibrary(ctx: RequestContext, input: { id: string; summary: string; path?: string }) {
-  const item = await findItem(ctx.db, input.id);
+  const item = await findItemFor(ctx, input.id);
   const library = await getScopeBySlug(ctx.db, "library");
   if (item.scope_id === library.id) throw new ValidationError("this item is already in the library");
   if (item.status !== "published" && item.status !== "possibly_stale") throw new ValidationError("only published items can be shared");
@@ -518,7 +525,7 @@ export async function shareToLibrary(ctx: RequestContext, input: { id: string; s
 // Verification and links
 
 export async function verifyEntry(ctx: RequestContext, input: { id: string; still_valid: boolean; note?: string }) {
-  const item = await findItem(ctx.db, input.id);
+  const item = await findItemFor(ctx, input.id);
   await assertCanPropose(ctx, item.scope_id);
   if (item.status !== "published" && item.status !== "possibly_stale") {
     throw new ValidationError(`only published items can be verified (this one is ${item.status})`);
@@ -551,19 +558,20 @@ export async function verifyEntry(ctx: RequestContext, input: { id: string; stil
 type Ref = { kind: "article" | "finding" | "scope" | "component"; id: string; scopeId: string };
 
 /** "<uuid>" (article or finding), "scope:<slug>", or "component:<project>/<component>". */
-async function resolveRef(db: Queryable, ref: string): Promise<Ref> {
+async function resolveRef(ctx: RequestContext, ref: string): Promise<Ref> {
+  const db = ctx.db;
   if (ref.startsWith("scope:")) {
-    const s = await getScopeBySlug(db, ref.slice(6));
+    const s = await getReadableScope(ctx, ref.slice(6));
     return { kind: "scope", id: s.id, scopeId: s.id };
   }
   if (ref.startsWith("component:")) {
     const [project, component] = ref.slice(10).split("/");
     if (!project || !component) throw new ValidationError("component refs look like component:<project>/<component>");
-    const s = await getScopeBySlug(db, project);
+    const s = await getReadableScope(ctx, project);
     const c = await getComponent(db, s.id, component);
     return { kind: "component", id: c.id, scopeId: s.id };
   }
-  const item = await findItem(db, ref);
+  const item = await findItemFor(ctx, ref);
   return { kind: item.kind, id: item.id, scopeId: item.scope_id };
 }
 
@@ -583,8 +591,8 @@ export const LINK_KINDS = Object.keys(LINK_RULES) as [string, ...string[]];
 export async function linkEntries(ctx: RequestContext, input: { from: string; to: string; relation: string }) {
   const rule = LINK_RULES[input.relation];
   if (!rule) throw new ValidationError(`unknown relation '${input.relation}'`);
-  const from = await resolveRef(ctx.db, input.from);
-  const to = await resolveRef(ctx.db, input.to);
+  const from = await resolveRef(ctx, input.from);
+  const to = await resolveRef(ctx, input.to);
   if (from.id === to.id) throw new ValidationError("cannot link an item to itself");
   if (!rule.from.includes(from.kind) || !rule.to.includes(to.kind)) {
     throw new ValidationError(`'${input.relation}' links ${rule.from.join("/")} → ${rule.to.join("/")}, not ${from.kind} → ${to.kind}`);

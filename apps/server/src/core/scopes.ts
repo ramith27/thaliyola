@@ -1,5 +1,6 @@
 import type { Queryable } from "../db/pool.js";
 import { NotFoundError, ValidationError, type RequestContext } from "./context.js";
+import { assertCanRead, readableScopes } from "./permissions.js";
 
 export interface Scope {
   id: string;
@@ -8,6 +9,7 @@ export interface Scope {
   name: string;
   description: string;
   status: string;
+  visibility: "team" | "members";
 }
 
 export interface Component {
@@ -20,16 +22,23 @@ export interface Component {
 }
 
 export async function getScopeBySlug(db: Queryable, slug: string): Promise<Scope> {
-  const { rows } = await db.query<Scope>("SELECT id, kind, slug, name, description, status FROM scopes WHERE slug = $1", [slug]);
+  const { rows } = await db.query<Scope>("SELECT id, kind, slug, name, description, status, visibility FROM scopes WHERE slug = $1", [slug]);
   if (!rows[0]) throw new NotFoundError(`scope '${slug}'`);
   return rows[0];
 }
 
 /** The project a call is about: explicit argument first, then the client's header. */
+/** A scope the caller may read (members-only projects look missing to non-members). */
+export async function getReadableScope(ctx: RequestContext, slug: string): Promise<Scope> {
+  const scope = await getScopeBySlug(ctx.db, slug);
+  await assertCanRead(ctx, scope.id, `scope '${slug}'`);
+  return scope;
+}
+
 export async function resolveProject(ctx: RequestContext, explicit?: string): Promise<Scope | undefined> {
   const slug = explicit ?? ctx.project;
   if (!slug) return undefined;
-  const scope = await getScopeBySlug(ctx.db, slug);
+  const scope = await getReadableScope(ctx, slug);
   if (scope.kind !== "project") throw new ValidationError(`'${slug}' is a ${scope.kind} scope, not a project`);
   return scope;
 }
@@ -51,8 +60,9 @@ export async function listComponents(db: Queryable, projectId: string): Promise<
   return rows;
 }
 
-export async function listProjects(db: Queryable, includeArchived = false) {
-  const { rows } = await db.query<{
+export async function listProjects(ctx: RequestContext, includeArchived = false) {
+  const readable = await readableScopes(ctx);
+  const { rows } = await ctx.db.query<{
     slug: string;
     name: string;
     description: string;
@@ -67,9 +77,9 @@ export async function listProjects(db: Queryable, includeArchived = false) {
                         FROM scope_members m JOIN users u ON u.id = m.user_id
                        WHERE m.scope_id = s.id AND m.role = 'owner'), '{}') AS owners
        FROM scopes s
-      WHERE s.kind = 'project' AND ($1 OR s.status = 'active')
+      WHERE s.kind = 'project' AND ($1 OR s.status = 'active') AND ($2::uuid[] IS NULL OR s.id = ANY($2))
       ORDER BY s.name`,
-    [includeArchived],
+    [includeArchived, readable],
   );
   return rows;
 }
@@ -83,9 +93,12 @@ export type ScopeFilter =
  * Default: the current project (if any) + Team + Library; "all": everything; otherwise one scope slug.
  */
 export async function resolveScopeFilter(ctx: RequestContext, scope?: string, project?: string): Promise<ScopeFilter> {
-  if (scope === "all") return { mode: "all" };
+  if (scope === "all") {
+    const readable = await readableScopes(ctx);
+    return readable === null ? { mode: "all" } : { mode: "ids", scopeIds: readable };
+  }
   if (scope && scope !== "default") {
-    const s = await getScopeBySlug(ctx.db, scope);
+    const s = await getReadableScope(ctx, scope);
     return { mode: "ids", scopeIds: [s.id], currentProjectId: s.kind === "project" ? s.id : undefined };
   }
   const current = await resolveProject(ctx, project);

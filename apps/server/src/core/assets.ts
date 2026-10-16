@@ -3,9 +3,9 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { audit } from "./audit.js";
 import { ForbiddenError, NotFoundError, ValidationError, type RequestContext } from "./context.js";
-import { canApprove } from "./permissions.js";
+import { assertCanRead, canApprove } from "./permissions.js";
 import { redact } from "./redaction.js";
-import { findItem } from "./writes.js";
+import { findItemFor } from "./writes.js";
 
 /**
  * Screenshots, exported frames, design-token files and specs attached to an
@@ -83,7 +83,7 @@ export async function uploadAsset(
   ctx: RequestContext,
   input: { target_id: string; filename: string; mime: string; data: Buffer; alt_text?: string },
 ) {
-  const item = await findItem(ctx.db, input.target_id);
+  const item = await findItemFor(ctx, input.target_id);
   if (item.status === "rejected") throw new ValidationError(`${item.kind} is rejected`);
   const check = MIME_TYPES[input.mime];
   if (!check) throw new ValidationError(`unsupported type ${input.mime}; allowed: ${ASSET_MIME_TYPES.join(", ")}`);
@@ -126,14 +126,15 @@ export async function listAssets(ctx: RequestContext, targetId: string): Promise
 
 export async function getAsset(ctx: RequestContext, id: string): Promise<{ meta: AssetMeta & { target_id: string; target_kind: string }; data: Buffer }> {
   const { rows } = await ctx.db.query(
-    `SELECT a.id, a.filename, a.mime, a.size_bytes::int AS size_bytes, a.alt_text, a.created_at, a.storage_key, a.target_id, a.target_kind,
+    `SELECT a.id, a.filename, a.mime, a.size_bytes::int AS size_bytes, a.alt_text, a.created_at, a.storage_key, a.target_id, a.target_kind, a.scope_id,
             coalesce(u.email, u.subject) AS uploaded_by
        FROM assets a LEFT JOIN users u ON u.id = a.created_by WHERE a.id = $1 AND a.deleted_at IS NULL`,
     [id],
   );
   const row = rows[0];
   if (!row) throw new NotFoundError(`asset ${id}`);
-  const { storage_key, ...meta } = row;
+  await assertCanRead(ctx, row.scope_id, `asset ${id}`);
+  const { storage_key, scope_id: _scope, ...meta } = row;
   return { meta, data: await storeFor(ctx).get(storage_key) };
 }
 

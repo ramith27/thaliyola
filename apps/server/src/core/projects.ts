@@ -1,5 +1,6 @@
 import type { RequestContext } from "./context.js";
 import { ValidationError } from "./context.js";
+import { readableScopes } from "./permissions.js";
 import { getComponent, listComponents, resolveProject } from "./scopes.js";
 
 const OVERVIEW_MAX_CHARS = 6000;
@@ -45,10 +46,11 @@ export async function getProjectContext(ctx: RequestContext, projectSlug?: strin
        JOIN scopes s ON s.id = coalesce(a.scope_id, f.scope_id)
       WHERE r.kind = 'uses'
         AND s.id <> $1
+        AND ($2::uuid[] IS NULL OR s.id = ANY($2))
         AND (r.from_id = $1
              OR r.from_id IN (SELECT id FROM articles WHERE scope_id = $1)
              OR r.from_id IN (SELECT id FROM findings WHERE scope_id = $1))`,
-    [project.id],
+    [project.id, await readableScopes(ctx)],
   );
 
   const knownIssues = await db.query(

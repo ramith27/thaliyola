@@ -107,11 +107,11 @@ curl -X POST -H "Authorization: Bearer $TOKEN" -H 'content-type: application/jso
 
 ### Permissions
 
-- **Reading** is open to every authenticated user.
-- **Proposing** is open to everyone until a scope lists writers or owners; after that, only they can propose in it.
+- **Reading:** every signed-in user can read team-visible scopes. A project can be made **members-only** (scope settings, or `PATCH /api/scopes/:slug`). Then only its members and admins can read it, and for everyone else its articles, findings, files, review items and links don't appear anywhere: search, browse, project lists, "used by" links, needs-attention and suggestions all leave them out, and direct requests return "not found". Library owners can still review what such a project proposes to publish to the library.
+- **Proposing:** in a team-visible scope, anyone can propose until the scope lists writers or owners; after that, only they can. In members-only projects, only writers and owners can.
 - **Approving** is limited to scope owners and admins (`ADMIN_EMAILS`). Service identities never approve.
 
-Admins manage projects and members through the API:
+Admins manage projects, members, components and visibility on each scope's **Settings** page, or through the API:
 
 ```sh
 curl -X POST .../api/projects -d '{"slug":"order-service","name":"Order service"}'
@@ -283,5 +283,6 @@ apps/server/
 - ~~Local sign-in with built-in accounts and personal API tokens~~ (done)
 - ~~**M4** Freshness jobs, OAuth for claude.ai connectors in local mode~~ (done)
 - ~~Workflow prompts, Claude Code plugin, backups, promotion and duplicate suggestions~~ (done)
-- Next: Trello cards for recurring root causes, S3-compatible asset store, per-scope read restrictions
+- ~~Members-only projects~~ (done)
+- Next: S3-compatible asset store, Trello cards for recurring root causes
 - **M5** Integrations with existing agent skills, Slack and Sentry

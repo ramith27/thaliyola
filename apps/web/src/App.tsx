@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, authApi, getToken, setToken, type Me, type ScopeInfo } from "./api";
 import { AccountPage, ForcedPasswordChange, LoginPage, UsersPage } from "./pages/account";
+import { ScopeSettingsPage } from "./pages/settings";
 import { Layout } from "./components/Layout";
 import { ErrorBox, Loading } from "./components/ui";
 import { HomePage, ProjectPage, ScopePage, SearchPage } from "./pages/browse";
@@ -79,16 +80,16 @@ export function App() {
   let page;
   switch (section) {
     case undefined:
-      page = <HomePage scopes={boot.scopes} />;
+      page = <HomePage scopes={boot.scopes} me={boot.me} />;
       break;
     case "search":
       page = <SearchPage route={route} />;
       break;
     case "scope":
-      page = <ScopePage slug={id!} scopes={boot.scopes} />;
+      page = route.path[2] === "settings" ? <ScopeSettingsPage slug={id!} scopes={boot.scopes} me={boot.me} /> : <ScopePage slug={id!} scopes={boot.scopes} me={boot.me} />;
       break;
     case "project":
-      page = <ProjectPage slug={id!} route={route} />;
+      page = <ProjectPage slug={id!} route={route} me={boot.me} />;
       break;
     case "article":
       page = <ArticlePage id={id!} route={route} />;

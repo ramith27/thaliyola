@@ -1,7 +1,8 @@
 import type { Queryable } from "../db/pool.js";
 import { splitSections } from "./chunking.js";
 import { NotFoundError, type RequestContext } from "./context.js";
-import { getScopeBySlug } from "./scopes.js";
+import { assertCanRead, readableScopes } from "./permissions.js";
+import { getReadableScope } from "./scopes.js";
 
 export interface RelatedItem {
   relation: string;
@@ -15,7 +16,7 @@ export interface RelatedItem {
 }
 
 /** Typed links in both directions, with a readable label for each end. */
-export async function relatedItems(db: Queryable, id: string): Promise<RelatedItem[]> {
+export async function relatedItems(db: Queryable, id: string, readable: string[] | null = null): Promise<RelatedItem[]> {
   const { rows } = await db.query<RelatedItem>(
     `WITH r AS (
        SELECT kind AS relation, 'out' AS direction, to_kind AS other_kind, to_id AS other_id FROM relations WHERE from_id = $1
@@ -35,8 +36,10 @@ export async function relatedItems(db: Queryable, id: string): Promise<RelatedIt
        LEFT JOIN scopes s     ON r.other_kind = 'scope'     AND s.id = r.other_id
        LEFT JOIN components c ON r.other_kind = 'component' AND c.id = r.other_id
        LEFT JOIN scopes ps    ON ps.id = c.scope_id
+      -- Links into scopes the caller can't read are left out.
+      WHERE $2::uuid[] IS NULL OR coalesce(sa.id, sf.id, s.id, ps.id) = ANY($2)
       ORDER BY r.relation, label`,
-    [id],
+    [id, readable],
   );
   return rows;
 }
@@ -73,7 +76,7 @@ async function componentSlugs(db: Queryable, ids: string[]): Promise<string[]> {
   return rows.map((r) => r.slug);
 }
 
-export async function getArticle(ctx: RequestContext, id: string, section?: string) {
+export async function getArticle(ctx: RequestContext, id: string, section?: string, opts: { skipReadCheck?: boolean } = {}) {
   const { rows } = await ctx.db.query(
     `SELECT a.*, s.slug AS scope_slug, s.kind AS scope_kind, coalesce(u.email, u.subject) AS owner
        FROM articles a JOIN scopes s ON s.id = a.scope_id LEFT JOIN users u ON u.id = a.owner_id
@@ -82,6 +85,7 @@ export async function getArticle(ctx: RequestContext, id: string, section?: stri
   );
   const a = rows[0];
   if (!a) throw new NotFoundError(`article ${id}`);
+  if (!opts.skipReadCheck) await assertCanRead(ctx, a.scope_id, `article ${id}`);
 
   const sections = splitSections(a.body_md);
   let body: string = a.body_md;
@@ -107,14 +111,14 @@ export async function getArticle(ctx: RequestContext, id: string, section?: stri
     updated_at: a.updated_at,
     sections: sections.map((s) => s.heading).filter(Boolean),
     body_md: body,
-    related: await relatedItems(ctx.db, id),
+    related: await relatedItems(ctx.db, id, await readableScopes(ctx)),
     source_links: await sourceLinks(ctx.db, id),
     entities: await entitiesFor(ctx.db, id),
     assets: await assetsFor(ctx.db, id),
   };
 }
 
-export async function getFinding(ctx: RequestContext, id: string) {
+export async function getFinding(ctx: RequestContext, id: string, opts: { skipReadCheck?: boolean } = {}) {
   const { rows } = await ctx.db.query(
     `SELECT f.*, s.slug AS scope_slug, s.kind AS scope_kind, coalesce(u.email, u.subject) AS author
        FROM findings f JOIN scopes s ON s.id = f.scope_id LEFT JOIN users u ON u.id = f.author_id
@@ -123,6 +127,7 @@ export async function getFinding(ctx: RequestContext, id: string) {
   );
   const f = rows[0];
   if (!f) throw new NotFoundError(`finding ${id}`);
+  if (!opts.skipReadCheck) await assertCanRead(ctx, f.scope_id, `finding ${id}`);
   const history = await ctx.db.query(
     `SELECT r.op, r.state, r.reason, r.created_at, r.decided_at, coalesce(u.email, u.subject) AS author
        FROM revisions r JOIN users u ON u.id = r.author_id
@@ -145,7 +150,7 @@ export async function getFinding(ctx: RequestContext, id: string) {
     last_verified_at: f.last_verified_at,
     created_at: f.created_at,
     updated_at: f.updated_at,
-    related: await relatedItems(ctx.db, id),
+    related: await relatedItems(ctx.db, id, await readableScopes(ctx)),
     source_links: await sourceLinks(ctx.db, id),
     entities: await entitiesFor(ctx.db, id),
     assets: await assetsFor(ctx.db, id),
@@ -155,7 +160,7 @@ export async function getFinding(ctx: RequestContext, id: string) {
 
 /** Articles in one scope as a folder tree (by `path`), optionally under a path prefix. */
 export async function browseKb(ctx: RequestContext, scopeSlug: string, pathPrefix?: string) {
-  const scope = await getScopeBySlug(ctx.db, scopeSlug);
+  const scope = await getReadableScope(ctx, scopeSlug);
   const prefix = (pathPrefix ?? "").replace(/^\/+|\/+$/g, "");
   const { rows } = await ctx.db.query<{ id: string; title: string; type: string; status: string; path: string }>(
     `SELECT id, title, type, status, path FROM articles
