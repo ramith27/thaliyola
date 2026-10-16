@@ -3,8 +3,12 @@ import pg from "pg";
 export type Db = pg.Pool;
 export type Queryable = pg.Pool | pg.PoolClient;
 
+/** Candidates the HNSW index returns per query; semantic search oversamples this many before scope filters. */
+export const VECTOR_CANDIDATES = 400;
+
 export function createPool(connectionString: string): Db {
-  return new pg.Pool({ connectionString, max: 10 });
+  // The index search list must be at least as long as the candidate list (set at connection start-up).
+  return new pg.Pool({ connectionString, max: 10, options: `-c hnsw.ef_search=${VECTOR_CANDIDATES}` });
 }
 
 export async function withTx<T>(db: Db, fn: (client: pg.PoolClient) => Promise<T>): Promise<T> {

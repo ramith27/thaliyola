@@ -75,6 +75,17 @@ S3_SECRET_ACCESS_KEY=…
 
 Requests are signed with AWS Signature V4 using Node's built-in crypto (no AWS SDK). Signing was tested against a server that verifies signatures strictly. Files are always served through Cairn, which checks permissions, so the bucket stays private.
 
+### Performance
+
+Search finds candidates through indexes first (GIN for full-text, HNSW for vectors), then applies scope, status and permission filters to just those candidates. Measured on a 2-vCPU container with synthetic data (`apps/server/test/perf.bench.ts`):
+
+| Knowledge base | Project search (keyword / hybrid) | Search everything | Duplicate check |
+|---|---|---|---|
+| 30k chunks (~4k articles, 10k findings) | 46 / 60 ms | 114 ms | 145 ms |
+| 90k chunks (~12k articles, 30k findings) | 110–150 ms | 220–430 ms | 105 ms |
+
+Query embedding with the local model adds about 10–40 ms. Searches made only of very common words cost the most, because full-text ranking scales with the number of matching chunks.
+
 ### Freshness
 
 Knowledge goes stale:

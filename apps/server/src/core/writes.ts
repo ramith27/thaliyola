@@ -1,4 +1,4 @@
-import { withTx, type Queryable } from "../db/pool.js";
+import { VECTOR_CANDIDATES, withTx, type Queryable } from "../db/pool.js";
 import { addSourceLink, insertArticle, insertFinding, relate } from "./bootstrap.js";
 import { ConflictError, NotFoundError, ValidationError, type RequestContext } from "./context.js";
 import { getArticle, getFinding } from "./items.js";
@@ -142,18 +142,21 @@ export async function findDuplicateFindings(ctx: RequestContext, text: string, s
        SELECT to_tsquery('simple', coalesce(string_agg(t, ' | '), '')) AS any_term
          FROM (SELECT regexp_replace(l, '[^[:alnum:]_]', '', 'g') AS t FROM unnest((SELECT lex FROM p)) l) x
         WHERE t <> ''
+     ),
+     -- Cheap ranking first; exact term overlap only for the best candidates.
+     candidates AS (
+       SELECT c.parent_id, c.tsv FROM chunks c CROSS JOIN q
+        WHERE c.parent_kind = 'finding' AND c.scope_id = ANY($2::uuid[]) AND c.tsv @@ q.any_term
+        ORDER BY ts_rank(c.tsv, q.any_term, 1) DESC LIMIT 50
      )
      SELECT f.id, f.title, f.status, s.slug AS scope,
             round(((SELECT count(*) FROM unnest(p.lex) x WHERE x = ANY(tsvector_to_array(c.tsv)))::numeric
                    / greatest(cardinality(p.lex), 1)), 2)::float AS overlap
-       FROM chunks c
-       CROSS JOIN p CROSS JOIN q
+       FROM candidates c
+       CROSS JOIN p
        JOIN findings f ON f.id = c.parent_id
        JOIN scopes s ON s.id = f.scope_id
-      WHERE c.parent_kind = 'finding'
-        AND c.scope_id = ANY($2::uuid[])
-        AND f.status IN ('draft', 'published', 'possibly_stale')
-        AND c.tsv @@ q.any_term
+      WHERE f.status IN ('draft', 'published', 'possibly_stale')
       ORDER BY overlap DESC
       LIMIT 5`,
     [text, scopeIds],
@@ -170,13 +173,15 @@ export async function findDuplicateFindings(ctx: RequestContext, text: string, s
     }
     if (vector) {
       const bySimilarity = await ctx.db.query<{ id: string; title: string; status: string; scope: string; similarity: number }>(
-        `SELECT f.id, f.title, f.status, s.slug AS scope, round((1 - (c.embedding <=> $1::vector))::numeric, 3)::float AS similarity
-           FROM chunks c
-           JOIN findings f ON f.id = c.parent_id
+        `SELECT f.id, f.title, f.status, s.slug AS scope, round((1 - nn.dist)::numeric, 3)::float AS similarity
+           FROM (SELECT c.id, c.parent_id, c.parent_kind, c.scope_id, c.embedding_model, c.embedding <=> $1::vector AS dist
+                   FROM chunks c WHERE c.embedding IS NOT NULL
+                  ORDER BY c.embedding <=> $1::vector LIMIT ${VECTOR_CANDIDATES}) nn
+           JOIN findings f ON f.id = nn.parent_id
            JOIN scopes s ON s.id = f.scope_id
-          WHERE c.parent_kind = 'finding' AND c.scope_id = ANY($2::uuid[]) AND c.embedding_model = $3
+          WHERE nn.parent_kind = 'finding' AND nn.scope_id = ANY($2::uuid[]) AND nn.embedding_model = $3
             AND f.status IN ('draft', 'published', 'possibly_stale')
-          ORDER BY c.embedding <=> $1::vector LIMIT 5`,
+          ORDER BY nn.dist LIMIT 5`,
         [toPgVector(vector), scopeIds, ctx.embedder.model],
       );
       for (const r of bySimilarity.rows) {

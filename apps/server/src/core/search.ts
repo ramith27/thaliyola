@@ -1,5 +1,6 @@
 import type { RequestContext } from "./context.js";
 import { ValidationError } from "./context.js";
+import { VECTOR_CANDIDATES } from "../db/pool.js";
 import { toPgVector } from "./embeddings.js";
 import { readableScopes } from "./permissions.js";
 import { resolveScopeFilter } from "./scopes.js";
@@ -96,12 +97,20 @@ export async function searchKnowledge(ctx: RequestContext, input: SearchInput): 
       queryVector = null;
     }
   }
+  // Candidates come from the indexes first (GIN for keywords, HNSW for meaning); the filters then
+  // apply to those candidates only, so cost tracks matches rather than the size of the knowledge base.
+  const filters = where.filter((w) => w !== "c.tsv @@ q.any_term").join("\n           AND ");
   const vec = queryVector
-    ? `SELECT id, row_number() OVER (ORDER BY dist) AS r, 1 - dist AS sim
-         FROM (SELECT id, embedding <=> ${p(queryVector)}::vector AS dist FROM filtered
-                WHERE embedding IS NOT NULL AND embedding_model = ${p(ctx.embedder!.model)}) d
-        WHERE 1 - dist >= ${p(ctx.settings.searchMinSimilarity)}
-        ORDER BY dist LIMIT 50`
+    ? `SELECT nn.id, row_number() OVER (ORDER BY nn.dist) AS r, 1 - nn.dist AS sim
+         FROM (SELECT c.id, c.embedding <=> ${p(queryVector)}::vector AS dist FROM chunks c
+                WHERE c.embedding IS NOT NULL
+                ORDER BY c.embedding <=> ${p(queryVector)}::vector LIMIT ${VECTOR_CANDIDATES}) nn
+         JOIN chunks c ON c.id = nn.id AND c.embedding_model = ${p(ctx.embedder!.model)}
+         LEFT JOIN articles a ON c.parent_kind = 'article' AND a.id = c.parent_id
+         LEFT JOIN findings f ON c.parent_kind = 'finding' AND f.id = c.parent_id
+        WHERE 1 - nn.dist >= ${p(ctx.settings.searchMinSimilarity)}
+          AND ${filters}
+        ORDER BY nn.dist LIMIT 50`
     : "SELECT NULL::bigint AS id, NULL::bigint AS r, NULL::float AS sim WHERE false";
 
   const sql = `
@@ -112,18 +121,14 @@ export async function searchKnowledge(ctx: RequestContext, input: SearchInput): 
                 FROM unnest(tsvector_to_array(to_tsvector('english', $1))) AS l) terms
        WHERE t <> ''
     ),
-    filtered AS MATERIALIZED (
-      SELECT c.id, c.parent_kind, c.parent_id, c.heading, c.ord, c.text, c.scope_id, c.tsv, c.embedding, c.embedding_model,
-             coalesce(a.status, f.status) AS status, (${usesLinked}) AS via_uses_link
-        FROM chunks c
-        LEFT JOIN articles a ON c.parent_kind = 'article' AND a.id = c.parent_id
-        LEFT JOIN findings f ON c.parent_kind = 'finding' AND f.id = c.parent_id
-       WHERE ${where.filter((w) => w !== "c.tsv @@ q.any_term").join("\n         AND ")}
-    ),
     fts AS (
       SELECT id, row_number() OVER (ORDER BY rank DESC) AS r
-        FROM (SELECT f.id, ts_rank_cd(f.tsv, q.any_term) * CASE WHEN f.tsv @@ q.all_terms THEN 2.0 ELSE 1.0 END AS rank
-                FROM filtered f CROSS JOIN q WHERE f.tsv @@ q.any_term) x
+        FROM (SELECT c.id, ts_rank(c.tsv, q.any_term, 1) * CASE WHEN c.tsv @@ q.all_terms THEN 2.0 ELSE 1.0 END AS rank
+                FROM chunks c CROSS JOIN q
+                LEFT JOIN articles a ON c.parent_kind = 'article' AND a.id = c.parent_id
+                LEFT JOIN findings f ON c.parent_kind = 'finding' AND f.id = c.parent_id
+               WHERE c.tsv @@ q.any_term
+                 AND ${filters}) x
        ORDER BY rank DESC LIMIT 50
     ),
     vec AS (${vec}),
@@ -136,11 +141,13 @@ export async function searchKnowledge(ctx: RequestContext, input: SearchInput): 
     ),
     scored AS (
       SELECT DISTINCT ON (c.parent_kind, c.parent_id)
-             c.parent_kind, c.parent_id, c.heading, c.ord, c.text, c.scope_id, c.via_uses_link, fused.sim, fused.keyword_match,
+             c.parent_kind, c.parent_id, c.heading, c.ord, c.text, c.scope_id, (${usesLinked}) AS via_uses_link, fused.sim, fused.keyword_match,
              fused.rrf
-               * CASE c.status WHEN 'published' THEN 1.0 WHEN 'possibly_stale' THEN 0.6 ELSE 0.4 END
+               * CASE coalesce(a.status, f.status) WHEN 'published' THEN 1.0 WHEN 'possibly_stale' THEN 0.6 ELSE 0.4 END
                * CASE WHEN c.scope_id = ${currentProject} THEN 1.3 ELSE 1.0 END AS score
-        FROM fused JOIN filtered c ON c.id = fused.id
+        FROM fused JOIN chunks c ON c.id = fused.id
+        LEFT JOIN articles a ON c.parent_kind = 'article' AND a.id = c.parent_id
+        LEFT JOIN findings f ON c.parent_kind = 'finding' AND f.id = c.parent_id
        ORDER BY c.parent_kind, c.parent_id, score DESC, c.ord
     ),
     top AS (SELECT * FROM scored ORDER BY score DESC LIMIT ${limitParam})
