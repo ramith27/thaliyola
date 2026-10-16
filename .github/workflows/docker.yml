@@ -1,0 +1,55 @@
+name: Docker
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Configure
+        run: |
+          cat > .env <<'CONF'
+          POSTGRES_PASSWORD=ci-password
+          AUTH_MODE=local
+          EMBEDDINGS=local
+          CONF
+      - name: Build and start the stack
+        run: docker compose up -d --build
+      - name: Wait for health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/healthz; then exit 0; fi
+            sleep 2
+          done
+          docker compose logs server
+          exit 1
+      - name: Demo data, users and tokens (admin CLI inside the container)
+        run: |
+          docker compose exec -T server node dist/scripts/seed.js
+          docker compose exec -T server node dist/scripts/admin.js create-user --email admin@example.com --admin
+          docker compose exec -T server node dist/scripts/admin.js create-user --email agent@example.com
+          echo "ADMIN_TOKEN=$(docker compose exec -T server node dist/scripts/admin.js create-token --email admin@example.com --name ci 2>/dev/null)" >> "$GITHUB_ENV"
+          echo "AGENT_TOKEN=$(docker compose exec -T server node dist/scripts/admin.js create-token --email agent@example.com --name ci 2>/dev/null)" >> "$GITHUB_ENV"
+      - name: Smoke test against the container
+        env:
+          CAIRN_URL: http://127.0.0.1:8080
+        run: pnpm --filter @cairn/server smoke
+      - name: Web UI is served
+        run: curl -fsS http://127.0.0.1:8080/ | grep -q '<div id="root">'
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs
