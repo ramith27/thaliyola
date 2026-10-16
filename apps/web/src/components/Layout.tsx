@@ -164,6 +164,9 @@ function UserMenu({ me }: { me: Me }) {
           <a className="menu-item" href={href("/account")} onClick={() => setOpen(false)}>
             <I name="user" size={16} /> Account and tokens
           </a>
+          <a className="menu-item" href={href("/teams")} onClick={() => setOpen(false)}>
+            <I name="team" size={16} /> Teams
+          </a>
           <a className="menu-item" href={href("/connect")} onClick={() => setOpen(false)}>
             <I name="plug" size={16} /> Connect your tools
           </a>

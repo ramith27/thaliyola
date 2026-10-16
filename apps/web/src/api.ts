@@ -82,7 +82,9 @@ export interface ScopeInfo {
   name: string;
   description: string;
   visibility: "team" | "members";
-  components: { slug: string; kind: string; repo_url: string | null }[];
+  components: { slug: string; kind: string; repo_url: string | null; description?: string }[];
+  my_role: "reader" | "writer" | "owner" | null;
+  can_manage: boolean;
 }
 
 export interface Related {

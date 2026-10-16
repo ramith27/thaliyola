@@ -6,6 +6,7 @@ import { ConnectPage } from "./pages/connect";
 import { Dashboard } from "./pages/dashboard";
 import { EntityPage } from "./pages/entity";
 import { GraphPage } from "./pages/graph";
+import { TeamPage, TeamsPage } from "./pages/teams";
 import { MetricsPage } from "./pages/metrics";
 import { InviteAcceptPage } from "./pages/invite";
 import { ImportPage, NewProjectPage } from "./pages/setup";
@@ -97,10 +98,10 @@ export function App() {
       page = <SearchPage route={route} />;
       break;
     case "scope":
-      page = route.path[2] === "settings" ? <ScopeSettingsPage slug={id!} scopes={boot.scopes} me={boot.me} /> : <ScopePage slug={id!} scopes={boot.scopes} me={boot.me} />;
+      page = route.path[2] === "settings" ? <ScopeSettingsPage slug={id!} scopes={boot.scopes} me={boot.me} route={route} /> : <ScopePage slug={id!} scopes={boot.scopes} me={boot.me} />;
       break;
     case "project":
-      page = <ProjectPage slug={id!} route={route} me={boot.me} />;
+      page = <ProjectPage slug={id!} route={route} me={boot.me} scopes={boot.scopes} />;
       break;
     case "article":
       page = <ArticlePage id={id!} route={route} me={boot.me} />;
@@ -125,6 +126,9 @@ export function App() {
       break;
     case "entity":
       page = <EntityPage kind={id!} name={route.path[2] ?? ""} />;
+      break;
+    case "teams":
+      page = id ? <TeamPage slug={id} scopes={boot.scopes} /> : <TeamsPage me={boot.me} />;
       break;
     case "metrics":
       page = <MetricsPage me={boot.me} route={route} />;

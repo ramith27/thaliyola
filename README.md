@@ -176,6 +176,10 @@ Also: `GET/POST /api/revisions/:id/comments`, `GET /api/revisions/:id/reviewers`
 
 ### Permissions
 
+- **Projects manage themselves:** each project has its own settings page (General, Members and access, Repositories) that its owners manage, not only admins: name and description, visibility, people and teams with roles, and its repositories.
+- **Teams:** groups of people (Teams page; admins create them and manage members). Add a team to any number of projects with a role, and everyone in it gets that role there. A person's role in a project is the highest of their own and their teams' roles.
+- **Repositories:** a project can have any number of repositories (components), each with its URL; one repository belongs to one project. A Claude session finds its project from the git remote: the `X-Cairn-Repo` header, or the `repo` argument of `get_project_context` (`GET /api/repos/resolve?url=` for scripts).
+- **Moving:** owners can move a folder from one scope into a project (Move… beside a folder): items keep their ids, history and links; the folder prefix can be dropped, and chosen sub-folders become the project's repositories (`POST /api/move`, with `dry_run` for a preview).
 - **Reading:** every signed-in user can read team-visible scopes. A project can be made **members-only** (scope settings, or `PATCH /api/scopes/:slug`). Then only its members and admins can read it, and for everyone else its articles, findings, files, review items and links don't appear anywhere: search, browse, project lists, "used by" links, needs-attention and suggestions all leave them out, and direct requests return "not found". Library owners can still review what such a project proposes to publish to the library.
 - **Proposing:** in a team-visible scope, anyone can propose until the scope lists writers or owners; after that, only they can. In members-only projects, only writers and owners can.
 - **Approving** is limited to scope owners and admins (`ADMIN_EMAILS`). Service identities never approve.

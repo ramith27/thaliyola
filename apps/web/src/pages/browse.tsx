@@ -1,6 +1,7 @@
 import type { Folder, Me, Notice as NoticeT, ScopeInfo, SearchHit } from "../api";
 import { WatchButton } from "../components/notifications";
 import { AnswerCard, FavouriteButton } from "../components/find";
+import { MoveFolder } from "../components/move";
 import { api } from "../api";
 import { ErrorBox, formatDate, itemHref, Loading, Notice, ScopeBadge, Snippet, StatusBadge, TypeBadge } from "../components/ui";
 import { useApi } from "../hooks";
@@ -102,24 +103,35 @@ export function ScopePage({ slug, scopes, me }: { slug: string; scopes: ScopeInf
         </a>
         {scope && <WatchButton id={scope.id} />}
         {scope && <FavouriteButton id={scope.id} />}
-        {me.admin && (
+        {scope && (
           <a className="btn" href={href(`/scope/${slug}/settings`)}>
-            Settings
+            {scope.can_manage ? "Settings" : "Who has access"}
           </a>
         )}
       </div>
       <ErrorBox error={error} />
-      {data ? <TreeTable folder={data.tree} path="" /> : !error && <Loading />}
+      {data ? <TreeTable folder={data.tree} path="" canMove={!!scope && (me.admin || scope.my_role === "owner")} from={slug} scopes={scopes} /> : !error && <Loading />}
     </div>
   );
 }
 
-function TreeTable({ folder, path }: { folder: Folder; path: string }) {
+function TreeTable({ folder, path, canMove, from, scopes }: { folder: Folder; path: string; canMove: boolean; from: string; scopes: ScopeInfo[] }) {
+  const [moving, setMoving] = useState(false);
   return (
     <>
       {folder.articles.length > 0 && (
         <section>
-          {path && <h2>{path}</h2>}
+          {path && (
+            <div className="folder-head">
+              <h2>{path.split("/").join(" / ")}</h2>
+              {canMove && !moving && (
+                <button className="btn btn-small" onClick={() => setMoving(true)} title="Move this folder into a project">
+                  Move…
+                </button>
+              )}
+            </div>
+          )}
+          {moving && <MoveFolder from={from} folder={path} scopes={scopes} onCancel={() => setMoving(false)} onDone={() => window.location.reload()} />}
           <ul className="list">
             {folder.articles.map((a) => (
               <li key={a.id}>
@@ -131,7 +143,7 @@ function TreeTable({ folder, path }: { folder: Folder; path: string }) {
         </section>
       )}
       {Object.entries(folder.folders).map(([name, sub]) => (
-        <TreeTable key={name} folder={sub} path={path ? `${path} / ${name}` : name} />
+        <TreeTable key={name} folder={sub} path={path ? `${path}/${name}` : name} canMove={canMove} from={from} scopes={scopes} />
       ))}
     </>
   );
@@ -149,7 +161,8 @@ interface ProjectContext {
   open_known_issues: { id: string; title: string; status: string; updated_at: string }[];
 }
 
-export function ProjectPage({ slug, route, me }: { slug: string; route: Route; me: Me }) {
+export function ProjectPage({ slug, route, me, scopes = [] }: { slug: string; route: Route; me: Me; scopes?: ScopeInfo[] }) {
+  const info = scopes.find((s) => s.slug === slug);
   const component = route.query.get("component") ?? undefined;
   const path = `/projects/${encodeURIComponent(slug)}/context${component ? `?component=${encodeURIComponent(component)}` : ""}`;
   const { data, error, reload } = useApi<ProjectContext>(path);
@@ -222,11 +235,9 @@ export function ProjectPage({ slug, route, me }: { slug: string; route: Route; m
         </a>
         <WatchButton id={data.project.id} />
         <FavouriteButton id={data.project.id} />
-        {me.admin && (
-          <a className="btn" href={href(`/scope/${slug}/settings`)}>
-            Settings
-          </a>
-        )}
+        <a className="btn" href={href(`/scope/${slug}/settings`)}>
+          {info?.can_manage || me.admin ? "Settings" : "Members"}
+        </a>
       </div>
 
       {data.contracts && (

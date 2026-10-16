@@ -11,10 +11,24 @@ export async function createScope(db: Queryable, kind: "team" | "project" | "lib
   return rows[0]!.id;
 }
 
-export async function createComponent(db: Queryable, scopeId: string, slug: string, kind: string, repoUrl?: string) {
+/**
+ * A repository URL in a comparable form: host/path, lower case, without the scheme,
+ * user, ".git" or trailing slash ("git@github.com:Org/App.git" → "github.com/org/app").
+ */
+export function repoKey(url: string | null | undefined): string | null {
+  if (!url?.trim()) return null;
+  return url
+    .trim()
+    .replace(/^([a-z+]+:\/\/)?([^@/]+@)?/i, "")
+    .replace(/^([^/:]+):(?!\d+\/)/, "$1/")
+    .replace(/(\.git)?\/*$/i, "")
+    .toLowerCase();
+}
+
+export async function createComponent(db: Queryable, scopeId: string, slug: string, kind: string, repoUrl?: string, description = "") {
   const { rows } = await db.query<{ id: string }>(
-    "INSERT INTO components (scope_id, slug, kind, repo_url) VALUES ($1, $2, $3, $4) RETURNING id",
-    [scopeId, slug, kind, repoUrl ?? null],
+    "INSERT INTO components (scope_id, slug, kind, repo_url, repo_key, description) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+    [scopeId, slug, kind, repoUrl ?? null, repoKey(repoUrl), description],
   );
   return rows[0]!.id;
 }

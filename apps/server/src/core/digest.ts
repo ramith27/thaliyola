@@ -32,8 +32,8 @@ async function digestFor(db: Db, p: Person) {
   const scopes = (
     await db.query<{ id: string }>(
       `SELECT s.id FROM scopes s
-        WHERE (s.visibility = 'team' OR $2 OR s.id IN (SELECT scope_id FROM scope_members WHERE user_id = $1))
-          AND (s.kind <> 'project' OR s.id IN (SELECT scope_id FROM scope_members WHERE user_id = $1)
+        WHERE (s.visibility = 'team' OR $2 OR s.id IN (SELECT scope_id FROM scope_roles WHERE user_id = $1))
+          AND (s.kind <> 'project' OR s.id IN (SELECT scope_id FROM scope_roles WHERE user_id = $1)
                OR s.id IN (SELECT target_id FROM watches WHERE user_id = $1))`,
       [p.id, p.admin],
     )
@@ -49,7 +49,7 @@ async function digestFor(db: Db, p: Person) {
   const toReview = await db.query<{ id: string; summary: string }>(
     `SELECT r.id, r.summary FROM revisions r
       WHERE r.state = 'pending' AND r.author_id <> $1
-        AND ($2 OR r.scope_id IN (SELECT scope_id FROM scope_members WHERE user_id = $1 AND role = 'owner'))
+        AND ($2 OR r.scope_id IN (SELECT scope_id FROM scope_roles WHERE user_id = $1 AND role = 'owner'))
       ORDER BY r.created_at LIMIT 5`,
     [p.id, p.admin],
   );

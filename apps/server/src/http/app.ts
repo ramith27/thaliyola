@@ -9,6 +9,7 @@ import type { Settings } from "../config.js";
 import type { Embedder } from "../core/embeddings.js";
 import type { Actor } from "../core/context.js";
 import type { Db } from "../db/pool.js";
+import { resolveRepo } from "../core/scopes.js";
 import { buildMcpServer } from "../mcp/server.js";
 import { isAdmin } from "../core/permissions.js";
 import { apiErrorHandler, apiRouter } from "./api.js";
@@ -88,15 +89,18 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
   );
 
   app.post("/mcp", requireAuth(db, authenticate, oauth?.resourceMetadataUrl, publicOrigin), rateLimit, uploadJson, requirePasswordChanged, async (req, res) => {
-    const server = buildMcpServer({
-      db,
-      settings,
-      embedder,
-      onWrite,
-      actor: res.locals.actor as Actor,
-      project: req.header("x-cairn-project") || undefined,
-      component: req.header("x-cairn-component") || undefined,
-    });
+    // The project comes from X-Cairn-Project, or from the repository the session runs in (X-Cairn-Repo: git remote URL).
+    let project = req.header("x-cairn-project") || undefined;
+    let component = req.header("x-cairn-component") || undefined;
+    const repo = req.header("x-cairn-repo");
+    if (repo && !project) {
+      const found = await resolveRepo(db, repo).catch(() => null);
+      if (found) {
+        project = found.project;
+        component ??= found.component;
+      }
+    }
+    const server = buildMcpServer({ db, settings, embedder, onWrite, actor: res.locals.actor as Actor, project, component });
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on("close", () => {
       void transport.close();

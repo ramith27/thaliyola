@@ -68,23 +68,28 @@ export function Checklist({ fallback = null }: { fallback?: ReactNode }) {
 
 // ---- New project with a starter pack ------------------------------------------------
 
-const COMPONENT_KINDS = ["backend", "frontend", "mobile", "data", "infra"] as const;
+const REPO_KINDS = ["backend", "frontend", "mobile", "data", "infra", "other"] as const;
+type RepoRow = { url: string; slug: string; kind: string };
+const repoName = (url: string) => (url.replace(/(\.git)?\/*$/, "").split(/[/:]/).pop() ?? "").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-|-$/g, "");
 
 export function NewProjectPage() {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [description, setDescription] = useState("");
-  const [kinds, setKinds] = useState<string[]>(["backend", "frontend"]);
+  const [repos, setRepos] = useState<RepoRow[]>([{ url: "", slug: "", kind: "backend" }]);
   const [starter, setStarter] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const autoSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const finalSlug = slug || autoSlug;
+  const filled = repos.filter((r) => r.url.trim() || r.slug.trim());
+  const kinds = new Set(filled.map((r) => r.kind));
+  const setRepo = (i: number, patch: Partial<RepoRow>) => setRepos((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
 
   return (
     <div className="page editor">
       <h1>New project</h1>
-      <p className="lead">A project holds the design docs, contracts, decisions and findings for one product or service.</p>
+      <p className="lead">A project holds the design docs, contracts, decisions and findings for one product or service, with its own members, teams and settings.</p>
       <form
         onSubmit={async (e) => {
           e.preventDefault();
@@ -93,9 +98,15 @@ export function NewProjectPage() {
           try {
             await api("/projects", {
               method: "POST",
-              body: { slug: finalSlug, name, description: description || undefined, components: kinds.map((k) => ({ slug: k, kind: k })), starter },
+              body: {
+                slug: finalSlug,
+                name,
+                description: description || undefined,
+                components: filled.map((r) => ({ slug: r.slug || repoName(r.url) || r.kind, kind: r.kind, repo_url: r.url.trim() || undefined })),
+                starter,
+              },
             });
-            navigate(`/project/${finalSlug}`);
+            navigate(`/scope/${finalSlug}/settings`, { tab: "access" });
             window.location.reload();
           } catch (err) {
             setError(err as Error);
@@ -118,14 +129,29 @@ export function NewProjectPage() {
           Description
           <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What it does, in one line" />
         </label>
-        <fieldset className="checks">
-          <legend>Parts of the project (each repo connects as one)</legend>
-          {COMPONENT_KINDS.map((k) => (
-            <label key={k} className="inline">
-              <input type="checkbox" checked={kinds.includes(k)} onChange={(e) => setKinds((ks) => (e.target.checked ? [...ks, k] : ks.filter((x) => x !== k)))} /> {k}
-            </label>
+        <div className="field">
+          <span className="field-label">Repositories</span>
+          <span className="muted small">All the codebases in this project. A Claude session in any of them finds the project on its own. You can add more later.</span>
+          {repos.map((r, i) => (
+            <div key={i} className="repo-row">
+              <input value={r.url} onChange={(e) => setRepo(i, { url: e.target.value })} placeholder="https://github.com/acme/orders-api" aria-label={`Repository ${i + 1} URL`} />
+              <input value={r.slug} onChange={(e) => setRepo(i, { slug: e.target.value })} placeholder={repoName(r.url) || "name"} aria-label={`Repository ${i + 1} name`} pattern="[a-z0-9][a-z0-9-]*" />
+              <select value={r.kind} onChange={(e) => setRepo(i, { kind: e.target.value })} aria-label={`Repository ${i + 1} kind`}>
+                {REPO_KINDS.map((k) => (
+                  <option key={k}>{k}</option>
+                ))}
+              </select>
+              <button type="button" className="link-btn small danger" onClick={() => setRepos((rs) => rs.filter((_, j) => j !== i))} aria-label="Remove repository">
+                Remove
+              </button>
+            </div>
           ))}
-        </fieldset>
+          <div>
+            <button type="button" className="btn btn-small" onClick={() => setRepos((rs) => [...rs, { url: "", slug: "", kind: "frontend" }])}>
+              Add another repository
+            </button>
+          </div>
+        </div>
         <label className="inline starter-toggle">
           <input type="checkbox" checked={starter} onChange={(e) => setStarter(e.target.checked)} />
           <span>
@@ -133,10 +159,8 @@ export function NewProjectPage() {
             <span className="muted small">
               {" "}
               Outlines for a project overview, a design doc and an on-call runbook
-              {kinds.includes("backend") && (kinds.includes("frontend") || kinds.includes("mobile"))
-                ? ", plus the API contract between backend and client (so contract changes notify the client side)"
-                : ""}
-              . Each section says what to write.
+              {kinds.has("backend") && (kinds.has("frontend") || kinds.has("mobile")) ? ", plus the API contract between backend and client (so contract changes notify the client side)" : ""}. Each
+              section says what to write.
             </span>
           </span>
         </label>
@@ -149,6 +173,7 @@ export function NewProjectPage() {
             Cancel
           </a>
         </div>
+        <p className="muted small">Next you'll add the people and teams who work on it.</p>
       </form>
     </div>
   );

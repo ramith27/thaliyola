@@ -152,14 +152,14 @@ export async function reviewersFor(db: Queryable, settings: Settings, scopeId: s
   const { rows } = await db.query<{ id: string }>(
     `SELECT u.id FROM users u WHERE u.kind = 'human' AND u.disabled_at IS NULL AND (
        u.is_admin OR lower(u.email) = ANY($2::text[])
-       OR u.id IN (SELECT user_id FROM scope_members WHERE scope_id = $1 AND role = 'owner'))`,
+       OR u.id IN (SELECT user_id FROM scope_roles WHERE scope_id = $1 AND role = 'owner'))`,
     [scopeId, settings.adminEmails],
   );
   return rows.map((r) => r.id);
 }
 
 export async function membersOf(db: Queryable, scopeId: string): Promise<string[]> {
-  const { rows } = await db.query<{ user_id: string }>("SELECT user_id FROM scope_members WHERE scope_id = $1", [scopeId]);
+  const { rows } = await db.query<{ user_id: string }>("SELECT DISTINCT user_id FROM scope_roles WHERE scope_id = $1", [scopeId]);
   return rows.map((r) => r.user_id);
 }
 

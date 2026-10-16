@@ -1,9 +1,10 @@
-import { createComponent, createScope, relate } from "./bootstrap.js";
+import { withTx, type Queryable } from "../db/pool.js";
+import { createComponent, createScope, relate, repoKey } from "./bootstrap.js";
 import { ValidationError, type RequestContext } from "./context.js";
 import { newArticle } from "./direct.js";
 import { ARTICLE_TEMPLATES, SECTION_HINTS } from "./templates.js";
 import type { CreateArticleInput } from "./writes.js";
-import { assertAdmin } from "./permissions.js";
+import { assertAdmin, assertCanManage, isAdmin } from "./permissions.js";
 import { getReadableScope, getScopeBySlug } from "./scopes.js";
 
 const SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/;
@@ -20,10 +21,18 @@ export async function adminCreateProject(
   const existing = await ctx.db.query("SELECT 1 FROM scopes WHERE slug = $1", [input.slug]);
   if (existing.rowCount) throw new ValidationError(`scope '${input.slug}' already exists`);
   const id = await createScope(ctx.db, "project", input.slug, input.name.trim(), input.description?.trim() ?? "");
+  // Every repository is kept; the starter pack links its contract to the first backend and clients.
   const components: Record<string, string> = {};
-  for (const c of input.components ?? []) components[c.kind] ??= await createComponent(ctx.db, id, c.slug, c.kind, c.repo_url);
+  const seen = new Set<string>();
+  for (const c of input.components ?? []) {
+    if (seen.has(c.slug)) throw new ValidationError(`two repositories are called '${c.slug}'`);
+    seen.add(c.slug);
+    await assertRepoFree(ctx, c.repo_url);
+    const cid = await createComponent(ctx.db, id, c.slug, c.kind, c.repo_url || undefined);
+    components[c.kind] ??= cid;
+  }
   const starter = input.starter ? await starterPack(ctx, input.slug, input.name.trim(), components) : [];
-  return { id, slug: input.slug, components: Object.keys(components).length, starter };
+  return { id, slug: input.slug, components: seen.size, starter };
 }
 
 /** Section text for a starter article: what to write there, as an italic prompt people replace. */
@@ -58,13 +67,63 @@ async function starterPack(ctx: RequestContext, project: string, name: string, c
   return made;
 }
 
-export async function adminAddComponent(ctx: RequestContext, project: string, input: { slug: string; kind: string; repo_url?: string }) {
-  assertAdmin(ctx);
+export async function adminAddComponent(ctx: RequestContext, project: string, input: { slug: string; kind: string; repo_url?: string; description?: string }) {
   const scope = await getScopeBySlug(ctx.db, project);
-  if (scope.kind !== "project") throw new ValidationError("components belong to projects");
+  if (scope.kind !== "project") throw new ValidationError("repositories belong to projects");
+  await assertCanManage(ctx, scope);
   if (!SLUG.test(input.slug)) throw new ValidationError("slug must be lowercase letters, digits and hyphens");
-  const id = await createComponent(ctx.db, scope.id, input.slug, input.kind, input.repo_url);
+  await assertRepoFree(ctx, input.repo_url);
+  const exists = await ctx.db.query("SELECT 1 FROM components WHERE scope_id = $1 AND slug = $2", [scope.id, input.slug]);
+  if (exists.rowCount) throw new ValidationError(`${project} already has a component '${input.slug}'`);
+  const id = await createComponent(ctx.db, scope.id, input.slug, input.kind, input.repo_url || undefined, input.description?.trim() ?? "");
   return { id, project, slug: input.slug };
+}
+
+/** A repository can belong to one project only, so a session in it always lands in the same place. */
+async function assertRepoFree(ctx: RequestContext, url: string | undefined, exceptId?: string) {
+  const key = repoKey(url);
+  if (!key) return;
+  const { rows } = await ctx.db.query<{ project: string; slug: string }>(
+    "SELECT s.slug AS project, c.slug FROM components c JOIN scopes s ON s.id = c.scope_id WHERE c.repo_key = $1 AND ($2::uuid IS NULL OR c.id <> $2)",
+    [key, exceptId ?? null],
+  );
+  if (rows[0]) throw new ValidationError(`that repository is already ${rows[0].project}/${rows[0].slug}`);
+}
+
+export async function updateComponent(
+  ctx: RequestContext,
+  project: string,
+  slug: string,
+  patch: { slug?: string; kind?: string; repo_url?: string | null; description?: string },
+) {
+  const scope = await getScopeBySlug(ctx.db, project);
+  await assertCanManage(ctx, scope);
+  const c = (await ctx.db.query<{ id: string }>("SELECT id FROM components WHERE scope_id = $1 AND slug = $2", [scope.id, slug])).rows[0];
+  if (!c) throw new ValidationError(`${project} has no component '${slug}'`);
+  if (patch.slug !== undefined && !SLUG.test(patch.slug)) throw new ValidationError("slug must be lowercase letters, digits and hyphens");
+  if (patch.repo_url) await assertRepoFree(ctx, patch.repo_url, c.id);
+  const repo = patch.repo_url === undefined ? undefined : patch.repo_url?.trim() || null;
+  const { rows } = await ctx.db.query(
+    `UPDATE components SET slug = coalesce($2, slug), kind = coalesce($3, kind), description = coalesce($4, description),
+            repo_url = CASE WHEN $5 THEN $6 ELSE repo_url END, repo_key = CASE WHEN $5 THEN $7 ELSE repo_key END
+      WHERE id = $1 RETURNING slug, kind, repo_url, description`,
+    [c.id, patch.slug ?? null, patch.kind ?? null, patch.description ?? null, repo !== undefined, repo ?? null, repoKey(repo)],
+  );
+  return rows[0];
+}
+
+/** Removes a component; contracts and items stay, only their links to it go. */
+export async function removeComponent(ctx: RequestContext, project: string, slug: string) {
+  const scope = await getScopeBySlug(ctx.db, project);
+  await assertCanManage(ctx, scope);
+  const c = (await ctx.db.query<{ id: string }>("SELECT id FROM components WHERE scope_id = $1 AND slug = $2", [scope.id, slug])).rows[0];
+  if (!c) throw new ValidationError(`${project} has no component '${slug}'`);
+  await ctx.db.query("DELETE FROM relations WHERE from_id = $1 OR to_id = $1", [c.id]);
+  await ctx.db.query("DELETE FROM impact_notices WHERE component_id = $1", [c.id]);
+  await ctx.db.query("UPDATE articles SET component_ids = array_remove(component_ids, $1) WHERE $1 = ANY(component_ids)", [c.id]);
+  await ctx.db.query("UPDATE findings SET component_ids = array_remove(component_ids, $1) WHERE $1 = ANY(component_ids)", [c.id]);
+  await ctx.db.query("DELETE FROM components WHERE id = $1", [c.id]);
+  return { project, removed: slug };
 }
 
 /**
@@ -72,8 +131,8 @@ export async function adminAddComponent(ctx: RequestContext, project: string, in
  * placeholder user is created and claimed on their first login.
  */
 export async function adminSetMember(ctx: RequestContext, scopeSlug: string, email: string, role: "reader" | "writer" | "owner" | null) {
-  assertAdmin(ctx);
   const scope = await getScopeBySlug(ctx.db, scopeSlug);
+  await assertCanManage(ctx, scope);
   const normalized = email.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+$/.test(normalized)) throw new ValidationError("invalid email");
   const user =
@@ -81,16 +140,26 @@ export async function adminSetMember(ctx: RequestContext, scopeSlug: string, ema
     (
       await ctx.db.query<{ id: string }>("INSERT INTO users (subject, email) VALUES ($1, $2) RETURNING id", [`pending:${normalized}`, normalized])
     ).rows[0]!;
-  if (role === null) {
-    await ctx.db.query("DELETE FROM scope_members WHERE scope_id = $1 AND user_id = $2", [scope.id, user.id]);
-  } else {
-    await ctx.db.query(
-      `INSERT INTO scope_members (scope_id, user_id, role) VALUES ($1, $2, $3)
-       ON CONFLICT (scope_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
-      [scope.id, user.id, role],
-    );
-  }
+  await withTx(ctx.db, async (tx) => {
+    if (role === null) {
+      await tx.query("DELETE FROM scope_members WHERE scope_id = $1 AND user_id = $2", [scope.id, user.id]);
+    } else {
+      await tx.query(
+        `INSERT INTO scope_members (scope_id, user_id, role) VALUES ($1, $2, $3)
+         ON CONFLICT (scope_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
+        [scope.id, user.id, role],
+      );
+    }
+    await assertOwnerRemains(ctx, tx, scope);
+  });
   return { scope: scope.slug, email: normalized, role };
+}
+
+/** A project owner (not an admin) can't leave a project without owners; admins can always fix it. */
+export async function assertOwnerRemains(ctx: RequestContext, db: Queryable, scope: { id: string; kind: string }) {
+  if (isAdmin(ctx) || scope.kind !== "project") return;
+  const owners = await db.query("SELECT 1 FROM scope_roles WHERE scope_id = $1 AND role = 'owner' LIMIT 1", [scope.id]);
+  if (!owners.rowCount) throw new ValidationError("a project needs at least one owner; make someone else owner first");
 }
 
 export async function listMembers(ctx: RequestContext, scopeSlug: string) {
@@ -104,8 +173,8 @@ export async function listMembers(ctx: RequestContext, scopeSlug: string) {
 }
 
 export async function adminUpdateScope(ctx: RequestContext, slug: string, patch: { visibility?: "team" | "members"; name?: string; description?: string }) {
-  assertAdmin(ctx);
   const scope = await getScopeBySlug(ctx.db, slug);
+  await assertCanManage(ctx, scope);
   if (patch.visibility === "members" && scope.kind !== "project") throw new ValidationError("only projects can be members-only");
   const { rows } = await ctx.db.query(
     `UPDATE scopes SET visibility = coalesce($2, visibility), name = coalesce($3, name), description = coalesce($4, description)

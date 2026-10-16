@@ -22,6 +22,7 @@ import {
   updateFinding,
   verifyEntry,
 } from "../core/writes.js";
+import { resolveRepo } from "../core/scopes.js";
 import { getProjectContext } from "../core/projects.js";
 import { listProjects } from "../core/scopes.js";
 import { searchKnowledge } from "../core/search.js";
@@ -33,7 +34,8 @@ Scopes: "team" (org-wide systems, metrics, runbooks), one scope per project, and
 
 How to use it:
 - Before investigating an alert, bug or question, call search_knowledge first. Phrase the query the way the symptom first appeared.
-- Before changing code in a project, call get_project_context (pass the project, and the component if you know it: backend, frontend, ...). Read open impact notices first.
+- Before changing code in a project, call get_project_context (pass the project, and the component if you know it: backend, frontend, ...; or pass the repo's git remote URL as repo and Cairn finds both). Read open impact notices first.
+- Project knowledge belongs in that project's scope (project argument), not in "team": each project has its own members and access. Use "team" only for org-wide systems, metrics and runbooks.
 - Open only the relevant hits with get_article / get_finding; search results are compact summaries.
 - Items marked possibly_stale were not verified recently: confirm before relying on them.
 - When a search result solved your problem, call verify_entry so it stays fresh.
@@ -200,10 +202,22 @@ export function buildMcpServer(ctx: RequestContext): McpServer {
       inputSchema: {
         project: projectArg,
         component: z.string().optional().describe("Component slug (e.g. 'backend', 'frontend'). Defaults to the X-Cairn-Component header."),
+        repo: z
+          .string()
+          .optional()
+          .describe("The repository's git remote URL (`git remote get-url origin`). Finds the project and component when you don't know them."),
       },
       annotations: { readOnlyHint: true },
     },
-    (args) => run("get_project_context", null, () => getProjectContext(ctx, args.project, args.component)),
+    (args) =>
+      run("get_project_context", null, async () => {
+        if (args.repo && !args.project) {
+          const found = await resolveRepo(ctx.db, args.repo);
+          if (!found) throw new NotFoundError(`no project has the repository ${args.repo}; ask a project owner to add it under the project's settings → Repositories`);
+          return getProjectContext(ctx, found.project, args.component ?? found.component);
+        }
+        return getProjectContext(ctx, args.project, args.component);
+      }),
   );
 
   server.registerTool(

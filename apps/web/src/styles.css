@@ -622,3 +622,30 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .purge-zone { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--border); }
 .purge-zone.open { border: 1px solid var(--danger, #dc2626); border-radius: var(--radius); padding: 1rem 1.2rem; }
 .purge-zone h3 { margin-top: 0; color: var(--danger, #dc2626); }
+
+/* Project settings, teams, moving */
+.settings-tabs { margin: 0.4rem 0 1.2rem; }
+.settings-tabs a { padding: 0.45rem 0.8rem; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.settings-tabs a.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+.settings-tabs a:hover { text-decoration: none; color: var(--text); }
+.settings-section { max-width: 760px; }
+.row-end { text-align: right; }
+.role-help { margin-top: 1.5rem; }
+.repo-list .repo { display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.8rem 0.95rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); margin-bottom: 0.5rem; }
+.repo-list .repo > svg { color: var(--muted); margin-top: 0.15rem; flex: none; }
+.repo-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; }
+.repo-main code { overflow-wrap: anywhere; }
+.repo-list .repo.editing { display: block; }
+.repo-fields label { margin: 0.5rem 0; }
+.folder-head { display: flex; align-items: center; gap: 0.75rem; }
+.folder-head h2 { margin-right: auto; }
+.move-panel { border: 1px solid var(--accent); border-radius: var(--radius); padding: 1rem 1.2rem; margin: 0.5rem 0 1rem; background: var(--surface); box-shadow: 0 0 0 3px var(--ring); }
+.move-panel h3 { margin-top: 0; }
+.move-row { display: grid; grid-template-columns: minmax(200px, 320px) 1fr; gap: 1rem; align-items: end; }
+.move-row label { display: flex; flex-direction: column; gap: 0.3rem; font-weight: 550; font-size: 0.9rem; }
+.move-row label.inline { flex-direction: row; align-items: center; font-weight: 400; padding-bottom: 0.5rem; }
+.move-preview ul { max-height: 16rem; overflow: auto; }
+.move-preview .badge { margin-left: 0.4rem; }
+@media (max-width: 760px) { .move-row { grid-template-columns: 1fr; } }
+.repo-row { display: grid; grid-template-columns: 2fr 1fr 130px auto; gap: 0.5rem; align-items: center; }
+@media (max-width: 760px) { .repo-row { grid-template-columns: 1fr 1fr; } }

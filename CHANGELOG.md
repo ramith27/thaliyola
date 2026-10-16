@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Projects manage their own access: a settings page with General, Members and access, and Repositories, open to the project's owners (not just admins); owners can't leave a project without an owner (`/api/scopes/:slug/access`)
+- Teams: groups of people that get a role on many projects at once (`/api/teams`, `PUT /api/scopes/:slug/teams`); effective roles combine direct and team roles everywhere (reading, proposing, approving, notifications, digests)
+- Any number of repositories per project, editable and removable, one project per repository; sessions find their project from the git remote (`X-Cairn-Repo` header, `repo` argument of `get_project_context`, `/api/repos/resolve`)
+- Move a folder or items into a project, keeping history and links, optionally turning sub-folders into repositories (`POST /api/move`)
+
 - Metrics page (`/api/success`): searches answered, reuse rate, review time, repeat problems, unowned and stale items; knowledge gaps for admins (`/api/gaps`), from a search log that keeps query text only for misses, redacted (`SEARCH_LOG_DAYS`)
 - Admin purge of an article or finding with a required reason and a purge log (`POST /api/purge/:id`, `/api/purges`); stored files are removed when nothing else uses them
 - Weekly digest email (`DIGEST_DAY`, `DIGEST_HOUR`)

@@ -1,7 +1,10 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
 import type { Settings } from "../config.js";
-import { adminAddComponent, adminCreateProject, adminSetMember, adminUpdateScope, listMembers } from "../core/admin.js";
+import { adminAddComponent, adminCreateProject, adminSetMember, adminUpdateScope, listMembers, removeComponent, updateComponent } from "../core/admin.js";
+import { moveItems } from "../core/move.js";
+import { resolveRepo } from "../core/scopes.js";
+import { createTeam, deleteTeam, getTeam, listAccess, listTeams, setTeamMember, setTeamRole, updateTeam } from "../core/teams.js";
 import { ASSET_MIME_TYPES, deleteAsset, getAsset, uploadAsset } from "../core/assets.js";
 import { audit } from "../core/audit.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError, type Actor, type RequestContext } from "../core/context.js";
@@ -63,6 +66,12 @@ export function apiErrorHandler(err: unknown, _req: Request, res: Response, next
  * JSON API for the web UI and for reviewers. Approval is deliberately not an
  * MCP tool: agents propose, people approve here.
  */
+/** A git remote: https URL, SSH form (git@host:org/repo.git) or host/path; empty clears it. */
+const repoUrl = z
+  .string()
+  .max(500)
+  .refine((v) => v === "" || /^([a-z+]+:\/\/)?([^@\s/]+@)?[\w.-]+(:\d+)?[/:][\w./~-]+$/i.test(v.trim()), "not a repository URL");
+
 export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; settings: Settings; embedder?: Embedder; onWrite?: () => void }) {
   const router = Router();
   const ctxOf = (req: Request, res: Response): RequestContext => ({
@@ -108,8 +117,10 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
       const origin = settings.publicUrl ?? `${req.protocol}://${req.header("host")}`;
       const readable = await readableScopes(ctx);
       const memberships = await ctx.db.query(
-        `SELECT s.slug, s.name, s.kind, m.role FROM scope_members m JOIN scopes s ON s.id = m.scope_id
-          WHERE m.user_id = $1 ORDER BY s.kind, s.name`,
+        `SELECT s.slug, s.name, s.kind,
+                (array_agg(m.role ORDER BY CASE m.role WHEN 'owner' THEN 3 WHEN 'writer' THEN 2 ELSE 1 END DESC))[1] AS role
+           FROM scope_roles m JOIN scopes s ON s.id = m.scope_id
+          WHERE m.user_id = $1 GROUP BY s.id ORDER BY s.kind, s.name`,
         [ctx.actor.id],
       );
       const projects = await ctx.db.query(
@@ -158,11 +169,14 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
       const readable = await readableScopes(ctx);
       const { rows } = await ctx.db.query(
         `SELECT s.id, s.kind, s.slug, s.name, s.description, s.status, s.visibility,
-                coalesce((SELECT json_agg(json_build_object('slug', c.slug, 'kind', c.kind, 'repo_url', c.repo_url) ORDER BY c.slug)
-                            FROM components c WHERE c.scope_id = s.id), '[]') AS components
+                coalesce((SELECT json_agg(json_build_object('slug', c.slug, 'kind', c.kind, 'repo_url', c.repo_url, 'description', c.description) ORDER BY c.slug)
+                            FROM components c WHERE c.scope_id = s.id), '[]') AS components,
+                (SELECT r.role FROM scope_roles r WHERE r.scope_id = s.id AND r.user_id = $2
+                  ORDER BY CASE r.role WHEN 'owner' THEN 3 WHEN 'writer' THEN 2 ELSE 1 END DESC LIMIT 1) AS my_role,
+                ($3 OR (s.kind = 'project' AND EXISTS (SELECT 1 FROM scope_roles r WHERE r.scope_id = s.id AND r.user_id = $2 AND r.role = 'owner'))) AS can_manage
            FROM scopes s WHERE s.status = 'active' AND ($1::uuid[] IS NULL OR s.id = ANY($1))
           ORDER BY CASE s.kind WHEN 'team' THEN 0 WHEN 'library' THEN 1 ELSE 2 END, s.name`,
-        [readable],
+        [readable, ctx.actor.id, isAdmin(ctx) && ctx.actor.kind === "human"],
       );
       return { scopes: rows, article_types: ARTICLE_TYPES, finding_types: FINDING_TYPES };
     }),
@@ -518,8 +532,8 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
             name: z.string().min(1).max(200),
             description: z.string().max(2000).optional(),
             components: z
-              .array(z.object({ slug: z.string(), kind: z.enum(["backend", "frontend", "mobile", "data", "infra", "other"]), repo_url: z.string().url().optional() }))
-              .max(10)
+              .array(z.object({ slug: z.string(), kind: z.enum(["backend", "frontend", "mobile", "data", "infra", "other"]), repo_url: repoUrl.optional() }))
+              .max(30)
               .optional(),
             starter: z.boolean().optional(),
           })
@@ -534,7 +548,12 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
         ctx,
         String(req.params.slug),
         z
-          .object({ slug: z.string(), kind: z.enum(["backend", "frontend", "mobile", "data", "infra", "other"]), repo_url: z.string().url().optional() })
+          .object({
+            slug: z.string(),
+            kind: z.enum(["backend", "frontend", "mobile", "data", "infra", "other"]),
+            repo_url: repoUrl.optional(),
+            description: z.string().max(500).optional(),
+          })
           .parse(req.body),
       ),
     ),
@@ -555,6 +574,81 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
     handle("admin_set_member", (ctx, req) => {
       const body = z.object({ email: z.string(), role: z.enum(["reader", "writer", "owner"]).nullable() }).parse(req.body);
       return adminSetMember(ctx, String(req.params.slug), body.email, body.role);
+    }),
+  );
+
+  // ---- Project access, teams, repositories, moving ---------------------------
+
+  const role = z.enum(["reader", "writer", "owner"]);
+  router.get("/scopes/:slug/access", handle("list_access", (ctx, req) => listAccess(ctx, String(req.params.slug))));
+  router.put(
+    "/scopes/:slug/teams",
+    handle("set_team_role", (ctx, req) => {
+      const body = z.object({ team: z.string(), role: role.nullable() }).parse(req.body);
+      return setTeamRole(ctx, String(req.params.slug), body.team, body.role);
+    }),
+  );
+  router.patch(
+    "/projects/:slug/components/:component",
+    handle("update_component", (ctx, req) =>
+      updateComponent(
+        ctx,
+        String(req.params.slug),
+        String(req.params.component),
+        z
+          .object({
+            slug: z.string().optional(),
+            kind: z.enum(["backend", "frontend", "mobile", "data", "infra", "other"]).optional(),
+            repo_url: repoUrl.nullable().optional(),
+            description: z.string().max(500).optional(),
+          })
+          .parse(req.body),
+      ),
+    ),
+  );
+  router.delete("/projects/:slug/components/:component", handle("remove_component", (ctx, req) => removeComponent(ctx, String(req.params.slug), String(req.params.component))));
+  router.get("/teams", handle("list_teams", async (ctx) => ({ teams: await listTeams(ctx) })));
+  router.post(
+    "/teams",
+    handle("create_team", (ctx, req) => createTeam(ctx, z.object({ slug: z.string(), name: z.string().max(200), description: z.string().max(1000).optional() }).parse(req.body))),
+  );
+  router.get("/teams/:slug", handle("get_team", (ctx, req) => getTeam(ctx, String(req.params.slug))));
+  router.patch(
+    "/teams/:slug",
+    handle("update_team", (ctx, req) => updateTeam(ctx, String(req.params.slug), z.object({ name: z.string().max(200).optional(), description: z.string().max(1000).optional() }).parse(req.body))),
+  );
+  router.delete("/teams/:slug", handle("delete_team", (ctx, req) => deleteTeam(ctx, String(req.params.slug))));
+  router.put(
+    "/teams/:slug/members",
+    handle("set_team_member", (ctx, req) => {
+      const body = z.object({ email: z.string().max(320), member: z.boolean() }).parse(req.body);
+      return setTeamMember(ctx, String(req.params.slug), body.email, body.member);
+    }),
+  );
+  router.post(
+    "/move",
+    handle("move_items", (ctx, req) =>
+      moveItems(
+        ctx,
+        z
+          .object({
+            from: z.string(),
+            to: z.string(),
+            folder: z.string().max(500).optional(),
+            ids: z.array(uuid).max(500).optional(),
+            strip_folder: z.boolean().optional(),
+            repo_folders: z.array(z.string().max(200)).max(50).optional(),
+            dry_run: z.boolean().optional(),
+          })
+          .parse(req.body),
+      ),
+    ),
+  );
+  router.get(
+    "/repos/resolve",
+    handle("resolve_repo", async (ctx, req) => {
+      const found = await resolveRepo(ctx.db, z.string().min(3).max(500).parse(req.query.url));
+      return { match: found };
     }),
   );
 

@@ -1,3 +1,4 @@
+import { repoKey } from "./bootstrap.js";
 import type { Queryable } from "../db/pool.js";
 import { NotFoundError, ValidationError, type RequestContext } from "./context.js";
 import { assertCanRead, readableScopes } from "./permissions.js";
@@ -60,6 +61,17 @@ export async function listComponents(db: Queryable, projectId: string): Promise<
   return rows;
 }
 
+/** The project and component a repository belongs to, from its git remote URL. */
+export async function resolveRepo(db: Queryable, url: string): Promise<{ project: string; component: string } | null> {
+  const key = repoKey(url);
+  if (!key) return null;
+  const { rows } = await db.query<{ project: string; component: string }>(
+    "SELECT s.slug AS project, c.slug AS component FROM components c JOIN scopes s ON s.id = c.scope_id WHERE c.repo_key = $1 AND s.status = 'active' LIMIT 1",
+    [key],
+  );
+  return rows[0] ?? null;
+}
+
 export async function listProjects(ctx: RequestContext, includeArchived = false) {
   const readable = await readableScopes(ctx);
   const { rows } = await ctx.db.query<{
@@ -71,10 +83,10 @@ export async function listProjects(ctx: RequestContext, includeArchived = false)
     owners: string[];
   }>(
     `SELECT s.slug, s.name, s.description, s.status,
-            coalesce((SELECT json_agg(json_build_object('slug', c.slug, 'kind', c.kind) ORDER BY c.slug)
+            coalesce((SELECT json_agg(json_build_object('slug', c.slug, 'kind', c.kind, 'repo_url', c.repo_url) ORDER BY c.slug)
                         FROM components c WHERE c.scope_id = s.id), '[]') AS components,
             coalesce((SELECT array_agg(coalesce(u.email, u.subject) ORDER BY u.email)
-                        FROM scope_members m JOIN users u ON u.id = m.user_id
+                        FROM (SELECT DISTINCT scope_id, user_id, role FROM scope_roles) m JOIN users u ON u.id = m.user_id
                        WHERE m.scope_id = s.id AND m.role = 'owner'), '{}') AS owners
        FROM scopes s
       WHERE s.kind = 'project' AND ($1 OR s.status = 'active') AND ($2::uuid[] IS NULL OR s.id = ANY($2))

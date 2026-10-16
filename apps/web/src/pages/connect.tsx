@@ -161,6 +161,9 @@ export function ConnectPage() {
         </h2>
         <h3>For all your work</h3>
         <CopyBlock text={`claude mcp add --transport http cairn ${data.mcp_url} --scope user \\\n  ${headers[0]}`} />
+        <p className="muted small">
+          In a repository that's listed under a project's settings → Repositories, Claude passes its git remote and Cairn picks the project and component by itself.
+        </p>
 
         <h3>For one project's repository (recommended)</h3>
         <p className="muted small">
