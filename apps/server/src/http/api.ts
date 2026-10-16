@@ -7,6 +7,7 @@ import { audit } from "../core/audit.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError, type Actor, type RequestContext } from "../core/context.js";
 import { editArticle, editFinding, newArticle, newFinding } from "../core/direct.js";
 import { needsAttention } from "../core/freshness.js";
+import { insights, knowledgeGraph } from "../core/insights.js";
 import { listSuggestions } from "../core/suggestions.js";
 import { browseKb, getArticle, getFinding } from "../core/items.js";
 import { ackNotice, listImpactNotices } from "../core/notices.js";
@@ -128,6 +129,12 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
         catalog: await mcpCatalog(ctx),
       };
     }),
+  );
+
+  router.get("/insights", handle("insights", (ctx) => insights(ctx)));
+  router.get(
+    "/graph",
+    handle("graph", (ctx, req) => knowledgeGraph(ctx, { scope: z.string().optional().parse(req.query.scope) || undefined })),
   );
 
   // ---- Reading -------------------------------------------------------------

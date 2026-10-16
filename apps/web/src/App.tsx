@@ -3,9 +3,11 @@ import { api, ApiError, authApi, getToken, setToken, type Me, type ScopeInfo } f
 import { AccountPage, ForcedPasswordChange, LoginPage, UsersPage } from "./pages/account";
 import { ScopeSettingsPage } from "./pages/settings";
 import { ConnectPage } from "./pages/connect";
+import { Dashboard } from "./pages/dashboard";
+import { GraphPage } from "./pages/graph";
 import { Layout } from "./components/Layout";
 import { ErrorBox, Loading } from "./components/ui";
-import { HomePage, ProjectPage, ScopePage, SearchPage } from "./pages/browse";
+import { ProjectPage, ScopePage, SearchPage } from "./pages/browse";
 import { ArticlePage, FindingPage, NewArticlePage, NewFindingPage } from "./pages/items";
 import { ReviewQueuePage, RevisionPage } from "./pages/review";
 import { useRoute } from "./router";
@@ -81,7 +83,7 @@ export function App() {
   let page;
   switch (section) {
     case undefined:
-      page = <HomePage scopes={boot.scopes} me={boot.me} />;
+      page = <Dashboard scopes={boot.scopes} me={boot.me} />;
       break;
     case "search":
       page = <SearchPage route={route} />;
@@ -105,6 +107,9 @@ export function App() {
         ) : (
           <NewArticlePage route={route} scopes={boot.scopes} articleTypes={boot.articleTypes} />
         );
+      break;
+    case "graph":
+      page = <GraphPage route={route} scopes={boot.scopes} />;
       break;
     case "connect":
       page = <ConnectPage />;

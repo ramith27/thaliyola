@@ -1,94 +1,9 @@
 import type { Folder, Me, Notice as NoticeT, ScopeInfo, SearchHit } from "../api";
-import { GetStartedBanner } from "./connect";
-import { NewProjectForm } from "./settings";
 import { api } from "../api";
 import { ErrorBox, formatDate, itemHref, Loading, Notice, ScopeBadge, Snippet, StatusBadge, TypeBadge } from "../components/ui";
 import { useApi } from "../hooks";
 import { href, type Route } from "../router";
 import { useState } from "react";
-
-export function HomePage({ scopes, me }: { scopes: ScopeInfo[]; me: Me }) {
-  const projects = scopes.filter((s) => s.kind === "project");
-  const mine = useApi<{ revisions: { id: string; summary: string; state: string; target_title: string; scope: string }[] }>(
-    "/revisions?mine=true&state=pending&limit=10",
-  );
-  return (
-    <div className="page">
-      <GetStartedBanner />
-      <h1>Team knowledge</h1>
-      <p className="lead">
-        Systems, metrics, runbooks, project designs and shared library items, plus what the team learned from past investigations.
-      </p>
-      <div className="cards">
-        {scopes
-          .filter((s) => s.kind !== "project")
-          .map((s) => (
-            <a key={s.slug} className="card" href={href(`/scope/${s.slug}`)}>
-              <h3>{s.name}</h3>
-              <p className="muted">{s.description}</p>
-            </a>
-          ))}
-      </div>
-      <h2>Projects</h2>
-      {projects.length ? (
-        <div className="cards">
-          {projects.map((p) => (
-            <a key={p.slug} className="card" href={href(`/project/${p.slug}`)}>
-              <h3>
-                {p.name} {p.visibility === "members" && <span className="badge">members only</span>}
-              </h3>
-              <p className="muted">{p.description}</p>
-              <p className="small">{p.components.map((c) => c.slug).join(" · ")}</p>
-            </a>
-          ))}
-        </div>
-      ) : (
-        <p className="muted">No projects yet.</p>
-      )}
-      {me.admin && (
-        <div className="actions">
-          <NewProjectForm />
-        </div>
-      )}
-      <NeedsAttention />
-      {mine.data && mine.data.revisions.length > 0 && (
-        <>
-          <h2>Your pending proposals</h2>
-          <ul className="list">
-            {mine.data.revisions.map((r) => (
-              <li key={r.id}>
-                <a href={href(`/review/${r.id}`)}>{r.summary}</a> <ScopeBadge scope={r.scope} />
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </div>
-  );
-}
-
-function NeedsAttention() {
-  const { data } = useApi<{ entries: { kind: string; id: string; title: string; type: string; scope: string; reason: string; last_verified_at: string }[] }>(
-    "/attention?limit=8",
-  );
-  if (!data?.entries.length) return null;
-  return (
-    <section>
-      <h2>Needs attention</h2>
-      <p className="muted small">Not verified recently or past their review date. Check them against reality, then mark them still valid or fix them.</p>
-      <ul className="list">
-        {data.entries.map((e) => (
-          <li key={e.id}>
-            <a href={itemHref(e.kind, e.id)}>{e.title}</a> <TypeBadge type={e.type} /> <ScopeBadge scope={e.scope} />{" "}
-            <span className="muted small">
-              {e.reason} · last verified {formatDate(e.last_verified_at)}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
 
 export function SearchPage({ route }: { route: Route }) {
   const q = route.query.get("q") ?? "";

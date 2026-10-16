@@ -115,6 +115,27 @@ describe("REST API", () => {
     expect(body.has_connected).toBe(false);
   });
 
+  it("serves dashboard insights with zero-filled series", async () => {
+    const { body } = await call("user", "GET", "/api/insights");
+    expect(body.totals).toMatchObject({ projects: 2 });
+    expect(body.totals.articles).toBeGreaterThan(5);
+    expect(body.growth).toHaveLength(12);
+    expect(body.activity).toHaveLength(30);
+    expect(body.statuses.published).toBeGreaterThan(0);
+    expect(body.types[0]).toHaveProperty("n");
+  });
+
+  it("serves the knowledge graph with edges between visible nodes only", async () => {
+    const { body } = await call("user", "GET", "/api/graph");
+    const ids = new Set(body.nodes.map((n: { id: string }) => n.id));
+    expect(body.nodes.some((n: { kind: string }) => n.kind === "component")).toBe(true);
+    expect(body.edges.length).toBeGreaterThan(3);
+    expect(body.edges.every((e: { source: string; target: string }) => ids.has(e.source) && ids.has(e.target))).toBe(true);
+    expect(body.edges.map((e: { kind: string }) => e.kind)).toEqual(expect.arrayContaining(["uses", "consumed_by", "part_of"]));
+    const scoped = await call("user", "GET", "/api/graph?scope=library");
+    expect(scoped.body.nodes.every((n: { scope: string }) => n.scope === "library")).toBe(true);
+  });
+
   it("returns JSON 404 for unknown API routes and audits API calls", async () => {
     const res = await call("user", "GET", "/api/nope");
     expect(res).toEqual({ status: 404, body: { error: "not found" } });

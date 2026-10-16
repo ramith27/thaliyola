@@ -4,9 +4,9 @@ A shared team knowledge base exposed as a remote [MCP](https://modelcontextproto
 
 The server holds no LLM. Clients (Claude Code, claude.ai, scheduled agents) do the reasoning; Cairn stores, searches, validates and versions. Agent-written content goes through human review before it is published.
 
-| Project view for a frontend session | Search by meaning, not just keywords | Review an agent's proposed contract change |
+| Dashboard | Knowledge graph | Project view for a frontend session |
 |---|---|---|
-| ![Project view](docs/images/project-frontend.png) | ![Search](docs/images/search.png) | ![Review](docs/images/review.png) |
+| ![Dashboard](docs/images/dashboard.png) | ![Knowledge graph](docs/images/graph.png) | ![Project view](docs/images/project-frontend.png) |
 
 ## Concepts
 
@@ -113,6 +113,9 @@ On every write the server:
 ### Web UI
 
 The server also serves a web UI at `/` for people:
+
+- **Dashboard:** knowledge added per week, agent vs. web activity, freshness, knowledge by type, top contributors, recently approved changes and items needing attention. Every chart has a table view and hover details.
+- **Knowledge graph:** an interactive map of how projects, components, contracts, designs, library items and findings link. Hover to trace links, click to open, zoom and pan; unlinked items are hidden until asked for.
 
 - **Browse:** team, library and project scopes, each with a folder tree.
 - **Project view:** pick a component (backend, frontend, ...) to see the contracts it provides and consumes, upstream changes it still has to handle, the shared library items it uses, recent decisions and known issues.

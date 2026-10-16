@@ -109,6 +109,13 @@ describe("members-only projects", () => {
     expect((await getArticle(librarian, approved.library_copy_id as string)).scope.slug).toBe("library");
   });
 
+  it("are left out of dashboard numbers and the graph", async () => {
+    const graph = await fetch(`${base}/api/graph`, { headers: { authorization: "Bearer out" } }).then((r) => r.json());
+    expect(graph.nodes.some((n: { scope: string }) => n.scope === "order-service")).toBe(false);
+    const stats = await fetch(`${base}/api/insights`, { headers: { authorization: "Bearer out" } }).then((r) => r.json());
+    expect(stats.totals.projects).toBe(1);
+  });
+
   it("are hidden over HTTP too, and only admins change visibility", async () => {
     const scopes = await (await fetch(`${base}/api/scopes`, { headers: { authorization: "Bearer out" } })).json();
     expect(scopes.scopes.map((s: { slug: string }) => s.slug)).not.toContain("order-service");

@@ -1,105 +1,170 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { authApi, type Folder, type Me, type ScopeInfo } from "../api";
 import { useApi } from "../hooks";
 import { href, navigate, type Route } from "../router";
+import { I, type IconName } from "./icons";
 
 export function Layout({ me, scopes, route, children }: { me: Me; scopes: ScopeInfo[]; route: Route; children: ReactNode }) {
   const [q, setQ] = useState(route.path[0] === "search" ? (route.query.get("q") ?? "") : "");
   const [menuOpen, setMenuOpen] = useState(false);
   const pending = useApi<{ revisions: unknown[] }>("/revisions?state=pending&limit=200");
+  const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setMenuOpen(false);
     pending.reload();
   }, [route, pending.reload]);
 
-  const activeScope = route.path[0] === "scope" || route.path[0] === "project" ? route.path[1] : undefined;
-  const team = scopes.filter((s) => s.kind !== "project");
+  // ⌘K / Ctrl+K focuses search.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const section = route.path[0];
+  const activeScope = section === "scope" || section === "project" ? route.path[1] : undefined;
+  const shared = scopes.filter((s) => s.kind !== "project");
   const projects = scopes.filter((s) => s.kind === "project");
+  const pendingCount = pending.data?.revisions.length ?? 0;
+  const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
 
   return (
     <div className="app">
-      <header className="topbar">
-        <button className="menu-btn" aria-label="Menu" onClick={() => setMenuOpen((o) => !o)}>
-          ☰
-        </button>
+      <aside className={`sidebar ${menuOpen ? "open" : ""}`}>
         <a className="brand" href={href("/")}>
-          <img src="/favicon.svg" alt="" width={22} height={22} /> Cairn
+          <img src="/favicon.svg" alt="" width={24} height={24} />
+          <span>Cairn</span>
         </a>
-        <form
-          className="search-form"
-          role="search"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (q.trim()) navigate("/search", { q: q.trim() });
-          }}
-        >
-          <input type="search" placeholder="Search knowledge…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" />
-        </form>
-        <nav className="top-links">
-          <a href={href("/connect")} className={route.path[0] === "connect" ? "active" : ""}>
-            Connect
-          </a>
-          <a href={href("/review")} className={route.path[0] === "review" ? "active" : ""}>
-            Review{pending.data?.revisions.length ? <span className="count">{pending.data.revisions.length}</span> : null}
-          </a>
-          {me.admin && me.auth_mode === "local" && (
-            <a href={href("/admin/users")} className={route.path[0] === "admin" ? "active" : ""}>
-              Users
-            </a>
-          )}
-          <a href={href("/account")} className={`small me ${route.path[0] === "account" ? "active" : ""}`} title="Account and API tokens">
-            {me.email ?? "service"}
-          </a>
-          {me.auth_mode === "local" && (
-            <button
-              className="link-btn small"
-              onClick={async () => {
-                await authApi("/logout", {});
-                window.location.hash = "";
-                window.location.reload();
-              }}
-            >
-              Sign out
-            </button>
-          )}
+        <nav className="nav">
+          <NavLink to="/" icon="home" label="Home" active={section === undefined} />
+          <NavLink to="/graph" icon="graph" label="Knowledge graph" active={section === "graph"} />
+          <NavLink to="/review" icon="review" label="Review" active={section === "review"} count={pendingCount} />
+          <NavLink to="/connect" icon="plug" label="Connect" active={section === "connect"} />
         </nav>
-      </header>
-      <div className="body">
-        <aside className={`sidebar ${menuOpen ? "open" : ""}`}>
-          <SidebarGroup title="Shared" scopes={team} active={activeScope} />
-          <SidebarGroup title="Projects" scopes={projects} active={activeScope} />
-          <div className="sidebar-actions">
-            <a className="btn btn-small" href={href("/new/article", { scope: activeScope })}>
-              New article
-            </a>
-            <a className="btn btn-small" href={href("/new/finding", { scope: activeScope })}>
-              New finding
-            </a>
-          </div>
-        </aside>
+        <div className="nav-group">
+          <div className="nav-title">Shared</div>
+          {shared.map((s) => (
+            <ScopeLink key={s.slug} scope={s} active={activeScope === s.slug} />
+          ))}
+        </div>
+        <div className="nav-group">
+          <div className="nav-title">Projects</div>
+          {projects.map((s) => (
+            <ScopeLink key={s.slug} scope={s} active={activeScope === s.slug} />
+          ))}
+          {!projects.length && <div className="muted small nav-empty">No projects yet</div>}
+        </div>
+        <div className="sidebar-foot">
+          <a className="btn btn-block" href={href("/new/article", { scope: activeScope })}>
+            <I name="plus" size={16} /> New article
+          </a>
+        </div>
+      </aside>
+      {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} />}
+
+      <div className="main">
+        <header className="topbar">
+          <button className="icon-btn menu-btn" aria-label="Menu" onClick={() => setMenuOpen((o) => !o)}>
+            <I name="menu" />
+          </button>
+          <form
+            className="search-form"
+            role="search"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (q.trim()) navigate("/search", { q: q.trim() });
+            }}
+          >
+            <I name="search" size={16} />
+            <input ref={searchRef} type="search" placeholder="Search knowledge…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" />
+            <kbd>{isMac ? "⌘K" : "Ctrl K"}</kbd>
+          </form>
+          <UserMenu me={me} />
+        </header>
         <main className="content">{children}</main>
       </div>
     </div>
   );
 }
 
-function SidebarGroup({ title, scopes, active }: { title: string; scopes: ScopeInfo[]; active?: string }) {
-  if (!scopes.length) return null;
+function NavLink({ to, icon, label, active, count }: { to: string; icon: IconName; label: string; active: boolean; count?: number }) {
   return (
-    <section>
-      <h4 className="sidebar-title">{title}</h4>
-      <ul className="plain">
-        {scopes.map((s) => (
-          <li key={s.slug}>
-            <a className={`scope-link ${active === s.slug ? "active" : ""}`} href={href(s.kind === "project" ? `/project/${s.slug}` : `/scope/${s.slug}`)}>
-              {s.name}
+    <a className={`nav-link ${active ? "active" : ""}`} href={href(to)}>
+      <I name={icon} />
+      <span>{label}</span>
+      {!!count && <span className="count">{count}</span>}
+    </a>
+  );
+}
+
+function ScopeLink({ scope, active }: { scope: ScopeInfo; active: boolean }) {
+  const icon: IconName = scope.kind === "library" ? "library" : scope.kind === "team" ? "team" : scope.visibility === "members" ? "lock" : "folder";
+  return (
+    <div>
+      <a className={`nav-link ${active ? "active" : ""}`} href={href(scope.kind === "project" ? `/project/${scope.slug}` : `/scope/${scope.slug}`)}>
+        <I name={icon} />
+        <span>{scope.name}</span>
+      </a>
+      {active && <ScopeTree slug={scope.slug} />}
+    </div>
+  );
+}
+
+function UserMenu({ me }: { me: Me }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const close = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, []);
+  const initial = (me.email ?? "?")[0]!.toUpperCase();
+  return (
+    <div className="user-menu" ref={ref}>
+      <button className="avatar-btn" onClick={() => setOpen((o) => !o)} aria-label="Account menu" aria-expanded={open}>
+        <span className="avatar">{initial}</span>
+      </button>
+      {open && (
+        <div className="menu" role="menu">
+          <div className="menu-head">
+            <div className="avatar avatar-lg">{initial}</div>
+            <div>
+              <div className="menu-email">{me.email ?? "service account"}</div>
+              <div className="muted small">{me.admin ? "Admin" : "Member"}</div>
+            </div>
+          </div>
+          <a className="menu-item" href={href("/account")} onClick={() => setOpen(false)}>
+            <I name="user" size={16} /> Account and tokens
+          </a>
+          <a className="menu-item" href={href("/connect")} onClick={() => setOpen(false)}>
+            <I name="plug" size={16} /> Connect your tools
+          </a>
+          {me.admin && me.auth_mode === "local" && (
+            <a className="menu-item" href={href("/admin/users")} onClick={() => setOpen(false)}>
+              <I name="team" size={16} /> Users
             </a>
-            {active === s.slug && <ScopeTree slug={s.slug} />}
-          </li>
-        ))}
-      </ul>
-    </section>
+          )}
+          {me.auth_mode === "local" && (
+            <button
+              className="menu-item"
+              onClick={async () => {
+                await authApi("/logout", {});
+                window.location.hash = "";
+                window.location.reload();
+              }}
+            >
+              <I name="logout" size={16} /> Sign out
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
