@@ -16,6 +16,7 @@ import {
 import { AddLinkForm, ShareToLibrary } from "../components/actions";
 import { Attachments } from "../components/assets";
 import { useApi } from "../hooks";
+import { RelationsPanel } from "./graph";
 import { href, navigate, type Route } from "../router";
 
 function Meta({ item }: { item: Article | Finding }) {
@@ -143,6 +144,7 @@ export function ArticlePage({ id, route }: { id: string; route: Route }) {
           <ShareToLibrary id={id} scopeKind={data.scope.kind} status={data.status} publishedAs={publishedAs(data)} />
         </div>
         <SectionedMarkdown body={data.body_md} />
+        <RelationsPanel id={id} />
       </article>
       <aside className="side">
         {data.sections.length > 1 && (
@@ -305,6 +307,7 @@ export function FindingPage({ id, route }: { id: string; route: Route }) {
             <Markdown text={data.fix} />
           </>
         )}
+        <RelationsPanel id={id} />
         {data.history.length > 0 && (
           <>
             <h2>History</h2>

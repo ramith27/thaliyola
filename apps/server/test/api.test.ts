@@ -136,6 +136,17 @@ describe("REST API", () => {
     expect(scoped.body.nodes.every((n: { scope: string }) => n.scope === "library")).toBe(true);
   });
 
+  it("focuses the graph on one item's neighbourhood", async () => {
+    const { body } = await call("user", "GET", `/api/graph?focus=${ids.screen}&depth=1`);
+    const labels = body.nodes.map((n: { label: string }) => n.label).sort();
+    expect(labels).toEqual(expect.arrayContaining(["Orders list screen", "Data table", "Orders API v1"]));
+    expect(labels).not.toContain("Checkout error-rate alert");
+    const two = await call("user", "GET", `/api/graph?focus=${ids.screen}&depth=2`);
+    // Two hops reach the contract's consumer component and, through it, the project.
+    expect(two.body.nodes.some((n: { kind: string }) => n.kind === "component")).toBe(true);
+    expect(two.body.nodes.some((n: { kind: string }) => n.kind === "project")).toBe(true);
+  });
+
   it("returns JSON 404 for unknown API routes and audits API calls", async () => {
     const res = await call("user", "GET", "/api/nope");
     expect(res).toEqual({ status: 404, body: { error: "not found" } });

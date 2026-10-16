@@ -5,6 +5,7 @@
 - Redesigned web UI: Inter typeface, slate/blue palette with full dark mode, icon sidebar, avatar menu, ⌘K search
 - Dashboard with stat tiles and charts (knowledge added, activity, freshness, knowledge by type, top contributors), built to the dataviz method: validated palette, legends, hover tooltips, table view for every chart
 - Interactive knowledge graph of projects, components, articles and findings and how they link
+- Relationships panel on every article and finding (two-hop local graph), graph focus mode (`/api/graph?focus=…&depth=…`), graph button on project pages
 
 - Web UI: Connect page with the user's access and roles, inline token creation, and ready-to-copy setup for Claude Code (global and per repository), claude.ai and other MCP clients, plus the live list of prompts and tools; getting-started banner for users who haven't connected yet
 - Support for running behind a reverse proxy and an authentication gateway (nginx config, public-origin aware same-origin checks)

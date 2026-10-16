@@ -134,7 +134,13 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
   router.get("/insights", handle("insights", (ctx) => insights(ctx)));
   router.get(
     "/graph",
-    handle("graph", (ctx, req) => knowledgeGraph(ctx, { scope: z.string().optional().parse(req.query.scope) || undefined })),
+    handle("graph", (ctx, req) =>
+      knowledgeGraph(ctx, {
+        scope: z.string().optional().parse(req.query.scope) || undefined,
+        focus: uuid.optional().parse(req.query.focus || undefined),
+        depth: z.coerce.number().int().min(1).max(3).optional().parse(req.query.depth || undefined),
+      }),
+    ),
   );
 
   // ---- Reading -------------------------------------------------------------

@@ -267,6 +267,14 @@ a.tile:hover { text-decoration: none; border-color: var(--border-strong); box-sh
 .node-label { fill: var(--text); font-size: 11px; font-weight: 500; paint-order: stroke; stroke: var(--surface-2); stroke-width: 4px; stroke-linejoin: round; pointer-events: none; }
 .node-stale > rect, .node-stale > circle:not(.match-ring) { opacity: 0.55; }
 .match-ring { fill: none; stroke: var(--accent); stroke-width: 2.5; }
+.focus-ring { fill: none; stroke: var(--text); stroke-width: 2; }
+.focus-chip { display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.35rem 0.4rem 0.35rem 0.75rem; border-radius: 999px; background: var(--accent-soft); color: var(--accent-text); font-size: 0.88rem; max-width: 420px; }
+.focus-chip strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.focus-chip a { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: inherit; font-size: 1rem; }
+.focus-chip a:hover { background: color-mix(in srgb, var(--accent) 15%, transparent); text-decoration: none; }
+.relations { margin-top: 2rem; }
+.relations .section-head { margin-top: 0; }
+.graph-legend-compact { padding: 0.55rem 0.85rem; gap: 0.8rem; font-size: 0.8rem; }
 .dim { opacity: 0.18; }
 .graph-tooltip { position: absolute; left: 1rem; bottom: 1rem; max-width: 340px; background: var(--surface); border: 1px solid var(--border);
   border-radius: 10px; box-shadow: var(--shadow-lg); padding: 0.6rem 0.75rem; pointer-events: none; }

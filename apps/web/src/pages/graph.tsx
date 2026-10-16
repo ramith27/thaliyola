@@ -56,9 +56,12 @@ function itemHref(n: GNode) {
 
 export function GraphPage({ route, scopes }: { route: Route; scopes: ScopeInfo[] }) {
   const scope = route.query.get("scope") ?? "";
+  const focus = route.query.get("focus") ?? "";
+  const params = new URLSearchParams({ ...(scope ? { scope } : {}), ...(focus ? { focus, depth: "2" } : {}) }).toString();
   const { data, error } = useApi<{ nodes: Omit<GNode, "degree">[]; edges: { source: string; target: string; kind: string }[]; truncated: boolean }>(
-    `/graph${scope ? `?scope=${encodeURIComponent(scope)}` : ""}`,
+    `/graph${params ? `?${params}` : ""}`,
   );
+  const focusNode = focus ? data?.nodes.find((n) => n.id === focus) : undefined;
   const [query, setQuery] = useState("");
   const [asTable, setAsTable] = useState(false);
   const [showUnlinked, setShowUnlinked] = useState(false);
@@ -80,7 +83,15 @@ export function GraphPage({ route, scopes }: { route: Route; scopes: ScopeInfo[]
         </div>
       </div>
       <div className="toolbar">
-        <select value={scope} onChange={(e) => navigate("/graph", { scope: e.target.value || undefined })} aria-label="Scope">
+        {focus && (
+          <span className="focus-chip">
+            Around <strong>{focusNode?.label ?? "item"}</strong>
+            <a href={href("/graph", { scope: scope || undefined })} aria-label="Show the whole graph">
+              ×
+            </a>
+          </span>
+        )}
+        <select value={scope} onChange={(e) => navigate("/graph", { scope: e.target.value || undefined, focus: focus || undefined })} aria-label="Scope">
           <option value="">All scopes</option>
           {scopes.map((s) => (
             <option key={s.slug} value={s.slug}>
@@ -113,7 +124,7 @@ export function GraphPage({ route, scopes }: { route: Route; scopes: ScopeInfo[]
       ) : asTable ? (
         <GraphTable nodes={data.nodes} edges={data.edges} />
       ) : (
-        <GraphCanvas key={`${scope}:${showUnlinked}`} nodes={view!.nodes} edges={data.edges} query={query} />
+        <GraphCanvas key={`${scope}:${focus}:${showUnlinked}`} nodes={view!.nodes} edges={data.edges} query={query} focusId={focus || undefined} />
       )}
       {data?.truncated && <p className="muted small">Showing the most recently updated items. Pick a scope to see all of it.</p>}
     </div>
@@ -154,7 +165,21 @@ function GraphTable({ nodes, edges }: { nodes: Omit<GNode, "degree">[]; edges: {
   );
 }
 
-function GraphCanvas({ nodes: rawNodes, edges: rawEdges, query }: { nodes: Omit<GNode, "degree">[]; edges: { source: string; target: string; kind: string }[]; query: string }) {
+export function GraphCanvas({
+  nodes: rawNodes,
+  edges: rawEdges,
+  query = "",
+  focusId,
+  height,
+  compact = false,
+}: {
+  nodes: Omit<GNode, "degree">[];
+  edges: { source: string; target: string; kind: string }[];
+  query?: string;
+  focusId?: string;
+  height?: number;
+  compact?: boolean;
+}) {
   const wrap = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 800, h: 560 });
   const [, setTick] = useState(0);
@@ -171,9 +196,10 @@ function GraphCanvas({ nodes: rawNodes, edges: rawEdges, query }: { nodes: Omit<
     const nodes: GNode[] = rawNodes.map((n) => ({ ...n, degree: degree.get(n.id) ?? 0 }));
     const edges: GEdge[] = rawEdges.map((e) => ({ ...e }));
     const sim = forceSimulation(nodes)
-      .force("link", forceLink<GNode, GEdge>(edges).id((d) => d.id).distance((l) => (l.kind === "part_of" ? 55 : 105)).strength(0.55))
-      .force("charge", forceManyBody().strength(-340))
-      .force("collide", forceCollide<GNode>().radius((d) => radius(d) + 22))
+      // Small graphs get more room so their (always shown) labels don't collide.
+      .force("link", forceLink<GNode, GEdge>(edges).id((d) => d.id).distance((l) => (l.kind === "part_of" ? 55 : 105) * (nodes.length < 20 ? 1.45 : 1)).strength(0.55))
+      .force("charge", forceManyBody().strength(nodes.length < 20 ? -700 : -340))
+      .force("collide", forceCollide<GNode>().radius((d) => radius(d) + (nodes.length < 20 ? 38 : 22)))
       .force("x", forceX().strength(0.04))
       .force("y", forceY().strength(0.06))
       .force("center", forceCenter(0, 0))
@@ -183,7 +209,7 @@ function GraphCanvas({ nodes: rawNodes, edges: rawEdges, query }: { nodes: Omit<
 
   useEffect(() => {
     if (!wrap.current) return;
-    const ro = new ResizeObserver(([e]) => setSize({ w: e!.contentRect.width, h: Math.max(460, Math.min(720, window.innerHeight - 260)) }));
+    const ro = new ResizeObserver(([e]) => setSize({ w: e!.contentRect.width, h: height ?? Math.max(460, Math.min(720, window.innerHeight - 260)) }));
     ro.observe(wrap.current);
     return () => ro.disconnect();
   }, []);
@@ -238,7 +264,7 @@ function GraphCanvas({ nodes: rawNodes, edges: rawEdges, query }: { nodes: Omit<
 
   return (
     <div className="card graph-card">
-      <div className="graph-legend">
+      <div className={`graph-legend ${compact ? "graph-legend-compact" : ""}`}>
         {(["article", "finding", "project", "component"] as const).map((k) => (
           <span key={k} className="legend-item">
             <svg width="14" height="14" viewBox="-7 -7 14 14">
@@ -247,7 +273,7 @@ function GraphCanvas({ nodes: rawNodes, edges: rawEdges, query }: { nodes: Omit<
             {KIND[k].label}
           </span>
         ))}
-        <span className="muted small graph-hint">Scroll to zoom · drag to pan · drag a node to pin it</span>
+        {!compact && <span className="muted small graph-hint">Scroll to zoom · drag to pan · drag a node to pin it</span>}
       </div>
       <div
         ref={wrap}
@@ -312,7 +338,8 @@ function GraphCanvas({ nodes: rawNodes, edges: rawEdges, query }: { nodes: Omit<
               const r = radius(n);
               const match = q && n.label.toLowerCase().includes(q);
               const dim = (neighbors && !neighbors.has(n.id)) || (q && !match);
-              const label = showAllLabels || n.kind === "project" || n.degree >= 4 || neighbors?.has(n.id) || match;
+              const isFocus = n.id === focusId;
+              const label = showAllLabels || isFocus || n.kind === "project" || n.degree >= 4 || neighbors?.has(n.id) || match;
               return (
                 <g
                   key={n.id}
@@ -323,7 +350,7 @@ function GraphCanvas({ nodes: rawNodes, edges: rawEdges, query }: { nodes: Omit<
                   onPointerLeave={() => setHover(null)}
                 >
                   <circle r={r + 8} fill="transparent" />
-                  {match && <circle r={r + 5} className="match-ring" />}
+                  {(match || isFocus) && <circle r={r + 5} className={isFocus ? "focus-ring" : "match-ring"} />}
                   <Shape node={n} r={r} fill={KIND[n.kind].color} stroke="var(--surface)" />
                   {label && (
                     <text y={r + 13} textAnchor="middle" className="node-label">
@@ -373,4 +400,21 @@ function radius(n: GNode) {
   if (n.kind === "project") return 13;
   if (n.kind === "component") return 7;
   return Math.min(13, 6 + Math.sqrt(n.degree) * 2.2);
+}
+
+/** Local graph of one item's connections (two hops), for article and finding pages. */
+export function RelationsPanel({ id }: { id: string }) {
+  const { data } = useApi<{ nodes: Omit<GNode, "degree">[]; edges: { source: string; target: string; kind: string }[] }>(`/graph?focus=${id}&depth=2`);
+  if (!data || data.edges.length === 0) return null;
+  return (
+    <section className="relations">
+      <div className="section-head">
+        <h2>Relationships</h2>
+        <a className="btn btn-small" href={href("/graph", { focus: id })}>
+          <I name="graph" size={14} /> Open in graph
+        </a>
+      </div>
+      <GraphCanvas nodes={data.nodes} edges={data.edges} focusId={id} height={340} compact />
+    </section>
+  );
 }

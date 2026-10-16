@@ -212,6 +212,9 @@ export function ProjectPage({ slug, route, me }: { slug: string; route: Route; m
         <a className="btn" href={href("/new/finding", { scope: slug })}>
           New finding
         </a>
+        <a className="btn" href={href("/graph", { scope: slug })}>
+          Graph
+        </a>
         {me.admin && (
           <a className="btn" href={href(`/scope/${slug}/settings`)}>
             Settings

@@ -116,6 +116,7 @@ The server also serves a web UI at `/` for people:
 
 - **Dashboard:** knowledge added per week, agent vs. web activity, freshness, knowledge by type, top contributors, recently approved changes and items needing attention. Every chart has a table view and hover details.
 - **Knowledge graph:** an interactive map of how projects, components, contracts, designs, library items and findings link. Hover to trace links, click to open, zoom and pan; unlinked items are hidden until asked for.
+- **Relationships:** every article and finding page shows a local graph of its connections within two links. "Open in graph" focuses the full graph on it, and project pages link to their own graph.
 
 - **Browse:** team, library and project scopes, each with a folder tree.
 - **Project view:** pick a component (backend, frontend, ...) to see the contracts it provides and consumes, upstream changes it still has to handle, the shared library items it uses, recent decisions and known issues.

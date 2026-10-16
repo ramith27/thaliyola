@@ -101,8 +101,26 @@ export async function insights(ctx: RequestContext) {
  * The knowledge graph: items, projects and components as nodes; typed links as edges.
  * Only what the viewer can read, and both ends of every edge must be visible.
  */
-export async function knowledgeGraph(ctx: RequestContext, opts: { scope?: string; limit?: number } = {}) {
+export async function knowledgeGraph(ctx: RequestContext, opts: { scope?: string; limit?: number; focus?: string; depth?: number } = {}) {
   const readable = await readableScopes(ctx);
+  // Focus mode: only what is within `depth` links of one item (both directions), plus the projects of any components.
+  let focusIds: string[] | null = null;
+  if (opts.focus) {
+    const { rows } = await ctx.db.query<{ id: string }>(
+      `WITH RECURSIVE walk(id, d) AS (
+         SELECT $1::uuid, 0
+         UNION
+         SELECT CASE WHEN r.from_id = w.id THEN r.to_id ELSE r.from_id END, w.d + 1
+           FROM relations r JOIN walk w ON r.from_id = w.id OR r.to_id = w.id
+          WHERE w.d < $2
+       )
+       SELECT id FROM walk
+       UNION SELECT c.scope_id FROM components c WHERE c.id IN (SELECT id FROM walk)
+       UNION SELECT c.id FROM components c WHERE c.scope_id = $1::uuid`,
+      [opts.focus, Math.min(Math.max(opts.depth ?? 2, 1), 3)],
+    );
+    focusIds = rows.map((r) => r.id);
+  }
   const limit = Math.min(opts.limit ?? 300, 600);
   const scopeId = opts.scope ? (await ctx.db.query<{ id: string }>("SELECT id FROM scopes WHERE slug = $1", [opts.scope])).rows[0]?.id ?? null : null;
 
@@ -122,8 +140,8 @@ export async function knowledgeGraph(ctx: RequestContext, opts: { scope?: string
        SELECT c.id, 'component', s.name || ' · ' || c.slug, c.kind, 'published', s.slug, s.kind, c.created_at
          FROM components c JOIN scopes s ON s.id = c.scope_id
         WHERE ($1::uuid[] IS NULL OR c.scope_id = ANY($1)) AND ($2::uuid IS NULL OR c.scope_id = $2)
-     ) n ORDER BY updated_at DESC LIMIT $3`,
-    [readable, scopeId, limit],
+     ) n WHERE ($4::uuid[] IS NULL OR n.id = ANY($4)) ORDER BY updated_at DESC LIMIT $3`,
+    [readable, scopeId, limit, focusIds],
   );
   const ids = nodes.rows.map((n) => n.id);
   const edges = await ctx.db.query(
@@ -133,5 +151,5 @@ export async function knowledgeGraph(ctx: RequestContext, opts: { scope?: string
      SELECT c.scope_id, c.id, 'part_of' FROM components c WHERE c.id = ANY($1::uuid[]) AND c.scope_id = ANY($1::uuid[])`,
     [ids],
   );
-  return { nodes: nodes.rows, edges: edges.rows, truncated: nodes.rows.length === limit };
+  return { nodes: nodes.rows, edges: edges.rows, truncated: nodes.rows.length === limit, focus: opts.focus ?? null };
 }
