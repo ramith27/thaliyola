@@ -47,9 +47,13 @@ jobs:
       - name: Smoke test against the container
         env:
           CAIRN_URL: http://127.0.0.1:8080
-        run: pnpm --filter @cairn/server smoke
+        run: pnpm --filter @cairn/server smoke 2>&1 | tee smoke.log; test "${PIPESTATUS[0]}" -eq 0
       - name: Web UI is served
         run: curl -fsS http://127.0.0.1:8080/ | grep -q '<div id="root">'
       - name: Logs on failure
         if: failure()
-        run: docker compose logs
+        run: |
+          docker compose logs
+          # Surface the essentials as annotations (readable without signing in to GitHub).
+          if [ -f smoke.log ]; then grep -A1 '^FAIL' smoke.log | head -20 | while IFS= read -r l; do echo "::error title=smoke::$l"; done; fi
+          docker compose logs --no-color --tail 15 server | while IFS= read -r l; do echo "::warning title=server log::$l"; done
