@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Knowledge graph: project articles and findings link to the repository they're about, or to the project, so a project and its pages form one cluster
+
 - Move a single article or finding (Move… on its page) to a project, into a folder there and onto a repository; re-file items inside a project (`into_folder`, `component` on `POST /api/move`)
 - Fix: sub-folders chosen as repositories during a move keep their folder (they were flattened to the top level); the project page lists everything grouped by repository (`GET /api/projects/:slug/pages`)
 

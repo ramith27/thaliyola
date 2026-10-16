@@ -148,7 +148,13 @@ export async function knowledgeGraph(ctx: RequestContext, opts: { scope?: string
     `SELECT from_id AS source, to_id AS target, kind FROM relations WHERE from_id = ANY($1::uuid[]) AND to_id = ANY($1::uuid[])
      UNION ALL
      -- Components belong to their project.
-     SELECT c.scope_id, c.id, 'part_of' FROM components c WHERE c.id = ANY($1::uuid[]) AND c.scope_id = ANY($1::uuid[])`,
+     SELECT c.scope_id, c.id, 'part_of' FROM components c WHERE c.id = ANY($1::uuid[]) AND c.scope_id = ANY($1::uuid[])
+     UNION ALL
+     -- Project items hang off the repository they're about, or off the project itself.
+     SELECT x.id, coalesce(c.id, x.scope_id), 'belongs_to'
+       FROM (SELECT id, scope_id, component_ids FROM articles UNION ALL SELECT id, scope_id, component_ids FROM findings) x
+       LEFT JOIN components c ON c.id = ANY(x.component_ids) AND c.id = ANY($1::uuid[])
+      WHERE x.id = ANY($1::uuid[]) AND (c.id IS NOT NULL OR x.scope_id = ANY($1::uuid[]))`,
     [ids],
   );
   return { nodes: nodes.rows, edges: edges.rows, truncated: nodes.rows.length === limit, focus: opts.focus ?? null };

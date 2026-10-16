@@ -39,6 +39,7 @@ const RELATION: Record<string, string> = {
   promoted_into: "promoted into",
   published_as: "published as",
   part_of: "part of",
+  belongs_to: "in",
 };
 
 function Shape({ node, r, fill, stroke }: { node: GNode; r: number; fill: string; stroke: string }) {
@@ -197,7 +198,7 @@ export function GraphCanvas({
     const edges: GEdge[] = rawEdges.map((e) => ({ ...e }));
     const sim = forceSimulation(nodes)
       // Small graphs get more room so their (always shown) labels don't collide.
-      .force("link", forceLink<GNode, GEdge>(edges).id((d) => d.id).distance((l) => (l.kind === "part_of" ? 55 : 105) * (nodes.length < 20 ? 1.45 : 1)).strength(0.55))
+      .force("link", forceLink<GNode, GEdge>(edges).id((d) => d.id).distance((l) => (l.kind === "part_of" ? 55 : l.kind === "belongs_to" ? 80 : 105) * (nodes.length < 20 ? 1.45 : 1)).strength(0.55))
       .force("charge", forceManyBody().strength(nodes.length < 20 ? -700 : -340))
       .force("collide", forceCollide<GNode>().radius((d) => radius(d) + (nodes.length < 20 ? 38 : 22)))
       .force("x", forceX().strength(0.04))

@@ -6,6 +6,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { devAuthenticator } from "../src/auth/index.js";
 import { adminAddComponent, adminCreateProject, adminSetMember, adminUpdateScope, removeComponent, updateComponent } from "../src/core/admin.js";
 import { getArticle } from "../src/core/items.js";
+import { knowledgeGraph } from "../src/core/insights.js";
+import { approveRevision } from "../src/core/review.js";
 import { moveItems } from "../src/core/move.js";
 import { projectPages } from "../src/core/projects.js";
 import { readableScopes } from "../src/core/permissions.js";
@@ -207,5 +209,19 @@ describe("moving items into a project", () => {
     const refiled = await getArticle(a, art.article_id);
     expect([refiled.path, refiled.components]).toEqual(["Runbooks", ["invoice-api"]]);
     await expect(moveItems(a, { from: "billing", to: "billing", ids: [art.article_id], component: "nope" })).rejects.toThrow(/no repository 'nope'/);
+
+    // The graph ties project items to their repository (or the project), so a project and its pages form one cluster.
+    await approveRevision(a, art.revision_id);
+    await approveRevision(a, f.revision_id);
+    const g = await knowledgeGraph(a, { scope: "billing" });
+    const comp = g.nodes.find((n) => n.kind === "component" && String(n.label).endsWith("invoice-api"))!;
+    const project = g.nodes.find((n) => n.kind === "project")!;
+    expect(g.edges).toEqual(expect.arrayContaining([
+      { source: art.article_id, target: comp.id, kind: "belongs_to" },
+      { source: f.finding_id, target: comp.id, kind: "belongs_to" },
+    ]));
+    const loose = g.nodes.filter((n) => (n.kind === "article" || n.kind === "finding") && !g.edges.some((e) => e.source === n.id && e.kind === "belongs_to"));
+    expect(loose).toEqual([]);
+    expect(project).toBeTruthy();
   });
 });
