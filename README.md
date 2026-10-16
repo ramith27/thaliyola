@@ -128,6 +128,14 @@ X-Cairn-Project: order-service
 X-Cairn-Component: frontend
 ```
 
+## Agent integrations
+
+[`integrations/`](integrations) has everything needed to make agents use Cairn by default:
+- **Prompts:** `investigate`, `start-coding`, `capture` and `review-stale`, served by every Cairn server.
+- **Claude Code:** a plugin with the `cairn` skill, a per-repo `.mcp.json` template, and a CLAUDE.md snippet.
+- **claude.ai:** connector setup.
+- **Scheduled jobs:** recipes for agents that turn Slack threads and Sentry issues into proposals.
+
 ## Running locally
 
 Requirements: Node 22, pnpm 9, and either Docker or Postgres 16 with [pgvector](https://github.com/pgvector/pgvector).

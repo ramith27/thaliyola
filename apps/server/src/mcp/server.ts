@@ -24,6 +24,7 @@ import {
 import { getProjectContext } from "../core/projects.js";
 import { listProjects } from "../core/scopes.js";
 import { searchKnowledge } from "../core/search.js";
+import { registerPrompts } from "./prompts.js";
 
 export const SERVER_INSTRUCTIONS = `Cairn, the team knowledge base: shared, reviewed knowledge for the whole team.
 
@@ -504,5 +505,6 @@ export function buildMcpServer(ctx: RequestContext): McpServer {
     (args) => run("ack_notice", args.id, () => ackNotice(ctx, args.id)),
   );
 
+  registerPrompts(server);
   return server;
 }

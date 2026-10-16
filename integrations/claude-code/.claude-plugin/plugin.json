@@ -1,0 +1,11 @@
+{
+  "name": "cairn",
+  "version": "0.1.0",
+  "description": "Use your team's Cairn knowledge base from Claude Code: search before investigating, load project context before coding, capture what you learn.",
+  "license": "MIT",
+  "author": {
+    "name": "ramith27",
+    "url": "https://github.com/ramith27"
+  },
+  "repository": "https://github.com/ramith27/cairn-mcp"
+}

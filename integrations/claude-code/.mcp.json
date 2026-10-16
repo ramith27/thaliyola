@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "cairn": {
+      "type": "http",
+      "url": "${CAIRN_URL}/mcp",
+      "headers": {
+        "Authorization": "Bearer ${CAIRN_TOKEN}",
+        "X-Cairn-Project": "${CAIRN_PROJECT:-}",
+        "X-Cairn-Component": "${CAIRN_COMPONENT:-}"
+      }
+    }
+  }
+}
