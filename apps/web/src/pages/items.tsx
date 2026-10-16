@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, ApiError, type Article, type Finding, type ScopeInfo, type WriteResult } from "../api";
 import {
   ErrorBox,
@@ -19,6 +19,8 @@ import { useApi } from "../hooks";
 import { RelationsPanel } from "./graph";
 import { WatchButton } from "../components/notifications";
 import { FavouriteButton, recordVisit, SectionLink, ShareButton } from "../components/find";
+import { clearDraft, DraftOffer, Editor, useAutosave } from "../components/editor";
+import { takePrefill } from "../paste";
 import { I } from "../components/icons";
 import { href, navigate, type Route } from "../router";
 
@@ -223,10 +225,11 @@ function ArticleEditor({ article, onSaved }: { article: Article; onSaved: () => 
   const [title, setTitle] = useState(article.title);
   const [body, setBody] = useState(article.body_md);
   const [summary, setSummary] = useState("");
-  const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [result, setResult] = useState<WriteResult | null>(null);
+  const draftKey = `article:${article.id}:v${article.version}`;
+  const autosave = useAutosave(draftKey, body, article.body_md);
 
   async function save() {
     setSaving(true);
@@ -236,6 +239,7 @@ function ArticleEditor({ article, onSaved }: { article: Article; onSaved: () => 
         method: "PUT",
         body: { version: article.version, summary, body_md: body, title: title !== article.title ? title : undefined },
       });
+      clearDraft(draftKey);
       setResult(res);
       if (res.published) {
         onSaved();
@@ -266,15 +270,18 @@ function ArticleEditor({ article, onSaved }: { article: Article; onSaved: () => 
         Title
         <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
       </label>
-      <div className="tabs">
-        <button className={!preview ? "active" : ""} onClick={() => setPreview(false)}>
-          Write
-        </button>
-        <button className={preview ? "active" : ""} onClick={() => setPreview(true)}>
-          Preview
-        </button>
-      </div>
-      {preview ? <Markdown text={body} /> : <textarea className="body-input" value={body} onChange={(e) => setBody(e.target.value)} rows={24} />}
+      <DraftOffer
+        offer={autosave.offer}
+        onRestore={(t) => {
+          setBody(t);
+          autosave.dismiss();
+        }}
+        onDiscard={() => {
+          clearDraft(draftKey);
+          autosave.dismiss();
+        }}
+      />
+      <Editor value={body} onChange={setBody} uploadTarget={article.id} rows={24} />
       <label>
         What changed (shown to reviewers and in impact notices)
         <input value={summary} onChange={(e) => setSummary(e.target.value)} maxLength={300} placeholder="e.g. GET /orders now requires status" />
@@ -358,18 +365,48 @@ export function FindingPage({ id, route }: { id: string; route: Route }) {
   );
 }
 
+type FindingText = { title: string; symptoms: string; root_cause: string; fix: string };
+
+/** Title plus the three finding fields, each a compact markdown editor. */
+function FindingFields({ fields, onChange, uploadTarget }: { fields: FindingText; onChange: (f: FindingText) => void; uploadTarget?: string }) {
+  const set = (k: keyof FindingText) => (v: string) => onChange({ ...fields, [k]: v });
+  return (
+    <>
+      <label>
+        Title
+        <input value={fields.title} onChange={(e) => set("title")(e.target.value)} maxLength={200} />
+      </label>
+      <div className="field">
+        <span className="field-label">Symptoms, as first observed</span>
+        <Editor compact label="Symptoms" value={fields.symptoms} onChange={set("symptoms")} rows={4} uploadTarget={uploadTarget} placeholder="What someone searching later would type" />
+      </div>
+      <div className="field">
+        <span className="field-label">Root cause</span>
+        <Editor compact label="Root cause" value={fields.root_cause} onChange={set("root_cause")} rows={4} uploadTarget={uploadTarget} />
+      </div>
+      <div className="field">
+        <span className="field-label">Fix or workaround</span>
+        <Editor compact label="Fix" value={fields.fix} onChange={set("fix")} rows={3} uploadTarget={uploadTarget} />
+      </div>
+    </>
+  );
+}
+
 function FindingEditor({ finding, onSaved }: { finding: Finding; onSaved: () => void }) {
-  const [fields, setFields] = useState({ title: finding.title, symptoms: finding.symptoms, root_cause: finding.root_cause, fix: finding.fix });
+  const initial = { title: finding.title, symptoms: finding.symptoms, root_cause: finding.root_cause, fix: finding.fix ?? "" };
+  const [fields, setFields] = useState<FindingText>(initial);
   const [summary, setSummary] = useState("");
   const [error, setError] = useState<Error | null>(null);
   const [result, setResult] = useState<WriteResult | null>(null);
-  const set = (k: keyof typeof fields) => (e: { target: { value: string } }) => setFields((f) => ({ ...f, [k]: e.target.value }));
+  const draftKey = `finding:${finding.id}:v${finding.version}`;
+  const autosave = useAutosave(draftKey, JSON.stringify(fields), JSON.stringify(initial));
 
   async function save() {
     setError(null);
     const patch = Object.fromEntries(Object.entries(fields).filter(([k, v]) => v !== finding[k as keyof typeof fields]));
     try {
       const res = await api<WriteResult>(`/findings/${finding.id}`, { method: "PUT", body: { version: finding.version, summary, patch } });
+      clearDraft(draftKey);
       setResult(res);
       if (res.published) {
         onSaved();
@@ -392,22 +429,18 @@ function FindingEditor({ finding, onSaved }: { finding: Finding; onSaved: () => 
   return (
     <div className="page editor">
       <h1>Edit finding</h1>
-      <label>
-        Title
-        <input value={fields.title} onChange={set("title")} maxLength={200} />
-      </label>
-      <label>
-        Symptoms (as first observed)
-        <textarea value={fields.symptoms} onChange={set("symptoms")} rows={4} />
-      </label>
-      <label>
-        Root cause
-        <textarea value={fields.root_cause} onChange={set("root_cause")} rows={4} />
-      </label>
-      <label>
-        Fix or workaround
-        <textarea value={fields.fix} onChange={set("fix")} rows={3} />
-      </label>
+      <DraftOffer
+        offer={autosave.offer}
+        onRestore={(t) => {
+          setFields(JSON.parse(t));
+          autosave.dismiss();
+        }}
+        onDiscard={() => {
+          clearDraft(draftKey);
+          autosave.dismiss();
+        }}
+      />
+      <FindingFields fields={fields} onChange={setFields} uploadTarget={finding.id} />
       <label>
         What changed
         <input value={summary} onChange={(e) => setSummary(e.target.value)} maxLength={300} />
@@ -462,19 +495,26 @@ function ComponentPicker({ scope, value, onChange }: { scope?: ScopeInfo; value:
 }
 
 export function NewArticlePage({ route, scopes, articleTypes }: { route: Route; scopes: ScopeInfo[]; articleTypes: string[] }) {
+  const [prefill] = useState(() => takePrefill("article"));
   const [scope, setScope] = useState(route.query.get("scope") || scopes[0]?.slug || "team");
-  const [type, setType] = useState(route.query.get("type") || "design_doc");
-  const [title, setTitle] = useState("");
+  const [type, setType] = useState(prefill?.type || route.query.get("type") || "design_doc");
+  const [title, setTitle] = useState(prefill?.title ?? "");
   const [path, setPath] = useState("");
-  const [body, setBody] = useState("");
+  const [body, setBody] = useState(prefill?.body_md ?? "");
+  const template = useRef("");
+  const autosave = useAutosave("new-article", JSON.stringify({ title, body }), JSON.stringify({ title: prefill?.title ?? "", body: prefill?.body_md ?? template.current }));
   const [components, setComponents] = useState<string[]>([]);
   const [error, setError] = useState<Error | null>(null);
   const [result, setResult] = useState<WriteResult | null>(null);
   const scopeInfo = scopes.find((s) => s.slug === scope);
 
+  // The type's template, with writing hints as HTML comments (removed on save). Only replaces an untouched body.
   useEffect(() => {
-    api<{ body_md: string }>(`/templates/${type}`)
-      .then((t) => setBody((b) => (b.trim() === "" || /^(## .+\n\n)+$/.test(b) ? t.body_md : b)))
+    api<{ body_md: string }>(`/templates/${type}?hints=true`)
+      .then((t) => {
+        setBody((b) => (b.trim() === "" || b === template.current ? t.body_md : b));
+        template.current = t.body_md;
+      })
       .catch(() => undefined);
   }, [type]);
   useEffect(() => setComponents([]), [scope]);
@@ -483,6 +523,7 @@ export function NewArticlePage({ route, scopes, articleTypes }: { route: Route; 
     setError(null);
     try {
       const res = await api<WriteResult>("/articles", { method: "POST", body: { scope, type, title, path, body_md: body, components } });
+      clearDraft("new-article");
       setResult(res);
       if (res.published) navigate(`/article/${res.article_id}`);
     } catch (e) {
@@ -502,6 +543,20 @@ export function NewArticlePage({ route, scopes, articleTypes }: { route: Route; 
   return (
     <div className="page editor">
       <h1>New article</h1>
+      {prefill && <Notice>Drafted from pasted text. Check every section before saving.</Notice>}
+      <DraftOffer
+        offer={autosave.offer}
+        onRestore={(t) => {
+          const d = JSON.parse(t);
+          setTitle(d.title);
+          setBody(d.body);
+          autosave.dismiss();
+        }}
+        onDiscard={() => {
+          clearDraft("new-article");
+          autosave.dismiss();
+        }}
+      />
       <div className="row">
         <ScopeSelect scopes={scopes} value={scope} onChange={setScope} />
         <label>
@@ -524,10 +579,11 @@ export function NewArticlePage({ route, scopes, articleTypes }: { route: Route; 
         <input value={path} onChange={(e) => setPath(e.target.value)} placeholder="e.g. Contracts or Systems/Payments" />
       </label>
       <ComponentPicker scope={scopeInfo} value={components} onChange={setComponents} />
-      <label>
-        Body (markdown; sections follow the type's template)
-        <textarea className="body-input" value={body} onChange={(e) => setBody(e.target.value)} rows={22} />
-      </label>
+      <div className="field">
+        <span className="field-label">Body</span>
+        <span className="muted small">Sections follow the type's template. The <code>{"<!-- Hint -->"}</code> lines are removed when you save. Images can be added once the article exists.</span>
+        <Editor value={body} onChange={setBody} rows={22} />
+      </div>
       <ErrorBox error={error} />
       <div className="actions">
         <button className="btn btn-primary" disabled={!title.trim()} onClick={save}>
@@ -539,13 +595,15 @@ export function NewArticlePage({ route, scopes, articleTypes }: { route: Route; 
 }
 
 export function NewFindingPage({ route, scopes, findingTypes }: { route: Route; scopes: ScopeInfo[]; findingTypes: string[] }) {
+  const [prefill] = useState(() => takePrefill("finding"));
   const [scope, setScope] = useState(route.query.get("scope") || scopes[0]?.slug || "team");
-  const [type, setType] = useState("rca");
-  const [fields, setFields] = useState({ title: "", symptoms: "", root_cause: "", fix: "" });
+  const [type, setType] = useState(prefill?.type ?? "rca");
+  const empty = { title: prefill?.title ?? "", symptoms: prefill?.symptoms ?? "", root_cause: prefill?.root_cause ?? "", fix: prefill?.fix ?? "" };
+  const [fields, setFields] = useState<FindingText>(empty);
+  const autosave = useAutosave("new-finding", JSON.stringify(fields), JSON.stringify(empty));
   const [components, setComponents] = useState<string[]>([]);
   const [error, setError] = useState<Error | null>(null);
   const [result, setResult] = useState<WriteResult | null>(null);
-  const set = (k: keyof typeof fields) => (e: { target: { value: string } }) => setFields((f) => ({ ...f, [k]: e.target.value }));
   const scopeInfo = scopes.find((s) => s.slug === scope);
   useEffect(() => setComponents([]), [scope]);
 
@@ -556,6 +614,7 @@ export function NewFindingPage({ route, scopes, findingTypes }: { route: Route; 
         method: "POST",
         body: { scope, type, ...fields, components, force_new: forceNew || undefined },
       });
+      if (res.status !== "duplicates_found") clearDraft("new-finding");
       setResult(res);
       if (res.published) navigate(`/finding/${res.finding_id}`);
     } catch (e) {
@@ -575,6 +634,18 @@ export function NewFindingPage({ route, scopes, findingTypes }: { route: Route; 
   return (
     <div className="page editor">
       <h1>New finding</h1>
+      {prefill && <Notice>Drafted from pasted text. Check the root cause and fix before saving.</Notice>}
+      <DraftOffer
+        offer={autosave.offer}
+        onRestore={(t) => {
+          setFields(JSON.parse(t));
+          autosave.dismiss();
+        }}
+        onDiscard={() => {
+          clearDraft("new-finding");
+          autosave.dismiss();
+        }}
+      />
       <div className="row">
         <ScopeSelect scopes={scopes} value={scope} onChange={setScope} />
         <label>
@@ -588,22 +659,7 @@ export function NewFindingPage({ route, scopes, findingTypes }: { route: Route; 
           </select>
         </label>
       </div>
-      <label>
-        Title
-        <input value={fields.title} onChange={set("title")} maxLength={200} />
-      </label>
-      <label>
-        Symptoms, as first observed
-        <textarea value={fields.symptoms} onChange={set("symptoms")} rows={4} placeholder="What someone searching later would type" />
-      </label>
-      <label>
-        Root cause
-        <textarea value={fields.root_cause} onChange={set("root_cause")} rows={4} />
-      </label>
-      <label>
-        Fix or workaround
-        <textarea value={fields.fix} onChange={set("fix")} rows={3} />
-      </label>
+      <FindingFields fields={fields} onChange={setFields} />
       <ComponentPicker scope={scopeInfo} value={components} onChange={setComponents} />
       {result?.status === "duplicates_found" && (
         <Notice kind="warn">

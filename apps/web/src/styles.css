@@ -558,3 +558,35 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .section-wrap:hover .section-link, .section-link:focus-visible, .section-link.done { opacity: 1; }
 .section-link:hover { color: var(--accent); background: var(--surface-2); }
 @media (pointer: coarse) { .section-link { opacity: 0.6; } }
+
+/* Markdown editor */
+.editor .field { display: flex; flex-direction: column; gap: 0.35rem; margin: 0.9rem 0; }
+.field-label { font-weight: 550; font-size: 0.9rem; }
+.md-editor { border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface); }
+.md-editor:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }
+.md-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.1rem; padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--border); background: var(--surface-2); border-radius: 10px 10px 0 0; }
+.md-toolbar > button { background: none; border: 0; min-width: 30px; height: 28px; padding: 0 0.4rem; border-radius: 6px; color: var(--text-2); font: inherit; font-size: 0.85rem; font-weight: 650; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.md-toolbar > button:hover { background: var(--surface); color: var(--text); }
+.md-toolbar > button[title^="Italic"] { font-style: italic; }
+.md-modes { margin-left: auto; display: flex; gap: 0.1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 7px; padding: 2px; }
+.md-modes button { background: none; border: 0; padding: 0.15rem 0.55rem; border-radius: 5px; font: inherit; font-size: 0.8rem; color: var(--muted); cursor: pointer; }
+.md-modes button.active { background: var(--surface-2); color: var(--text); font-weight: 600; }
+.md-panes { display: grid; grid-template-columns: 1fr; }
+.mode-split .md-panes { grid-template-columns: 1fr 1fr; }
+.md-input { position: relative; }
+.md-editor textarea, .editor .md-editor textarea { width: 100%; border: 0; border-radius: 0 0 10px 10px; resize: vertical; box-shadow: none; display: block; min-height: 5rem; }
+.md-editor textarea:focus { box-shadow: none; }
+.mode-split textarea { border-radius: 0 0 0 10px; height: 100%; }
+.md-preview { padding: 0.6rem 0.9rem; overflow: auto; max-height: 70vh; border-left: 1px solid var(--border); }
+.mode-preview .md-preview { border-left: 0; min-height: 10rem; }
+.md-suggest { position: absolute; z-index: 30; min-width: 240px; max-width: 360px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18); padding: 0.25rem; }
+.md-suggest button { display: flex; width: 100%; justify-content: space-between; gap: 0.75rem; align-items: baseline; background: none; border: 0; padding: 0.4rem 0.55rem; border-radius: 7px; font: inherit; font-size: 0.88rem; color: var(--text); cursor: pointer; text-align: left; }
+.md-suggest button span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.md-suggest button.active { background: var(--surface-2); }
+.md-note { padding: 0 0.75rem 0.5rem; margin: 0.4rem 0 0; }
+.draft-offer { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+.draft-offer span { flex: 1; min-width: 200px; }
+.paste-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-top: 1rem; }
+.paste-grid label { margin: 0; }
+.paste-preview .preview-box { margin-top: 0.35rem; }
+@media (max-width: 900px) { .mode-split .md-panes, .paste-grid { grid-template-columns: 1fr; } .mode-split .md-preview { border-left: 0; border-top: 1px solid var(--border); } }

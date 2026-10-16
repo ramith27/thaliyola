@@ -130,7 +130,7 @@ describe("MCP over streamable HTTP", () => {
   it("offers workflow prompts", async () => {
     const client = await connect({ authorization: "Bearer secret-token" });
     const { prompts } = await client.listPrompts();
-    expect(prompts.map((p) => p.name).sort()).toEqual(["capture", "investigate", "review-stale", "start-coding"]);
+    expect(prompts.map((p) => p.name).sort()).toEqual(["capture", "draft-from-paste", "investigate", "review-stale", "start-coding"]);
     const p = await client.getPrompt({ name: "start-coding", arguments: { project: "order-service", component: "frontend" } });
     const text = (p.messages[0]!.content as { text: string }).text;
     expect(text).toContain('get_project_context with component "frontend"');

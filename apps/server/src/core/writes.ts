@@ -8,7 +8,7 @@ import { toPgVector } from "./embeddings.js";
 import { onProposal, track } from "./notify.js";
 import { getComponent, getReadableScope, getScopeBySlug, resolveProject, type Scope } from "./scopes.js";
 import { linkEntities, normalizeTags, type EntityRef } from "./tags.js";
-import { missingSections } from "./templates.js";
+import { missingSections, stripHints } from "./templates.js";
 
 /**
  * Proposals. Every write by a person or agent becomes a pending revision that
@@ -366,7 +366,7 @@ export async function createArticle(ctx: RequestContext, input: CreateArticleInp
   const scope = await targetScope(ctx, input.scope, input.project);
   await assertCanPropose(ctx, scope.id);
   if (input.type === "project_overview" && scope.kind !== "project") throw new ValidationError("project_overview belongs in a project scope");
-  const { fields, redactions } = redactFields({ title: input.title.trim(), body_md: input.body_md, path: (input.path ?? "").trim() });
+  const { fields, redactions } = redactFields({ title: input.title.trim(), body_md: stripHints(input.body_md), path: (input.path ?? "").trim() });
   requireText("title", fields.title);
   checkLength("title", fields.title, LIMITS.title);
   checkLength("body_md", fields.body_md, LIMITS.body);
@@ -436,7 +436,7 @@ export async function proposeArticleEdit(ctx: RequestContext, input: ArticleEdit
     throw new ConflictError(`article is at version ${item.version}, not ${input.version}`, await getArticle(ctx, input.id));
   }
   const { fields, redactions } = redactFields({
-    text: input.text,
+    text: stripHints(input.text),
     summary: input.summary.trim(),
     section: (input.section ?? "").trim(),
     title: (input.title ?? "").trim(),

@@ -127,7 +127,9 @@ The server also serves a web UI at `/` for people:
 - **Links:** copy a link to any article section from the icon beside its heading, or share an item with the Share button (the native share sheet on phones).
 - **Files and links:** attach screenshots and files, add Figma/PR/Sentry links, and share project items to the library.
 - **Connect:** after signing in, people see their access and roles. They can create a token in place and copy ready-made setup for Claude Code (global or per repository, with the project and component chosen from lists), claude.ai and other MCP clients. The page also lists the workflow prompts and all tools. A home-page banner points new users there until they connect.
-- **Read and edit:** articles (markdown with preview) and findings. Edits by scope owners and admins publish immediately; everyone else's edits become proposals.
+- **Read and edit:** articles and findings. Edits by scope owners and admins publish immediately; everyone else's edits become proposals.
+- **Editor:** markdown with a formatting toolbar, a live side-by-side preview, `/` for blocks (headings, lists, checklists, code, tables, callouts), `@` to link an article or finding, `#` to link a system, table, metric or service, list continuation on Enter, and pasted or dropped images uploaded as attachments (once the item exists). New articles start from their type's template with a writing hint in each section (`<!-- Hint: … -->`), removed on save. Unsaved changes are kept in the browser and offered back after a reload. It stays plain markdown: not a WYSIWYG editor.
+- **Paste to draft:** paste a Slack thread, email or notes and get a draft finding or article. Simple rules pull out the title and labelled parts ("Root cause:", "Fix:") and drop timestamps, reactions, email headers and signatures; you check it before saving. For a smarter draft, use the `draft-from-paste` prompt in an AI client.
 - **Review queue:** line diffs of current vs proposed text, with approve and reject. Reviewers can correct a proposal before approving it (the change is marked "edited by reviewer"), discuss it in a comment thread, assign it to another reviewer, and select several proposals to approve at once. Keyboard: `j`/`k` move, `x` select, `o` open in the queue; `a` approve, `e` edit, `r` reject, `n` next on a proposal.
 - **History:** every published version of an article or finding is kept. The History page diffs any version against the one before it and restores an old version as a new one (directly for owners, as a proposal for everyone else).
 - **Suggestions:** recurring root causes to promote into the article people read first, and possible duplicates to link, each with a one-click action. Both actions create proposals.
@@ -193,7 +195,7 @@ X-Cairn-Component: frontend
 ## Agent integrations
 
 [`integrations/`](integrations) has everything needed to make agents use Cairn by default:
-- **Prompts:** `investigate`, `start-coding`, `capture` and `review-stale`, served by every Cairn server.
+- **Prompts:** `investigate`, `start-coding`, `capture`, `draft-from-paste` and `review-stale`, served by every Cairn server.
 - **Claude Code:** a plugin with the `cairn` skill, a per-repo `.mcp.json` template, and a CLAUDE.md snippet.
 - **claude.ai:** connector setup.
 - **Scheduled jobs:** recipes for agents that turn Slack threads and Sentry issues into proposals.

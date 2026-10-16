@@ -17,11 +17,15 @@ export function Markdown({ text }: { text: string }) {
         remarkPlugins={[remarkGfm]}
         urlTransform={(url) => (/^asset:[0-9a-f-]{36}$/.test(url) ? url : defaultUrlTransform(url))}
         components={{
-          a: ({ href: url, children }) => (
-            <a href={url} target="_blank" rel="noopener noreferrer nofollow">
-              {children}
-            </a>
-          ),
+          a: ({ href: url, children }) =>
+            // Links inside Cairn (@ mentions, entity links) stay in the tab.
+            url?.startsWith("#/") ? (
+              <a href={url}>{children}</a>
+            ) : (
+              <a href={url} target="_blank" rel="noopener noreferrer nofollow">
+                {children}
+              </a>
+            ),
           img: ({ src, alt }) => {
             if (typeof src !== "string") return null;
             if (src.startsWith("asset:")) return <AssetImage id={src.slice(6)} alt={alt ?? ""} />;

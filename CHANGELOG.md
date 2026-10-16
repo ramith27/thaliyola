@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Editor: formatting toolbar, live split preview, `/` block commands, `@` links to articles and findings, `#` links to entities, list continuation, image paste and drop (uploaded as attachments), local autosave with restore, and writing hints in new-article templates (`/api/templates/:type?hints=true`; `<!-- Hint: … -->` comments are removed on save)
+- Paste to draft (`/#/new/paste`): rule-based drafts of findings and articles from Slack threads, emails and notes, plus a `draft-from-paste` MCP prompt for AI clients
+- Web unit tests (`pnpm --filter @cairn/web test`)
+
 - Finding things: an answer card above search results (the best section or finding, quoted, with a confidence label), an "Ask Cairn" box on the home page, results as you type in the search box (`/api/search?prefix=true` matches the last word as a prefix), and a ⌘K command palette for search, entities, navigation, favourites, recent items and theme
 - Favourites (per person, `GET /api/favourites`, `PUT`/`DELETE /api/favourites/:id`) and recently viewed items in the sidebar
 - Entity pages (`/api/entities?q=`, `/api/entities/:kind/:name`) linked from each item's "About" list

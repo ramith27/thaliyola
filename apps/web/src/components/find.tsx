@@ -394,6 +394,7 @@ export function CommandPalette({ scopes, onClose }: { scopes: ScopeInfo[]; onClo
       { id: "account", group: "Go to", label: "Account and tokens", text: "account tokens password notifications", icon: "user", run: go(href("/account")) },
       { id: "new-article", group: "Create", label: "New article", text: "new article create write", icon: "plus", run: go(href("/new/article")) },
       { id: "new-finding", group: "Create", label: "New finding", text: "new finding incident rca known issue", icon: "bolt", run: go(href("/new/finding")) },
+      { id: "new-paste", group: "Create", label: "Draft from pasted text", text: "paste slack thread email import draft", icon: "inbox", run: go(href("/new/paste")) },
       ...(["light", "dark", "system"] as const).map((t) => ({
         id: `theme-${t}`,
         group: "Theme",

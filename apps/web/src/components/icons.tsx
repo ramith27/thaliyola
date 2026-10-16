@@ -171,6 +171,13 @@ export const icons = {
       <path d="M8 16v-4M12 16V8M16 16v-6" />
     </Icon>
   ),
+  image: (p: SVGProps<SVGSVGElement>) => (
+    <Icon {...p}>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+      <circle cx="9" cy="10" r="1.6" />
+      <path d="m20.5 16-5-5-8.5 8.5" />
+    </Icon>
+  ),
   clock: (p: SVGProps<SVGSVGElement>) => (
     <Icon {...p}>
       <circle cx="12" cy="12" r="8.5" />

@@ -6,6 +6,7 @@ import { ConnectPage } from "./pages/connect";
 import { Dashboard } from "./pages/dashboard";
 import { EntityPage } from "./pages/entity";
 import { GraphPage } from "./pages/graph";
+import { PasteDraftPage } from "./pages/paste";
 import { HistoryPage } from "./pages/history";
 import { Layout } from "./components/Layout";
 import { ErrorBox, Loading } from "./components/ui";
@@ -104,7 +105,9 @@ export function App() {
       break;
     case "new":
       page =
-        id === "finding" ? (
+        id === "paste" ? (
+          <PasteDraftPage />
+        ) : id === "finding" ? (
           <NewFindingPage route={route} scopes={boot.scopes} findingTypes={boot.findingTypes} />
         ) : (
           <NewArticlePage route={route} scopes={boot.scopes} articleTypes={boot.articleTypes} />

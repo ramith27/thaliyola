@@ -218,7 +218,7 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
     "/templates/:type",
     handle("get_template", async (_ctx, req) => {
       const type = z.enum(ARTICLE_TYPES).parse(req.params.type);
-      return { type, sections: ARTICLE_TEMPLATES[type], body_md: templateFor(type) };
+      return { type, sections: ARTICLE_TEMPLATES[type], body_md: templateFor(type, { hints: req.query.hints === "true" }) };
     }),
   );
   router.get(
