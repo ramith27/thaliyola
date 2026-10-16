@@ -6,6 +6,8 @@ import { ConnectPage } from "./pages/connect";
 import { Dashboard } from "./pages/dashboard";
 import { EntityPage } from "./pages/entity";
 import { GraphPage } from "./pages/graph";
+import { InviteAcceptPage } from "./pages/invite";
+import { ImportPage, NewProjectPage } from "./pages/setup";
 import { PasteDraftPage } from "./pages/paste";
 import { HistoryPage } from "./pages/history";
 import { Layout } from "./components/Layout";
@@ -53,6 +55,8 @@ export function App() {
     setAttempt((a) => a + 1);
   };
 
+  // Invitation links work before there is an account.
+  if (route.path[0] === "invite" && route.path[1] && !boot) return <InviteAcceptPage token={route.path[1]} onDone={retry} />;
   if (signIn === "local") return <LoginPage onSignedIn={retry} />;
   if (signIn === "dev") {
     return (
@@ -107,6 +111,8 @@ export function App() {
       page =
         id === "paste" ? (
           <PasteDraftPage />
+        ) : id === "project" ? (
+          <NewProjectPage />
         ) : id === "finding" ? (
           <NewFindingPage route={route} scopes={boot.scopes} findingTypes={boot.findingTypes} />
         ) : (
@@ -119,6 +125,12 @@ export function App() {
     case "entity":
       page = <EntityPage kind={id!} name={route.path[2] ?? ""} />;
       break;
+    case "import":
+      page = <ImportPage scopes={boot.scopes} articleTypes={boot.articleTypes} />;
+      break;
+    case "invite":
+      page = <p className="page">You're already signed in as {boot.me.email}. Sign out first to accept an invitation for another address.</p>;
+      break;
     case "history":
       page = <HistoryPage id={id!} />;
       break;
@@ -129,7 +141,7 @@ export function App() {
       page = <AccountPage me={boot.me} />;
       break;
     case "admin":
-      page = <UsersPage me={boot.me} />;
+      page = <UsersPage me={boot.me} scopes={boot.scopes} />;
       break;
     case "review":
       page = id ? <RevisionPage id={id} /> : <ReviewQueuePage route={route} />;

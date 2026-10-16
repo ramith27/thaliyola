@@ -65,6 +65,7 @@ export function notificationsRouter(db: Db, settings: Settings) {
         .object({
           email: z.record(z.string(), z.boolean()).optional(),
           digest: z.boolean().optional(),
+          onboarding_dismissed: z.boolean().optional(),
         })
         .parse(req.body);
       const { rows } = await db.query<{ prefs: unknown }>("UPDATE users SET prefs = prefs || $2::jsonb WHERE id = $1 RETURNING prefs", [actor(res).id, JSON.stringify(prefs)]);

@@ -8,6 +8,9 @@ import { ConflictError, ForbiddenError, NotFoundError, ValidationError, type Act
 import { editArticle, editFinding, newArticle, newFinding } from "../core/direct.js";
 import { ask, getEntity, listFavourites, searchEntities, setFavourite } from "../core/discover.js";
 import { needsAttention } from "../core/freshness.js";
+import { exportMarkdown } from "../core/exporter.js";
+import { importDocs } from "../core/importer.js";
+import { onboarding } from "../core/onboarding.js";
 import { insights, knowledgeGraph } from "../core/insights.js";
 import { listSuggestions } from "../core/suggestions.js";
 import { browseKb, getArticle, getFinding } from "../core/items.js";
@@ -181,6 +184,40 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
     }),
   );
   router.get("/entities/:kind/:name", handle("get_entity", (ctx, req) => getEntity(ctx, String(req.params.kind), String(req.params.name))));
+  router.post(
+    "/import",
+    handle("import_docs", (ctx, req) => {
+      const q = z
+        .object({
+          scope: z.string(),
+          type: z.enum(ARTICLE_TYPES).default("design_doc"),
+          filename: z.string().min(1).max(300),
+          folder: z.string().max(200).optional(),
+          dry_run: z.enum(["true", "false"]).optional(),
+        })
+        .parse(req.query);
+      if (!Buffer.isBuffer(req.body) || !req.body.length) throw new ValidationError("send the file as the request body");
+      return importDocs(ctx, { filename: q.filename, data: new Uint8Array(req.body), scope: q.scope, type: q.type, folder: q.folder, dryRun: q.dry_run === "true" });
+    }),
+  );
+  router.get("/export", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const ctx = ctxOf(req, res);
+      const scope = z.string().optional().parse(req.query.scope);
+      const out = await exportMarkdown(ctx, { scope });
+      await audit(ctx.db, ctx.actor.id, "api:export", null);
+      res
+        .set({
+          "Content-Type": "application/zip",
+          "Content-Disposition": `attachment; filename="cairn-${scope ?? "export"}-${new Date().toISOString().slice(0, 10)}.zip"`,
+          "Cache-Control": "no-store",
+        })
+        .send(Buffer.from(out.zip));
+    } catch (err) {
+      next(err);
+    }
+  });
+  router.get("/onboarding", handle("onboarding", (ctx) => onboarding(ctx)));
   router.get("/favourites", handle("list_favourites", async (ctx) => ({ favourites: await listFavourites(ctx) })));
   router.put("/favourites/:id", handle("add_favourite", (ctx, req) => setFavourite(ctx, uuid.parse(req.params.id), true)));
   router.delete("/favourites/:id", handle("remove_favourite", (ctx, req) => setFavourite(ctx, uuid.parse(req.params.id), false)));
@@ -460,7 +497,21 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
   router.post(
     "/projects",
     handle("admin_create_project", (ctx, req) =>
-      adminCreateProject(ctx, z.object({ slug: z.string(), name: z.string().min(1), description: z.string().optional() }).parse(req.body)),
+      adminCreateProject(
+        ctx,
+        z
+          .object({
+            slug: z.string(),
+            name: z.string().min(1).max(200),
+            description: z.string().max(2000).optional(),
+            components: z
+              .array(z.object({ slug: z.string(), kind: z.enum(["backend", "frontend", "mobile", "data", "infra", "other"]), repo_url: z.string().url().optional() }))
+              .max(10)
+              .optional(),
+            starter: z.boolean().optional(),
+          })
+          .parse(req.body),
+      ),
     ),
   );
   router.post(

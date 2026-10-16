@@ -1,17 +1,61 @@
-import { createComponent, createScope } from "./bootstrap.js";
+import { createComponent, createScope, relate } from "./bootstrap.js";
 import { ValidationError, type RequestContext } from "./context.js";
+import { newArticle } from "./direct.js";
+import { ARTICLE_TEMPLATES, SECTION_HINTS } from "./templates.js";
+import type { CreateArticleInput } from "./writes.js";
 import { assertAdmin } from "./permissions.js";
 import { getReadableScope, getScopeBySlug } from "./scopes.js";
 
 const SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
-export async function adminCreateProject(ctx: RequestContext, input: { slug: string; name: string; description?: string }) {
+export type ComponentKind = "backend" | "frontend" | "mobile" | "data" | "infra" | "other";
+
+export async function adminCreateProject(
+  ctx: RequestContext,
+  input: { slug: string; name: string; description?: string; components?: { slug: string; kind: ComponentKind; repo_url?: string }[]; starter?: boolean },
+) {
   assertAdmin(ctx);
   if (!SLUG.test(input.slug)) throw new ValidationError("slug must be lowercase letters, digits and hyphens");
+  for (const c of input.components ?? []) if (!SLUG.test(c.slug)) throw new ValidationError(`component slug '${c.slug}' must be lowercase letters, digits and hyphens`);
   const existing = await ctx.db.query("SELECT 1 FROM scopes WHERE slug = $1", [input.slug]);
   if (existing.rowCount) throw new ValidationError(`scope '${input.slug}' already exists`);
   const id = await createScope(ctx.db, "project", input.slug, input.name.trim(), input.description?.trim() ?? "");
-  return { id, slug: input.slug };
+  const components: Record<string, string> = {};
+  for (const c of input.components ?? []) components[c.kind] ??= await createComponent(ctx.db, id, c.slug, c.kind, c.repo_url);
+  const starter = input.starter ? await starterPack(ctx, input.slug, input.name.trim(), components) : [];
+  return { id, slug: input.slug, components: Object.keys(components).length, starter };
+}
+
+/** Section text for a starter article: what to write there, as an italic prompt people replace. */
+const prompt = (type: string) =>
+  (ARTICLE_TEMPLATES[type] ?? []).map((h) => `## ${h}\n\n_To write: ${SECTION_HINTS[h] ?? "…"}_\n`).join("\n");
+
+/**
+ * The articles every project ends up needing, published as outlines so they
+ * show on the project page from day one: an overview, a design doc, an
+ * on-call runbook and, when there is a backend and a client, the API
+ * contract between them (linked so contract changes notify the client).
+ */
+async function starterPack(ctx: RequestContext, project: string, name: string, components: Record<string, string>) {
+  const quiet = { ...ctx, quietProposals: true };
+  const made: { id: string; title: string; type: string }[] = [];
+  const add = async (type: string, title: string, path: string) => {
+    const res = await newArticle(quiet, { project, type: type as CreateArticleInput["type"], title, path, body_md: prompt(type) });
+    made.push({ id: res.article_id, title, type });
+    return res.article_id;
+  };
+  await add("project_overview", `${name} overview`, "");
+  await add("design_doc", `${name} design`, "Design");
+  await add("runbook", `${name} on-call runbook`, "Runbooks");
+  const client = components.frontend ?? components.mobile;
+  if (components.backend && client) {
+    const contract = await add("api_contract", `${name} API`, "Contracts");
+    await relate(ctx.db, { kind: "article", id: contract }, "provided_by", { kind: "component", id: components.backend });
+    for (const kind of ["frontend", "mobile"]) {
+      if (components[kind]) await relate(ctx.db, { kind: "article", id: contract }, "consumed_by", { kind: "component", id: components[kind]! });
+    }
+  }
+  return made;
 }
 
 export async function adminAddComponent(ctx: RequestContext, project: string, input: { slug: string; kind: string; repo_url?: string }) {

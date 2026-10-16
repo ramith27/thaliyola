@@ -590,3 +590,23 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .paste-grid label { margin: 0; }
 .paste-preview .preview-box { margin-top: 0.35rem; }
 @media (max-width: 900px) { .mode-split .md-panes, .paste-grid { grid-template-columns: 1fr; } .mode-split .md-preview { border-left: 0; border-top: 1px solid var(--border); } }
+
+/* Setup: checklist, import, new project */
+.checklist { margin: 0 0 1.4rem; padding: 1rem 1.2rem; }
+.checklist-head { display: flex; align-items: center; gap: 1rem; }
+.checklist-head h3 { margin: 0; }
+.checklist-head p { margin: 0.1rem 0 0; }
+.checklist-bar { flex: 1; height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; max-width: 260px; margin-left: auto; }
+.checklist-bar span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+.checklist-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.6rem 1.2rem; margin-top: 0.9rem; }
+.checklist-steps li { display: flex; gap: 0.6rem; align-items: flex-start; }
+.checklist-steps .check { flex: none; width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--border-strong); display: inline-flex; align-items: center; justify-content: center; margin-top: 0.1rem; color: var(--surface); }
+.checklist-steps li.done .check { background: var(--accent); border-color: var(--accent); }
+.checklist-steps li.done .step-title { color: var(--muted); text-decoration: line-through; }
+.step-title { font-weight: 600; font-size: 0.92rem; }
+.dropzone { display: flex !important; flex-direction: row !important; align-items: center; justify-content: center; gap: 0.6rem; border: 1.5px dashed var(--border-strong); border-radius: var(--radius); padding: 1.6rem; color: var(--muted); cursor: pointer; background: var(--surface); }
+.dropzone:hover, .dropzone.has-file { border-color: var(--accent); color: var(--text); }
+.starter-toggle { align-items: flex-start !important; gap: 0.6rem !important; margin: 1rem 0 !important; }
+.starter-toggle span { display: inline; }
+.import-results li { padding: 0.25rem 0; }
+.invite-card { margin: 0 0 1.5rem; padding: 1rem 1.2rem; }

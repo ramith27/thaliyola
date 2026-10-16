@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Email invitations for local sign-in: one-time links (7 days) where the invitee chooses a password, optional project and role, managed on the Users page (`/api/invitations`)
+- First-run checklist on the home page, derived from what has happened (`/api/onboarding`)
+- New project page with components and a starter pack (overview, design doc, on-call runbook, and a linked API contract when there is a backend and a client)
+- Import of Markdown, HTML and zip files, including Notion, Confluence and Google Docs exports, with a dry-run preview, folders, image attachments and one review notification per batch (`POST /api/import`, `IMPORT_MAX_BYTES`)
+- Markdown export as a zip with front matter and attachments (`GET /api/export`, `cairn-admin export`)
+
 - Editor: formatting toolbar, live split preview, `/` block commands, `@` links to articles and findings, `#` links to entities, list continuation, image paste and drop (uploaded as attachments), local autosave with restore, and writing hints in new-article templates (`/api/templates/:type?hints=true`; `<!-- Hint: … -->` comments are removed on save)
 - Paste to draft (`/#/new/paste`): rule-based drafts of findings and articles from Slack threads, emails and notes, plus a `draft-from-paste` MCP prompt for AI clients
 - Web unit tests (`pnpm --filter @cairn/web test`)

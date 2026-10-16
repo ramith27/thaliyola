@@ -6,11 +6,15 @@
  *   node dist/scripts/admin.js list-users
  *   node dist/scripts/admin.js create-token --email you@example.com --name "Claude Code" [--days 90]
  *   node dist/scripts/admin.js create-token --service rca-bot --name "nightly RCA job"
+ *   node dist/scripts/admin.js export --out cairn-export.zip [--scope team]
  *
  * Reads DATABASE_URL like the server.
  */
+import { writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { createApiToken, createLocalUser, listLocalUsers, resetPassword } from "../auth/local.js";
+import { loadConfig, settingsFrom } from "../config.js";
+import { exportMarkdown } from "../core/exporter.js";
 import { migrate } from "../db/migrate.js";
 import { createPool, type Db } from "../db/pool.js";
 
@@ -22,6 +26,8 @@ const { positionals, values } = parseArgs({
     admin: { type: "boolean", default: false },
     service: { type: "string" },
     days: { type: "string" },
+    out: { type: "string" },
+    scope: { type: "string" },
   },
 });
 
@@ -66,8 +72,16 @@ try {
     const token = await createApiToken(db, owner, values.name, values.days ? Number(values.days) : undefined);
     console.log(token.token);
     console.error("Shown once. Use it as: Authorization: Bearer <token>");
+  } else if (command === "export") {
+    if (!values.out) throw new Error("--out <file.zip> is required");
+    // Everything, as a system actor with admin reach (no person's read limits apply).
+    const settings = settingsFrom(loadConfig());
+    const actor = { id: await serviceUserId(db, "cairn-export"), subject: "service:cairn-export", email: null, kind: "service" as const };
+    const out = await exportMarkdown({ db, settings, actor }, { scope: values.scope, all: true });
+    writeFileSync(values.out, out.zip);
+    console.log(`Wrote ${values.out}: ${out.articles} articles, ${out.findings} findings, ${out.assets} files.`);
   } else {
-    console.error("commands: create-user | reset-password | list-users | create-token");
+    console.error("commands: create-user | reset-password | list-users | create-token | export");
     process.exitCode = 2;
   }
 } catch (err) {

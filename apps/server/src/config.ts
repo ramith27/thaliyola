@@ -39,6 +39,8 @@ const Env = z
     S3_PREFIX: z.string().optional(),
     S3_PATH_STYLE: z.enum(["true", "false"]).default("true"),
     ASSET_MAX_BYTES: z.coerce.number().int().positive().default(5 * 1024 * 1024),
+    // Largest upload for document import (a zip of Markdown/HTML pages and their images)
+    IMPORT_MAX_BYTES: z.coerce.number().int().positive().default(50 * 1024 * 1024),
     // Semantic search: local = bge-small in-process; hash = offline test embedder; off = keyword search only
     EMBEDDINGS: z.enum(["local", "hash", "off"]).default("local"),
     EMBEDDING_CACHE_DIR: z.string().optional(),
@@ -105,6 +107,7 @@ export function settingsFrom(config: Config): Settings {
     searchSimilarityWindow: config.SEARCH_SIMILARITY_WINDOW,
     duplicateSimilarity: config.DUPLICATE_SIMILARITY,
     assetMaxBytes: config.ASSET_MAX_BYTES,
+    importMaxBytes: config.IMPORT_MAX_BYTES,
   };
 }
 
@@ -128,6 +131,7 @@ export interface Settings {
   searchSimilarityWindow: number;
   duplicateSimilarity: number;
   assetMaxBytes: number;
+  importMaxBytes: number;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {

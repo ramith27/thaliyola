@@ -51,10 +51,11 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
   if (settings.logRequests) app.use(accessLog());
   const rateLimit = rateLimitPerActor(settings.rateLimitPerMinute);
   const publicOrigin = settings.publicUrl ? new URL(settings.publicUrl).origin : undefined;
-  // Small bodies for everyone; the two routes that carry base64 uploads get a larger limit, but only after auth.
-  const UPLOAD_PATHS = new Set(["/mcp", "/api/assets"]);
+  // Small bodies for everyone; the routes that carry uploads get a larger limit, but only after auth.
+  const UPLOAD_PATHS = new Set(["/mcp", "/api/assets", "/api/import"]);
   const smallJson = express.json({ limit: "1mb" });
   const uploadJson = express.json({ limit: Math.ceil(settings.assetMaxBytes * 1.4) + 1024 * 1024 });
+  const importRaw = express.raw({ type: () => true, limit: settings.importMaxBytes });
   app.use((req, res, next) => (UPLOAD_PATHS.has(req.path) ? next() : smallJson(req, res, next)));
 
   app.get("/healthz", async (_req, res) => {
@@ -78,6 +79,7 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
     requireAuth(db, authenticate, undefined, publicOrigin),
     rateLimit,
     (req: Request, res: Response, next: NextFunction) => (req.path === "/assets" ? uploadJson(req, res, next) : next()),
+    (req: Request, res: Response, next: NextFunction) => (req.path === "/import" ? importRaw(req, res, next) : next()),
     requirePasswordChanged,
     accountRouter(db, settings, (actor) => isAdmin({ db, actor, settings })),
     notificationsRouter(db, settings),

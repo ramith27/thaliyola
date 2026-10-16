@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { api, type Me, type ScopeInfo } from "../api";
 import { ErrorBox, Loading, Notice } from "../components/ui";
+import { ExportButton } from "./setup";
 import { useApi } from "../hooks";
 import { href, navigate } from "../router";
 
@@ -42,6 +43,12 @@ export function ScopeSettingsPage({ slug, scopes, me }: { slug: string; scopes: 
         <a href={href(scope.kind === "project" ? `/project/${slug}` : `/scope/${slug}`)}>{scope.name}</a> / settings
       </p>
       <h1>{scope.name} settings</h1>
+      <div className="actions">
+        <ExportButton scope={slug} label={`Export ${scope.name} as Markdown`} />
+        <a className="btn" href={href("/import")}>
+          Import documents
+        </a>
+      </div>
       <ErrorBox error={error} />
       {saved && <Notice kind="ok">{saved}</Notice>}
 
@@ -170,60 +177,5 @@ export function ScopeSettingsPage({ slug, scopes, me }: { slug: string; scopes: 
         </section>
       )}
     </div>
-  );
-}
-
-export function NewProjectForm() {
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [description, setDescription] = useState("");
-  const [error, setError] = useState<Error | null>(null);
-  const autoSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-
-  if (!open)
-    return (
-      <button className="btn" onClick={() => setOpen(true)}>
-        New project
-      </button>
-    );
-  return (
-    <form
-      className="stack-form"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        setError(null);
-        try {
-          const finalSlug = slug || autoSlug;
-          await api("/projects", { method: "POST", body: { slug: finalSlug, name, description } });
-          navigate(`/scope/${finalSlug}/settings`);
-          window.location.reload();
-        } catch (err) {
-          setError(err as Error);
-        }
-      }}
-    >
-      <label>
-        Name
-        <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Order service v2" />
-      </label>
-      <label>
-        Slug
-        <input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder={autoSlug || "order-service"} />
-      </label>
-      <label>
-        Description
-        <input value={description} onChange={(e) => setDescription(e.target.value)} />
-      </label>
-      <ErrorBox error={error} />
-      <div className="actions">
-        <button className="btn btn-primary" type="submit">
-          Create project
-        </button>
-        <button className="btn" type="button" onClick={() => setOpen(false)}>
-          Cancel
-        </button>
-      </div>
-    </form>
   );
 }

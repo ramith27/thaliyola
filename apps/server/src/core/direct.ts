@@ -21,7 +21,7 @@ import {
  * skip review"), otherwise it waits in the queue like any proposal.
  */
 
-async function settle<T extends { revision_id: string }>(ctx: RequestContext, scopeId: string, proposal: T) {
+export async function settleProposal<T extends { revision_id: string }>(ctx: RequestContext, scopeId: string, proposal: T) {
   if (!(await canApprove(ctx, scopeId))) {
     // Not self-approvable after all: now tell the reviewers.
     if (ctx.quietProposals) track(onProposal(ctx.db, ctx.settings, proposal.revision_id).catch(() => undefined));
@@ -37,20 +37,20 @@ const quiet = (ctx: RequestContext): RequestContext => ({ ...ctx, quietProposals
 export async function editArticle(ctx: RequestContext, input: ArticleEditInput) {
   const item = await findItem(ctx.db, input.id);
   ctx = quiet(ctx);
-  return settle(ctx, item.scope_id, await proposeArticleEdit(ctx, input));
+  return settleProposal(ctx, item.scope_id, await proposeArticleEdit(ctx, input));
 }
 
 export async function editFinding(ctx: RequestContext, input: UpdateFindingInput) {
   const item = await findItem(ctx.db, input.id);
   ctx = quiet(ctx);
-  return settle(ctx, item.scope_id, await updateFinding(ctx, input));
+  return settleProposal(ctx, item.scope_id, await updateFinding(ctx, input));
 }
 
 export async function newArticle(ctx: RequestContext, input: CreateArticleInput) {
   ctx = quiet(ctx);
   const created = await createArticle(ctx, input);
   const item = await findItem(ctx.db, created.article_id);
-  return settle(ctx, item.scope_id, created);
+  return settleProposal(ctx, item.scope_id, created);
 }
 
 export async function newFinding(ctx: RequestContext, input: ProposeFindingInput) {
@@ -58,5 +58,5 @@ export async function newFinding(ctx: RequestContext, input: ProposeFindingInput
   const created = await proposeFinding(ctx, input);
   if (created.status !== "pending_review") return created;
   const item = await findItem(ctx.db, created.finding_id);
-  return settle(ctx, item.scope_id, created);
+  return settleProposal(ctx, item.scope_id, created);
 }

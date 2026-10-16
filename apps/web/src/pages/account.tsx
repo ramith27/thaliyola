@@ -1,5 +1,8 @@
 import { useState, type FormEvent } from "react";
-import { api, authApi, type Me } from "../api";
+import { api, authApi, type Me, type ScopeInfo } from "../api";
+import { Invitations } from "./invite";
+import { ExportButton } from "./setup";
+import { href } from "../router";
 import { ErrorBox, formatDate, Loading, Notice } from "../components/ui";
 import { NotificationPrefs } from "../components/notifications";
 import { useApi } from "../hooks";
@@ -275,6 +278,16 @@ export function AccountPage({ me }: { me: Me }) {
       <ApiTokens />
       <ConnectedApps />
       <NotificationPrefs />
+      <section>
+        <h2>Your data</h2>
+        <p className="muted small">Download everything you can read as Markdown files with front matter, plus attachments, in a zip.</p>
+        <div className="actions">
+          <ExportButton />
+          <a className="btn" href={href("/import")}>
+            Import documents
+          </a>
+        </div>
+      </section>
       {me.local_account && (
         <section>
           <h2>Password</h2>
@@ -295,7 +308,7 @@ interface LocalUser {
   last_seen_at: string | null;
 }
 
-export function UsersPage({ me }: { me: Me }) {
+export function UsersPage({ me, scopes }: { me: Me; scopes: ScopeInfo[] }) {
   const { data, error, reload } = useApi<{ users: LocalUser[] }>("/users");
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -316,7 +329,9 @@ export function UsersPage({ me }: { me: Me }) {
   return (
     <div className="page">
       <h1>Users</h1>
-      <p className="lead">Accounts that sign in with a password. New users get a temporary password to change at first sign-in.</p>
+      <p className="lead">Accounts that sign in with a password. Invite people by email, or add an account directly with a temporary password to change at first sign-in.</p>
+      <Invitations scopes={scopes} />
+      <h2>Add an account directly</h2>
       {secret && (
         <Notice kind="ok">
           <p>

@@ -4,9 +4,9 @@ import { I } from "../components/icons";
 import { formatDate, itemHref, Loading, ScopeBadge, TypeBadge } from "../components/ui";
 import { useApi } from "../hooks";
 import { AskBox } from "../components/find";
+import { Checklist } from "./setup";
 import { href } from "../router";
 import { GetStartedBanner } from "./connect";
-import { NewProjectForm } from "./settings";
 
 interface Insights {
   totals: { articles: number; findings: number; projects: number; pending: number; attention: number };
@@ -36,7 +36,6 @@ export function Dashboard({ scopes, me }: { scopes: ScopeInfo[]; me: Me }) {
 
   return (
     <div className="page page-wide">
-      <GetStartedBanner />
       <div className="page-head">
         <div>
           <h1>{greeting(me.email)}</h1>
@@ -54,6 +53,7 @@ export function Dashboard({ scopes, me }: { scopes: ScopeInfo[]; me: Me }) {
           </a>
         </div>
       </div>
+      <Checklist fallback={<GetStartedBanner />} />
       <AskBox />
 
       {!data ? (
@@ -190,7 +190,11 @@ export function Dashboard({ scopes, me }: { scopes: ScopeInfo[]; me: Me }) {
 
       <div className="section-head">
         <h2>Projects</h2>
-        {me.admin && <NewProjectForm />}
+        {me.admin && (
+          <a className="btn" href={href("/new/project")}>
+            New project
+          </a>
+        )}
       </div>
       <div className="cards">
         {scopes

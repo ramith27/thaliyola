@@ -125,7 +125,7 @@ export async function listAssets(ctx: RequestContext, targetId: string): Promise
   return rows;
 }
 
-export async function getAsset(ctx: RequestContext, id: string): Promise<{ meta: AssetMeta & { target_id: string; target_kind: string }; data: Buffer }> {
+export async function getAsset(ctx: RequestContext, id: string, opts: { skipReadCheck?: boolean } = {}): Promise<{ meta: AssetMeta & { target_id: string; target_kind: string }; data: Buffer }> {
   const { rows } = await ctx.db.query(
     `SELECT a.id, a.filename, a.mime, a.size_bytes::int AS size_bytes, a.alt_text, a.created_at, a.storage_key, a.target_id, a.target_kind, a.scope_id,
             coalesce(u.email, u.subject) AS uploaded_by
@@ -134,7 +134,7 @@ export async function getAsset(ctx: RequestContext, id: string): Promise<{ meta:
   );
   const row = rows[0];
   if (!row) throw new NotFoundError(`asset ${id}`);
-  await assertCanRead(ctx, row.scope_id, `asset ${id}`);
+  if (!opts.skipReadCheck) await assertCanRead(ctx, row.scope_id, `asset ${id}`);
   const { storage_key, scope_id: _scope, ...meta } = row;
   return { meta, data: await storeFor(ctx).get(storage_key) };
 }

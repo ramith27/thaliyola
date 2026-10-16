@@ -129,6 +129,10 @@ The server also serves a web UI at `/` for people:
 - **Connect:** after signing in, people see their access and roles. They can create a token in place and copy ready-made setup for Claude Code (global or per repository, with the project and component chosen from lists), claude.ai and other MCP clients. The page also lists the workflow prompts and all tools. A home-page banner points new users there until they connect.
 - **Read and edit:** articles and findings. Edits by scope owners and admins publish immediately; everyone else's edits become proposals.
 - **Editor:** markdown with a formatting toolbar, a live side-by-side preview, `/` for blocks (headings, lists, checklists, code, tables, callouts), `@` to link an article or finding, `#` to link a system, table, metric or service, list continuation on Enter, and pasted or dropped images uploaded as attachments (once the item exists). New articles start from their type's template with a writing hint in each section (`<!-- Hint: … -->`), removed on save. Unsaved changes are kept in the browser and offered back after a reload. It stays plain markdown: not a WYSIWYG editor.
+- **Getting started:** the home page shows a checklist worked out from what has happened (create a project, invite the team, set up email, connect Claude, add knowledge, follow something) until it's done or hidden.
+- **New project:** pick its parts (backend, frontend, mobile, data, infra) and optionally a starter pack: outlines for an overview, a design doc and an on-call runbook, plus the API contract between backend and client, linked so contract changes notify the client side.
+- **Import:** Markdown or HTML files, or a zip of them, including Notion (Markdown & CSV), Confluence (HTML space export) and Google Docs (Web page) exports. A preview lists the pages, folders and images first; images in the zip become attachments, folders become article folders, and everything goes through redaction and review like any write (`POST /api/import?scope=…&type=…&filename=…[&dry_run=true]` with the file as the body, up to `IMPORT_MAX_BYTES`).
+- **Export:** a zip of Markdown files with YAML front matter and attachments, for everything you can read (Account page) or one scope (scope settings), or `GET /api/export[?scope=…]`.
 - **Paste to draft:** paste a Slack thread, email or notes and get a draft finding or article. Simple rules pull out the title and labelled parts ("Root cause:", "Fix:") and drop timestamps, reactions, email headers and signatures; you check it before saving. For a smarter draft, use the `draft-from-paste` prompt in an AI client.
 - **Review queue:** line diffs of current vs proposed text, with approve and reject. Reviewers can correct a proposal before approving it (the change is marked "edited by reviewer"), discuss it in a comment thread, assign it to another reviewer, and select several proposals to approve at once. Keyboard: `j`/`k` move, `x` select, `o` open in the queue; `a` approve, `e` edit, `r` reject, `n` next on a proposal.
 - **History:** every published version of an article or finding is kept. The History page diffs any version against the one before it and restores an old version as a new one (directly for owners, as a proposal for everyone else).
@@ -295,7 +299,8 @@ Choose with `AUTH_MODE`:
 In every mode, people can create **personal API tokens** on their Account page for Claude Code and other MCP clients. The page shows a ready-to-paste `claude mcp add` command. Tokens are stored hashed, can expire, and can be revoked.
 
 Local mode details:
-- New accounts get a temporary password that must be changed at first sign-in.
+- **Invitations:** admins invite people by email from the Users page (optionally into a project with a role). The link works once, expires after 7 days, and lets the invitee choose their own password. Without email set up, the admin gets the link to pass on.
+- Accounts added directly get a temporary password that must be changed at first sign-in.
 - Failed sign-ins are throttled.
 - Browser writes made with the session cookie must come from the same origin (CSRF protection on top of `SameSite=Lax`).
 - Disabling a user ends their sessions and revokes their tokens.
@@ -305,6 +310,7 @@ Local mode details:
 sudo cairn-admin create-user --email you@example.com --admin      # first admin (prints a temporary password)
 sudo cairn-admin reset-password --email someone@example.com
 sudo cairn-admin create-token --service nightly-rca --name "RCA job"  # token for a bot account
+sudo cairn-admin export --out /tmp/cairn.zip [--scope team]          # everything as Markdown (members-only projects too)
 ```
 
 ### OAuth for claude.ai and other OAuth clients (local mode)

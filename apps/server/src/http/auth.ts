@@ -15,6 +15,7 @@ import {
   sessionHash,
   updateLocalUser,
 } from "../auth/local.js";
+import { acceptInvitation, createInvitation, describeInvitation, listInvitations, revokeInvitation } from "../auth/invitations.js";
 import { listConnections, revokeConnection } from "../auth/oauth.js";
 import type { Settings } from "../config.js";
 import { audit } from "../core/audit.js";
@@ -88,6 +89,38 @@ export function publicAuthRouter(db: Db, settings: Settings) {
       setSessionCookie(req, res, settings, session.token);
       res.json({ ok: true, must_change_password: session.mustChangePassword });
     } catch (err) {
+      next(err);
+    }
+  });
+
+  // Invitation links: show who invited whom, then create the account with the invitee's own password and sign them in.
+  const invites = new LoginThrottle(30, 15 * 60_000);
+  router.get("/invite/:token", async (req, res, next) => {
+    try {
+      const inv = await describeInvitation(db, String(req.params.token));
+      if (!inv) return void res.status(404).json({ error: "this invitation link has expired or was already used" });
+      res.json(inv);
+    } catch (err) {
+      next(err);
+    }
+  });
+  router.post("/invite/:token", async (req, res, next) => {
+    try {
+      const ip = req.ip ?? "unknown";
+      if (invites.blocked(ip)) return void res.status(429).json({ error: "too many attempts; try again in 15 minutes" });
+      const body = z.object({ password: z.string().min(1).max(200), name: z.string().max(200).optional() }).safeParse(req.body);
+      if (!body.success) return void res.status(400).json({ error: "choose a password" });
+      const accepted = await acceptInvitation(db, String(req.params.token), body.data);
+      if (!accepted) {
+        invites.fail(ip);
+        return void res.status(404).json({ error: "this invitation link has expired or was already used" });
+      }
+      await audit(db, accepted.userId, "accept_invitation", null);
+      const session = await login(db, accepted.email, body.data.password, { ttlHours: settings.sessionTtlHours, userAgent: req.header("user-agent") });
+      if (session) setSessionCookie(req, res, settings, session.token);
+      res.json({ ok: true, email: accepted.email });
+    } catch (err) {
+      if (err instanceof ValidationError) return void res.status(400).json({ error: err.message });
       next(err);
     }
   });
@@ -184,6 +217,26 @@ export function accountRouter(db: Db, settings: Settings, isAdmin: (actor: Actor
       await audit(db, actorOf(res).id, "create_user", created.user.id);
       return { user: created.user, temporary_password: created.temporaryPassword };
     }),
+  );
+  router.get(
+    "/invitations",
+    wrap(async (_req, res) => (requireAdmin(res) ? { invitations: await listInvitations(db) } : undefined)),
+  );
+  router.post(
+    "/invitations",
+    wrap(async (req, res) => {
+      if (!requireAdmin(res)) return undefined;
+      const body = z
+        .object({ email: z.string().max(320), name: z.string().max(200).optional(), scope: z.string().optional(), role: z.enum(["reader", "writer", "owner"]).optional() })
+        .parse(req.body);
+      const inv = await createInvitation(db, settings, actorOf(res).id, body);
+      await audit(db, actorOf(res).id, "invite_user", inv.id);
+      return inv;
+    }),
+  );
+  router.delete(
+    "/invitations/:id",
+    wrap(async (req, res) => (requireAdmin(res) ? revokeInvitation(db, z.string().uuid().parse(req.params.id)) : undefined)),
   );
   router.post(
     "/users/:id/reset-password",

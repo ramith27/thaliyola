@@ -65,7 +65,7 @@ function mailer(settings: Settings): Transporter | null {
 const abs = (settings: Settings, link: string) => (settings.publicUrl ? `${settings.publicUrl}/${link.replace(/^\//, "")}` : link);
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
-function emailHtml(settings: Settings, n: NotificationInput) {
+function emailHtml(settings: Settings, n: NotificationInput, opts: { footer?: string; openLabel?: string } = {}) {
   const open = abs(settings, n.link);
   return `<!doctype html><html><body style="margin:0;background:#f6f7f9;font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#0f172a">
 <div style="max-width:560px;margin:24px auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px">
@@ -73,8 +73,8 @@ function emailHtml(settings: Settings, n: NotificationInput) {
 <div style="font-size:17px;font-weight:600;margin-bottom:8px">${escapeHtml(n.title)}</div>
 ${n.body ? `<div style="font-size:14px;color:#334155;line-height:1.55;white-space:pre-wrap;margin-bottom:16px">${escapeHtml(n.body)}</div>` : ""}
 <div>${n.action ? `<a href="${escapeHtml(n.action.url)}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;font-weight:600;margin-right:8px">${escapeHtml(n.action.label)}</a>` : ""}
-<a href="${escapeHtml(open)}" style="display:inline-block;border:1px solid #d6dae1;color:#0f172a;text-decoration:none;padding:9px 16px;border-radius:8px;font-weight:600">Open in Cairn</a></div>
-<div style="font-size:12px;color:#64748b;margin-top:24px">Change which emails you get on your Cairn account page.</div>
+<a href="${escapeHtml(open)}" style="display:inline-block;border:1px solid #d6dae1;color:#0f172a;text-decoration:none;padding:9px 16px;border-radius:8px;font-weight:600">${escapeHtml(opts.openLabel ?? "Open in Cairn")}</a></div>
+<div style="font-size:12px;color:#64748b;margin-top:24px">${escapeHtml(opts.footer ?? "Change which emails you get on your Cairn account page.")}</div>
 </div></body></html>`;
 }
 
@@ -111,6 +111,23 @@ export async function notify(db: Queryable, settings: Settings, userIds: string[
         .catch((err) => console.error(`[notify] email to ${u.email} failed: ${(err as Error).message}`)),
     );
   }
+}
+
+/** Sends one email that isn't tied to a user's notification preferences (invitations, digests). Returns false if mail is off. */
+export function sendEmail(settings: Settings, to: string, msg: { subject: string; body: string; link: string; openLabel: string; footer: string }) {
+  const t = mailer(settings);
+  if (!t) return false;
+  const n: NotificationInput = { kind: "invite", title: msg.subject, body: msg.body, link: msg.link };
+  const html = emailHtml(settings, n, { openLabel: msg.openLabel, footer: msg.footer });
+  track(
+    t
+      .sendMail({ from: settings.mailFrom, to, subject: msg.subject, text: `${msg.body}\n\n${abs(settings, msg.link)}`, html })
+      .then(() => {
+        if (settings.mailTransport === "json") outbox.push({ to, subject: msg.subject, text: msg.body, html });
+      })
+      .catch((err) => console.error(`[notify] email to ${to} failed: ${(err as Error).message}`)),
+  );
+  return true;
 }
 
 /** Posts a one-line message to the team Slack channel (incoming webhook), if configured. */

@@ -32,6 +32,7 @@ export const TEST_SETTINGS: Settings = {
   cookieSecure: "false",
   assetDir: mkdtempSync(path.join(tmpdir(), "cairn-assets-")),
   assetMaxBytes: 1024 * 1024,
+  importMaxBytes: 10 * 1024 * 1024,
   searchMinSimilarity: 0.6,
   searchSimilarityWindow: 0.02,
   duplicateSimilarity: 0.8,
