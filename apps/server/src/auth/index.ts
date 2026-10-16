@@ -4,6 +4,7 @@ import type { Config } from "../config.js";
 import type { Actor } from "../core/context.js";
 import { upsertUser } from "../core/users.js";
 import { SESSION_COOKIE, userForApiToken, userForSession } from "./local.js";
+import { OAUTH_ACCESS_PREFIX, userForOAuthToken } from "./oauth.js";
 import type { Db } from "../db/pool.js";
 
 export interface Identity {
@@ -78,12 +79,17 @@ export function sessionToken(req: Request): string | undefined {
   return cookie(req, SESSION_COOKIE);
 }
 
-/** Personal API tokens (`Authorization: Bearer cairn_pat_…`), accepted in every mode. */
-export function apiTokenAuthenticator(db: Db): Authenticator {
+/**
+ * Personal API tokens (`Bearer cairn_pat_…`), accepted in every mode, and
+ * OAuth access tokens (`Bearer cairn_oat_…`) issued by the local OAuth server.
+ */
+export function apiTokenAuthenticator(db: Db, oauthResource?: URL): Authenticator {
   return async (req) => {
-    const m = /^Bearer\s+(cairn_pat_\S+)$/i.exec(req.header("authorization") ?? "");
-    const user = m ? await userForApiToken(db, m[1]!) : null;
-    return user ? { ...user, via: "header" } : null;
+    const m = /^Bearer\s+(cairn_(?:pat|oat)_\S+)$/i.exec(req.header("authorization") ?? "");
+    if (!m) return null;
+    const token = m[1]!;
+    const user = token.startsWith(OAUTH_ACCESS_PREFIX) ? await userForOAuthToken(db, token, oauthResource) : await userForApiToken(db, token);
+    return user ? { subject: user.subject, email: user.email, kind: user.kind, via: "header" } : null;
   };
 }
 
@@ -99,13 +105,14 @@ export function chain(...authenticators: Authenticator[]): Authenticator {
 }
 
 export function authenticatorFor(config: Config, db: Db): Authenticator {
+  const oauthResource = config.AUTH_MODE === "local" && config.PUBLIC_URL ? new URL("/mcp", config.PUBLIC_URL) : undefined;
   const primary =
     config.AUTH_MODE === "cloudflare"
       ? cloudflareAuthenticator(config.CF_ACCESS_TEAM_DOMAIN!, config.CF_ACCESS_AUD!)
       : config.AUTH_MODE === "local"
         ? sessionAuthenticator(db)
         : devAuthenticator(config.DEV_TOKENS);
-  return chain(apiTokenAuthenticator(db), primary);
+  return chain(apiTokenAuthenticator(db, oauthResource), primary);
 }
 
 /**
@@ -126,12 +133,16 @@ function sameOrigin(req: Request): boolean {
   }
 }
 
-/** Rejects unauthenticated requests; attaches the user (created on first sight) as `res.locals.actor`. */
-export function requireAuth(db: Db, authenticate: Authenticator) {
+/**
+ * Rejects unauthenticated requests; attaches the user (created on first sight) as `res.locals.actor`.
+ * With `resourceMetadataUrl`, 401s point OAuth clients at the protected-resource metadata (RFC 9728).
+ */
+export function requireAuth(db: Db, authenticate: Authenticator, resourceMetadataUrl?: URL) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const identity = await authenticate(req);
       if (!identity) {
+        if (resourceMetadataUrl) res.set("WWW-Authenticate", `Bearer resource_metadata="${resourceMetadataUrl.href}"`);
         res.status(401).json({ error: "unauthenticated" });
         return;
       }

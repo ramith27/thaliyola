@@ -220,6 +220,49 @@ function ApiTokens() {
   );
 }
 
+function ConnectedApps() {
+  const { data, reload } = useApi<{ connections: { client_id: string; name: string; connected_at: string; last_refreshed_at: string }[] }>("/account/connections");
+  if (!data?.connections.length) return null;
+  return (
+    <section>
+      <h2>Connected apps</h2>
+      <p className="muted">Apps you allowed to use Cairn through OAuth, such as a claude.ai connector.</p>
+      <div className="table-wrap">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>App</th>
+              <th>Connected</th>
+              <th>Last refreshed</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {data.connections.map((c) => (
+              <tr key={c.client_id}>
+                <td>{c.name}</td>
+                <td>{formatDate(c.connected_at)}</td>
+                <td>{formatDate(c.last_refreshed_at)}</td>
+                <td>
+                  <button
+                    className="link-btn danger small"
+                    onClick={async () => {
+                      await api(`/account/connections/${encodeURIComponent(c.client_id)}`, { method: "DELETE" });
+                      reload();
+                    }}
+                  >
+                    Revoke
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 export function AccountPage({ me }: { me: Me }) {
   return (
     <div className="page">
@@ -229,6 +272,7 @@ export function AccountPage({ me }: { me: Me }) {
         {me.admin ? " · admin" : ""}
       </p>
       <ApiTokens />
+      <ConnectedApps />
       {me.local_account && (
         <section>
           <h2>Password</h2>

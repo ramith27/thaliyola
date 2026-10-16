@@ -40,6 +40,7 @@ export function HomePage({ scopes }: { scopes: ScopeInfo[] }) {
       ) : (
         <p className="muted">No projects yet. Admins create them through the API.</p>
       )}
+      <NeedsAttention />
       {mine.data && mine.data.revisions.length > 0 && (
         <>
           <h2>Your pending proposals</h2>
@@ -53,6 +54,29 @@ export function HomePage({ scopes }: { scopes: ScopeInfo[] }) {
         </>
       )}
     </div>
+  );
+}
+
+function NeedsAttention() {
+  const { data } = useApi<{ entries: { kind: string; id: string; title: string; type: string; scope: string; reason: string; last_verified_at: string }[] }>(
+    "/attention?limit=8",
+  );
+  if (!data?.entries.length) return null;
+  return (
+    <section>
+      <h2>Needs attention</h2>
+      <p className="muted small">Not verified recently or past their review date. Check them against reality, then mark them still valid or fix them.</p>
+      <ul className="list">
+        {data.entries.map((e) => (
+          <li key={e.id}>
+            <a href={itemHref(e.kind, e.id)}>{e.title}</a> <TypeBadge type={e.type} /> <ScopeBadge scope={e.scope} />{" "}
+            <span className="muted small">
+              {e.reason} · last verified {formatDate(e.last_verified_at)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

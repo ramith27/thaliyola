@@ -210,3 +210,8 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent-soft
 .table th { text-align: left; font-weight: 600; color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
 .table th, .table td { padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: top; }
 .row-actions { display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; justify-content: flex-end; }
+
+/* Keep the sidebar column painted for the full height of long pages (desktop). */
+@media (min-width: 861px) {
+  .body { background: linear-gradient(to right, var(--panel) 259px, var(--border) 259px, var(--border) 260px, transparent 260px); }
+}

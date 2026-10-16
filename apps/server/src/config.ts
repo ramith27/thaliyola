@@ -8,6 +8,9 @@ const Env = z
     DATABASE_URL: z.string().default("postgres://cairn:cairn@localhost:5432/cairn"),
     // local = built-in accounts; cloudflare = Cloudflare Access; dev = static tokens (local development only)
     AUTH_MODE: z.enum(["local", "cloudflare", "dev"]).default("local"),
+    // Public base URL (e.g. https://cairn.example.com). In local mode it enables the OAuth server for
+    // MCP clients such as claude.ai connectors, which need a fixed issuer URL.
+    PUBLIC_URL: z.string().url().optional(),
     SESSION_TTL_HOURS: z.coerce.number().int().positive().default(168),
     // Secure cookies: auto = when the request arrived over https (directly or via a local proxy/tunnel)
     COOKIE_SECURE: z.enum(["auto", "true", "false"]).default("auto"),
@@ -31,6 +34,10 @@ const Env = z
     SEARCH_MIN_SIMILARITY: z.coerce.number().min(0).max(1).default(0.6),
     // Cosine similarity at which an existing finding counts as a near-duplicate
     DUPLICATE_SIMILARITY: z.coerce.number().min(0).max(1).default(0.8),
+    // Published entries not verified for this many days are flagged possibly_stale
+    STALE_AFTER_DAYS: z.coerce.number().int().positive().default(90),
+    STALE_AFTER_DAYS_ARTICLES: z.coerce.number().int().positive().optional(),
+    MAINTENANCE_INTERVAL_HOURS: z.coerce.number().positive().default(6),
     DUPLICATE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.6),
   })
   .superRefine((env, ctx) => {
@@ -49,6 +56,7 @@ export function settingsFrom(config: Config): Settings {
     adminEmails: config.ADMIN_EMAILS.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean),
     duplicateThreshold: config.DUPLICATE_THRESHOLD,
     authMode: config.AUTH_MODE,
+    publicUrl: config.PUBLIC_URL?.replace(/\/+$/, ""),
     sessionTtlHours: config.SESSION_TTL_HOURS,
     cookieSecure: config.COOKIE_SECURE,
     assetDir: config.ASSET_DIR,
@@ -62,6 +70,7 @@ export interface Settings {
   adminEmails: string[];
   duplicateThreshold: number;
   authMode: "local" | "cloudflare" | "dev";
+  publicUrl?: string;
   sessionTtlHours: number;
   cookieSecure: "auto" | "true" | "false";
   assetDir: string;

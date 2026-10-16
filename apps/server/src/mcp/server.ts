@@ -4,6 +4,7 @@ import { z } from "zod";
 import { ASSET_MIME_TYPES, getAsset, uploadAsset } from "../core/assets.js";
 import { audit } from "../core/audit.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError, type RequestContext } from "../core/context.js";
+import { needsAttention } from "../core/freshness.js";
 import { browseKb, getArticle, getFinding } from "../core/items.js";
 import { ackNotice, listImpactNotices } from "../core/notices.js";
 import { listReviewQueue } from "../core/review.js";
@@ -200,6 +201,23 @@ export function buildMcpServer(ctx: RequestContext): McpServer {
       annotations: { readOnlyHint: true },
     },
     (args) => run("get_project_context", null, () => getProjectContext(ctx, args.project, args.component)),
+  );
+
+  server.registerTool(
+    "list_stale_entries",
+    {
+      title: "List entries needing attention",
+      description:
+        "Entries not verified recently (possibly_stale) and articles past their review date. " +
+        "Check each against reality, then call verify_entry (still valid) or propose a correction.",
+      inputSchema: {
+        scope: z.string().optional().describe("One scope slug, 'all', or omit for the current project + team + library"),
+        project: projectArg,
+        limit: z.number().int().min(1).max(200).optional(),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    (args) => run("list_stale_entries", null, () => needsAttention(ctx, args)),
   );
 
   // ---- Design assets and sharing ---------------------------------------------

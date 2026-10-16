@@ -23,6 +23,7 @@ export const TEST_SETTINGS: Settings = {
   adminEmails: ["admin@example.com"],
   duplicateThreshold: 0.6,
   authMode: "dev",
+  publicUrl: undefined,
   sessionTtlHours: 24,
   cookieSecure: "false",
   assetDir: mkdtempSync(path.join(tmpdir(), "cairn-assets-")),

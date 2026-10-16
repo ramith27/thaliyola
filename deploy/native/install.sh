@@ -80,6 +80,8 @@ EMBEDDING_CACHE_DIR=/var/lib/cairn/models
 #   CF_ACCESS_TEAM_DOMAIN=https://<team>.cloudflareaccess.com
 #   CF_ACCESS_AUD=<Access application AUD tag>
 AUTH_MODE=local
+# Public https URL (reverse proxy or tunnel); enables OAuth so claude.ai connectors can sign in.
+# PUBLIC_URL=https://cairn.example.com
 CONF
   chown root:cairn "$ENV_FILE"
   chmod 640 "$ENV_FILE"

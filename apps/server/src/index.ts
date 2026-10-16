@@ -1,6 +1,7 @@
 import { authenticatorFor } from "./auth/index.js";
 import { ensureBaseScopes } from "./core/bootstrap.js";
 import { HashingEmbedder, LocalEmbedder, startIndexer } from "./core/embeddings.js";
+import { startJobs } from "./core/freshness.js";
 import { loadConfig, settingsFrom } from "./config.js";
 import { migrate } from "./db/migrate.js";
 import { createPool } from "./db/pool.js";
@@ -28,6 +29,12 @@ if (embedder) {
 }
 const indexer = embedder ? startIndexer(db, embedder, (msg) => console.log(`[embeddings] ${msg}`)) : undefined;
 
+const jobs = startJobs(
+  db,
+  { findingDays: config.STALE_AFTER_DAYS, articleDays: config.STALE_AFTER_DAYS_ARTICLES ?? config.STALE_AFTER_DAYS, intervalHours: config.MAINTENANCE_INTERVAL_HOURS },
+  (msg) => console.log(`[maintenance] ${msg}`),
+);
+
 const server = createApp({
   db,
   authenticate: authenticatorFor(config, db),
@@ -42,6 +49,7 @@ const server = createApp({
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     indexer?.stop();
+    jobs.stop();
     server.close(() => void db.end().then(() => process.exit(0)));
   });
 }

@@ -39,6 +39,7 @@ A project can declare that it **uses** an item from the library or from another 
 | `list_impact_notices` / `ack_notice` | Upstream contract or shared-design changes a project or component hasn't handled yet |
 | `list_review_queue` | Pending and decided proposals (`mine: true` for your own) |
 | `get_article_template` | Expected sections for an article type |
+| `list_stale_entries` | Entries not verified recently and articles past their review date |
 | `get_asset` | A screenshot, exported frame, token file or spec attached to an item. Images come back as MCP image content the agent can look at |
 
 **Write tools.** Every write is a proposal that a person reviews before it is published:
@@ -55,6 +56,13 @@ A project can declare that it **uses** an item from the library or from another 
 | `add_source_link` | Attach a Figma frame, PR, Sentry issue or dashboard to an item |
 | `upload_asset` | Attach a screenshot (PNG/JPEG/WebP/GIF), token JSON, markdown or PDF. Text files are redacted; images can't be |
 | `share_to_library` | Propose publishing a project item to the library. On approval by a library owner, a copy (with its links and files) is created and the project is linked to it |
+
+### Freshness
+
+Knowledge goes stale:
+- **Flagging:** a maintenance job in the server marks published entries not verified for `STALE_AFTER_DAYS` (default 90; `STALE_AFTER_DAYS_ARTICLES` to differ for articles) as `possibly_stale`. They rank lower and carry a warning.
+- **Needs attention:** stale entries and articles past their `review_due` date appear on the home page and through `list_stale_entries` until someone verifies or fixes them.
+- **Housekeeping:** the same job cleans up expired sessions and OAuth artifacts. It runs every `MAINTENANCE_INTERVAL_HOURS`, on one instance at a time.
 
 ### Search
 
@@ -213,6 +221,19 @@ sudo cairn-admin reset-password --email someone@example.com
 sudo cairn-admin create-token --service nightly-rca --name "RCA job"  # token for a bot account
 ```
 
+### OAuth for claude.ai and other OAuth clients (local mode)
+
+Set `PUBLIC_URL` (e.g. `https://cairn.example.com`) and Cairn also acts as an OAuth 2.1 authorization server for MCP clients that only support OAuth, such as claude.ai custom connectors:
+- **Discovery:** protected-resource and authorization-server metadata, so clients find the server from a single 401.
+- **Registration:** dynamic client registration.
+- **Authorization:** authorization code with PKCE (S256). The person signs in with their Cairn account and approves the app on a consent page that shows where they'll be sent.
+- **Tokens:** opaque access tokens (1 hour) and rotating refresh tokens (30 days). A reused refresh token or authorization code revokes everything issued from it, and tokens are bound to this server's `/mcp` resource.
+- **Revocation:** people see and revoke connected apps on their Account page.
+
+To add Cairn to claude.ai, use **Settings → Connectors → Add custom connector** with `https://cairn.example.com/mcp`. Cairn must be reachable from the internet over https, for example through a Cloudflare Tunnel or a reverse proxy.
+
+The flow is built on the MCP TypeScript SDK's OAuth server router. Cairn supplies storage, sign-in, consent and token issuance.
+
 (`cairn-admin` is installed by the native installer. Elsewhere, run `node dist/scripts/admin.js …` with `DATABASE_URL` set.)
 
 ## Deployment with Cloudflare Zero Trust
@@ -248,5 +269,6 @@ apps/server/
 - ~~**M3** Library sharing, design assets (screenshots, token files), Figma links~~ (done)
 - ~~**M3b** Semantic search (pgvector + local embedding model), duplicate detection~~ (done)
 - ~~Local sign-in with built-in accounts and personal API tokens~~ (done)
-- **M4** Nightly freshness jobs, OAuth for claude.ai connectors in local mode, production hardening
+- ~~**M4** Freshness jobs, OAuth for claude.ai connectors in local mode~~ (done)
+- Next: Slack and Sentry integrations, promotion suggestions from recurring findings, backups guide
 - **M5** Integrations with existing agent skills, Slack and Sentry

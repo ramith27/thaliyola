@@ -6,6 +6,7 @@ import { ASSET_MIME_TYPES, deleteAsset, getAsset, uploadAsset } from "../core/as
 import { audit } from "../core/audit.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError, type Actor, type RequestContext } from "../core/context.js";
 import { editArticle, editFinding, newArticle, newFinding } from "../core/direct.js";
+import { needsAttention } from "../core/freshness.js";
 import { browseKb, getArticle, getFinding } from "../core/items.js";
 import { ackNotice, listImpactNotices } from "../core/notices.js";
 import { isAdmin } from "../core/permissions.js";
@@ -149,6 +150,12 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
         component: z.string().optional().parse(req.query.component),
         include_acked: req.query.include_acked === "true",
       }),
+    ),
+  );
+  router.get(
+    "/attention",
+    handle("needs_attention", (ctx, req) =>
+      needsAttention(ctx, { scope: z.string().optional().parse(req.query.scope), limit: z.coerce.number().int().min(1).max(200).optional().parse(req.query.limit) }),
     ),
   );
   router.post(

@@ -15,6 +15,7 @@ import {
   sessionHash,
   updateLocalUser,
 } from "../auth/local.js";
+import { listConnections, revokeConnection } from "../auth/oauth.js";
 import type { Settings } from "../config.js";
 import { audit } from "../core/audit.js";
 import { ValidationError, type Actor } from "../core/context.js";
@@ -155,6 +156,16 @@ export function accountRouter(db: Db, settings: Settings, isAdmin: (actor: Actor
     wrap(async (req, res) => {
       const result = await revokeApiToken(db, actorOf(res).id, z.string().uuid().parse(req.params.id));
       await audit(db, actorOf(res).id, "revoke_api_token", null);
+      return result;
+    }),
+  );
+
+  router.get("/account/connections", wrap(async (_req, res) => ({ connections: await listConnections(db, actorOf(res).id) })));
+  router.delete(
+    "/account/connections/:clientId",
+    wrap(async (req, res) => {
+      const result = await revokeConnection(db, actorOf(res).id, z.string().min(1).max(100).parse(req.params.clientId));
+      await audit(db, actorOf(res).id, "revoke_oauth_connection", null);
       return result;
     }),
   );

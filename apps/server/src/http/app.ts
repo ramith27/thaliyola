@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { requireAuth, type Authenticator } from "../auth/index.js";
+import { oauthRouter } from "../auth/oauth.js";
 import type { Settings } from "../config.js";
 import type { Embedder } from "../core/embeddings.js";
 import type { Actor } from "../core/context.js";
@@ -54,6 +55,10 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
 
   // Stateless streamable HTTP: a fresh server + transport per request, bound to the caller.
   app.use("/auth", publicAuthRouter(db, settings));
+
+  // OAuth server for local mode (claude.ai connectors and other OAuth-only MCP clients).
+  const oauth = settings.authMode === "local" && settings.publicUrl ? oauthRouter(db, settings, new URL(settings.publicUrl)) : undefined;
+  if (oauth) app.use(oauth.router);
   app.use(
     "/api",
     requireAuth(db, authenticate),
@@ -63,7 +68,7 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
     apiErrorHandler,
   );
 
-  app.post("/mcp", requireAuth(db, authenticate), requirePasswordChanged, async (req, res) => {
+  app.post("/mcp", requireAuth(db, authenticate, oauth?.resourceMetadataUrl), requirePasswordChanged, async (req, res) => {
     const server = buildMcpServer({
       db,
       settings,
@@ -92,7 +97,7 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
   // Web UI: static assets plus SPA fallback. Auth happens on the API calls it makes.
   if (existsSync(webDist)) {
     app.use(express.static(webDist, { index: false, maxAge: "1h" }));
-    app.get(/^\/(?!api\/|auth\/|mcp$|healthz$).*/, (_req, res) => {
+    app.get(/^\/(?!api\/|auth\/|oauth\/|\.well-known\/|mcp$|healthz$|authorize$|token$|register$|revoke$).*/, (_req, res) => {
       res.set("Cache-Control", "no-cache").sendFile(path.join(webDist, "index.html"));
     });
   }
