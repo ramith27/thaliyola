@@ -14,6 +14,7 @@ import { approveRevision, getRevision, listReviewQueue, rejectRevision } from ".
 import { searchKnowledge } from "../core/search.js";
 import { addSourceLinkTo, shareToLibrary, verifyEntry } from "../core/writes.js";
 import { ARTICLE_TEMPLATES, templateFor } from "../core/templates.js";
+import type { Embedder } from "../core/embeddings.js";
 import type { Db } from "../db/pool.js";
 
 const ARTICLE_TYPES = Object.keys(ARTICLE_TEMPLATES) as [string, ...string[]];
@@ -40,11 +41,13 @@ const sourceLinks = z
  * JSON API for the web UI and for reviewers. Approval is deliberately not an
  * MCP tool: agents propose, people approve here.
  */
-export function apiRouter(db: Db, settings: Settings) {
+export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; settings: Settings; embedder?: Embedder; onWrite?: () => void }) {
   const router = Router();
   const ctxOf = (req: Request, res: Response): RequestContext => ({
     db,
     settings,
+    embedder,
+    onWrite,
     actor: res.locals.actor as Actor,
     project: req.header("x-cairn-project") || undefined,
   });

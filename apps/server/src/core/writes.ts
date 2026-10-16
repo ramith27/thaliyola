@@ -4,6 +4,7 @@ import { ConflictError, NotFoundError, ValidationError, type RequestContext } fr
 import { getArticle, getFinding } from "./items.js";
 import { assertCanPropose } from "./permissions.js";
 import { onlyRedacted, redactFields, type Redaction } from "./redaction.js";
+import { toPgVector } from "./embeddings.js";
 import { getComponent, getScopeBySlug, resolveProject, type Scope } from "./scopes.js";
 import { linkEntities, normalizeTags, type EntityRef } from "./tags.js";
 import { missingSections } from "./templates.js";
@@ -114,16 +115,19 @@ export interface Duplicate {
   title: string;
   status: string;
   scope: string;
+  /** Share of the proposal's terms found in the existing finding. */
   overlap: number;
+  /** Embedding similarity, when semantic search is enabled. */
+  similarity: number | null;
 }
 
 /**
- * Findings that already contain most of the proposal's terms. Deterministic
- * (term overlap over the FTS lexemes); the client's Claude decides whether
- * it is really the same problem.
+ * Findings that are probably the same problem: they contain most of the
+ * proposal's terms, or (with embeddings) say nearly the same thing in other
+ * words. Deterministic; the client's Claude decides whether to merge.
  */
 export async function findDuplicateFindings(ctx: RequestContext, text: string, scopeIds: string[]): Promise<Duplicate[]> {
-  const { rows } = await ctx.db.query<Duplicate>(
+  const byTerms = await ctx.db.query<Omit<Duplicate, "similarity">>(
     `WITH p AS (
        SELECT array_agg(DISTINCT l) AS lex FROM unnest(tsvector_to_array(to_tsvector('english', $1))) l
      ),
@@ -147,7 +151,36 @@ export async function findDuplicateFindings(ctx: RequestContext, text: string, s
       LIMIT 5`,
     [text, scopeIds],
   );
-  return rows.filter((r) => r.overlap >= ctx.settings.duplicateThreshold);
+  const found = new Map<string, Duplicate>();
+  for (const r of byTerms.rows) if (r.overlap >= ctx.settings.duplicateThreshold) found.set(r.id, { ...r, similarity: null });
+
+  if (ctx.embedder) {
+    let vector: number[] | null = null;
+    try {
+      vector = (await ctx.embedder.embedDocuments([text]))[0] ?? null;
+    } catch {
+      vector = null;
+    }
+    if (vector) {
+      const bySimilarity = await ctx.db.query<{ id: string; title: string; status: string; scope: string; similarity: number }>(
+        `SELECT f.id, f.title, f.status, s.slug AS scope, round((1 - (c.embedding <=> $1::vector))::numeric, 3)::float AS similarity
+           FROM chunks c
+           JOIN findings f ON f.id = c.parent_id
+           JOIN scopes s ON s.id = f.scope_id
+          WHERE c.parent_kind = 'finding' AND c.scope_id = ANY($2::uuid[]) AND c.embedding_model = $3
+            AND f.status IN ('draft', 'published', 'possibly_stale')
+          ORDER BY c.embedding <=> $1::vector LIMIT 5`,
+        [toPgVector(vector), scopeIds, ctx.embedder.model],
+      );
+      for (const r of bySimilarity.rows) {
+        if (r.similarity < ctx.settings.duplicateSimilarity) continue;
+        const overlap = byTerms.rows.find((t) => t.id === r.id)?.overlap ?? 0;
+        found.set(r.id, { ...r, overlap, similarity: r.similarity });
+      }
+      for (const d of found.values()) d.similarity ??= bySimilarity.rows.find((r) => r.id === d.id)?.similarity ?? null;
+    }
+  }
+  return [...found.values()].sort((a, b) => (b.similarity ?? b.overlap) - (a.similarity ?? a.overlap));
 }
 
 /** Team + Library + the item's own scope: where a duplicate would be found by default search. */
@@ -239,6 +272,7 @@ export async function proposeFinding(ctx: RequestContext, input: ProposeFindingI
       summary: `New ${input.type}: ${fields.title}`.slice(0, LIMITS.summary),
       redactions,
     });
+    ctx.onWrite?.();
     return {
       status: "pending_review" as const,
       finding_id: id,
@@ -349,6 +383,7 @@ export async function createArticle(ctx: RequestContext, input: CreateArticleInp
       redactions,
     });
     const missing = missingSections(input.type, fields.body_md);
+    ctx.onWrite?.();
     return {
       status: "pending_review" as const,
       article_id: id,

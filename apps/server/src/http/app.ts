@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { requireAuth, type Authenticator } from "../auth/index.js";
 import type { Settings } from "../config.js";
+import type { Embedder } from "../core/embeddings.js";
 import type { Actor } from "../core/context.js";
 import type { Db } from "../db/pool.js";
 import { buildMcpServer } from "../mcp/server.js";
@@ -20,7 +21,19 @@ const SECURITY_HEADERS: Record<string, string> = {
   "Referrer-Policy": "same-origin",
 };
 
-export function createApp(db: Db, authenticate: Authenticator, settings: Settings, webDist: string = DEFAULT_WEB_DIST) {
+export interface AppOptions {
+  db: Db;
+  authenticate: Authenticator;
+  settings: Settings;
+  /** Built web UI; served at / when present. */
+  webDist?: string;
+  /** Enables semantic search and duplicate detection. */
+  embedder?: Embedder;
+  /** Called after writes so background indexing can pick up new chunks. */
+  onWrite?: () => void;
+}
+
+export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DIST, embedder, onWrite }: AppOptions) {
   const app = express();
   app.disable("x-powered-by");
   app.use((_req, res, next) => {
@@ -36,12 +49,14 @@ export function createApp(db: Db, authenticate: Authenticator, settings: Setting
   });
 
   // Stateless streamable HTTP: a fresh server + transport per request, bound to the caller.
-  app.use("/api", requireAuth(db, authenticate), apiRouter(db, settings));
+  app.use("/api", requireAuth(db, authenticate), apiRouter({ db, settings, embedder, onWrite }));
 
   app.post("/mcp", requireAuth(db, authenticate), async (req, res) => {
     const server = buildMcpServer({
       db,
       settings,
+      embedder,
+      onWrite,
       actor: res.locals.actor as Actor,
       project: req.header("x-cairn-project") || undefined,
       component: req.header("x-cairn-component") || undefined,

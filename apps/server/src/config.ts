@@ -20,6 +20,13 @@ const Env = z
     // Where uploaded screenshots, token files and specs are stored
     ASSET_DIR: z.string().default("./data/assets"),
     ASSET_MAX_BYTES: z.coerce.number().int().positive().default(5 * 1024 * 1024),
+    // Semantic search: local = bge-small in-process; hash = offline test embedder; off = keyword search only
+    EMBEDDINGS: z.enum(["local", "hash", "off"]).default("local"),
+    EMBEDDING_CACHE_DIR: z.string().optional(),
+    // Cosine similarity a vector-only hit needs to be returned at all
+    SEARCH_MIN_SIMILARITY: z.coerce.number().min(0).max(1).default(0.6),
+    // Cosine similarity at which an existing finding counts as a near-duplicate
+    DUPLICATE_SIMILARITY: z.coerce.number().min(0).max(1).default(0.8),
     DUPLICATE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.6),
   })
   .superRefine((env, ctx) => {
@@ -38,6 +45,8 @@ export function settingsFrom(config: Config): Settings {
     adminEmails: config.ADMIN_EMAILS.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean),
     duplicateThreshold: config.DUPLICATE_THRESHOLD,
     assetDir: config.ASSET_DIR,
+    searchMinSimilarity: config.SEARCH_MIN_SIMILARITY,
+    duplicateSimilarity: config.DUPLICATE_SIMILARITY,
     assetMaxBytes: config.ASSET_MAX_BYTES,
   };
 }
@@ -46,6 +55,8 @@ export interface Settings {
   adminEmails: string[];
   duplicateThreshold: number;
   assetDir: string;
+  searchMinSimilarity: number;
+  duplicateSimilarity: number;
   assetMaxBytes: number;
 }
 

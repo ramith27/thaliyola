@@ -18,7 +18,7 @@ beforeAll(async () => {
   ({ db, ids } = await freshDb());
   const web = mkdtempSync(path.join(tmpdir(), "cairn-web-"));
   writeFileSync(path.join(web, "index.html"), "<!doctype html><title>Cairn</title>");
-  server = createApp(db, devAuthenticator("user=alice@example.com,admin=admin@example.com"), TEST_SETTINGS, web).listen(0);
+  server = createApp({ db, authenticate: devAuthenticator("user=alice@example.com,admin=admin@example.com"), settings: TEST_SETTINGS, webDist: web }).listen(0);
   await new Promise((r) => server.once("listening", r));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });

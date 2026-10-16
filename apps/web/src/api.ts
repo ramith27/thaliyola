@@ -162,6 +162,7 @@ export interface SearchHit {
   snippet: string;
   scope: { slug: string; kind: string };
   via_uses_link: boolean;
+  match?: "keyword" | "semantic" | "keyword+semantic";
   warning?: string;
 }
 

@@ -30,7 +30,7 @@ A project can declare that it **uses** an item from the library or from another 
 
 | Tool | Purpose |
 |---|---|
-| `search_knowledge` | Keyword search over article sections and findings. Defaults to the current project + team + library |
+| `search_knowledge` | Hybrid keyword and semantic search over article sections and findings. Defaults to the current project + team + library |
 | `get_article` | One article, or one section of it, with relations, source links and entities |
 | `get_finding` | One finding with relations, source links and review history |
 | `browse_kb` | Folder tree of articles in a scope |
@@ -55,6 +55,14 @@ A project can declare that it **uses** an item from the library or from another 
 | `add_source_link` | Attach a Figma frame, PR, Sentry issue or dashboard to an item |
 | `upload_asset` | Attach a screenshot (PNG/JPEG/WebP/GIF), token JSON, markdown or PDF. Text files are redacted; images can't be |
 | `share_to_library` | Propose publishing a project item to the library. On approval by a library owner, a copy (with its links and files) is created and the project is linked to it |
+
+### Search
+
+Search is hybrid. Postgres full-text search and embedding similarity are merged with reciprocal rank fusion, then boosted for published, recently verified and current-project items. Embeddings come from a small model (`bge-small-en-v1.5`, int8) that runs in-process on CPU. It is not an LLM, needs no API key, and is downloaded once (~35 MB). New text is embedded in the background, so writes stay fast.
+
+- "card processor is throttling us" finds the payment-provider rate-limit RCA, even though they share no keywords.
+- Duplicate detection uses the same embeddings: a reworded copy of an existing finding is flagged. Thresholds were calibrated on real text and can be tuned (`DUPLICATE_SIMILARITY`, `SEARCH_MIN_SIMILARITY`).
+- `EMBEDDINGS=off` falls back to keyword search only, e.g. for machines without internet access.
 
 On every write the server:
 - redacts secrets and personal data (keys, tokens, passwords, connection-string credentials, JWTs, emails, phone numbers) with fixed rules, and refuses a write when a required field held nothing else;
@@ -168,6 +176,8 @@ CAIRN_URL=http://localhost:8080 AGENT_TOKEN=<user token> ADMIN_TOKEN=<admin toke
 
 ### Tests
 
+`CAIRN_REAL_EMBEDDINGS=1 pnpm test` also runs the semantic tests against the real model.
+
 Tests run against a real Postgres database (`TEST_DATABASE_URL`, default `postgres://cairn:cairn@localhost:5432/cairn_test`). The schema is dropped and recreated on each run.
 
 ```sh
@@ -205,6 +215,6 @@ apps/server/
 - ~~**M1** Write tools, review queue, optimistic concurrency, redaction, impact notices on approval~~ (done)
 - ~~**M2** Web UI: browse by scope, markdown editor, review queue with diffs~~ (done)
 - ~~**M3** Library sharing, design assets (screenshots, token files), Figma links~~ (done)
-- **M3b** Semantic search (pgvector + local embedding model), duplicate detection
+- ~~**M3b** Semantic search (pgvector + local embedding model), duplicate detection~~ (done)
 - **M4** Per-scope roles, nightly freshness jobs, production hardening
 - **M5** Integrations with existing agent skills, Slack and Sentry

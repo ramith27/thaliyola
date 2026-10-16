@@ -26,7 +26,7 @@ let base: string;
 
 beforeAll(async () => {
   ({ db, ids } = await freshDb());
-  server = createApp(db, devAuthenticator("user=alice@example.com,admin=admin@example.com"), TEST_SETTINGS).listen(0);
+  server = createApp({ db, authenticate: devAuthenticator("user=alice@example.com,admin=admin@example.com"), settings: TEST_SETTINGS }).listen(0);
   await new Promise((r) => server.once("listening", r));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });

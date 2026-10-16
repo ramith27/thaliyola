@@ -111,6 +111,7 @@ function HitList({ title, hits }: { title: string; hits: SearchHit[] }) {
               <ScopeBadge scope={h.scope} />
               {h.status !== "published" && <StatusBadge status={h.status} />}
               {h.via_uses_link && <span className="muted small">linked by this project</span>}
+              {h.match === "semantic" && <span className="muted small">similar meaning</span>}
             </div>
             <p className="snippet">
               <Snippet text={h.snippet} />

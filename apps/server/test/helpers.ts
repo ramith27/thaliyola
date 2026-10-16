@@ -24,6 +24,8 @@ export const TEST_SETTINGS: Settings = {
   duplicateThreshold: 0.6,
   assetDir: mkdtempSync(path.join(tmpdir(), "cairn-assets-")),
   assetMaxBytes: 1024 * 1024,
+  searchMinSimilarity: 0.6,
+  duplicateSimilarity: 0.8,
 };
 
 /** Context for a human user (tester@example.com unless another email is given). */

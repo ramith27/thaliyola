@@ -74,6 +74,12 @@ function nextArticleBody(body: string, payload: Record<string, any>): string {
 }
 
 export async function approveRevision(ctx: RequestContext, id: string): Promise<{ revision_id: string; state: string } & Record<string, unknown>> {
+  const result = await approveInTx(ctx, id);
+  ctx.onWrite?.();
+  return result;
+}
+
+async function approveInTx(ctx: RequestContext, id: string): Promise<{ revision_id: string; state: string } & Record<string, unknown>> {
   return withTx(ctx.db, async (db) => {
     const r = await loadRevision(db, id, true);
     if (r.state !== "pending") throw new ValidationError(`revision is already ${r.state}`);

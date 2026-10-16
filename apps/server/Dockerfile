@@ -8,9 +8,11 @@ COPY apps/web/package.json apps/web/
 RUN pnpm install --frozen-lockfile
 COPY apps/server apps/server
 COPY apps/web apps/web
+COPY deploy/prune-runtime.sh deploy/prune-runtime.sh
 RUN pnpm --filter @cairn/web build \
  && pnpm --filter @cairn/server build \
- && pnpm --filter @cairn/server deploy --prod /out
+ && pnpm --filter @cairn/server deploy --prod /out \
+ && deploy/prune-runtime.sh /out/node_modules
 
 FROM node:22-slim
 ENV NODE_ENV=production
@@ -21,7 +23,7 @@ COPY --from=build /out/package.json package.json
 COPY --from=build /repo/apps/server/dist dist
 COPY --from=build /repo/apps/server/migrations migrations
 COPY --from=build /repo/apps/web/dist web
-RUN mkdir -p /data/assets && chown node:node /data/assets
+RUN mkdir -p /data/assets /data/models && chown node:node /data/assets /data/models
 USER node
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s CMD node -e "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"

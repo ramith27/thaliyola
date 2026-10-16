@@ -1,5 +1,6 @@
 import type { Settings } from "../config.js";
 import type { Db } from "../db/pool.js";
+import type { Embedder } from "./embeddings.js";
 
 export interface Actor {
   id: string;
@@ -13,6 +14,10 @@ export interface RequestContext {
   db: Db;
   actor: Actor;
   settings: Settings;
+  /** Present when semantic search is enabled. */
+  embedder?: Embedder;
+  /** Wakes the background embedding indexer after a write. */
+  onWrite?: () => void;
   /** Project slug from the X-Cairn-Project header; a tool's explicit `project` argument wins. */
   project?: string;
   /** Component slug from the X-Cairn-Component header. */

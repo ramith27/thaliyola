@@ -1,5 +1,6 @@
 import type { RequestContext } from "./context.js";
 import { ValidationError } from "./context.js";
+import { toPgVector } from "./embeddings.js";
 import { resolveScopeFilter } from "./scopes.js";
 
 export interface SearchInput {
@@ -27,6 +28,7 @@ export interface SearchHit {
   last_verified_at: string | null;
   updated_at: string;
   score: number;
+  match: "keyword" | "semantic" | "keyword+semantic";
   warning?: string;
 }
 
@@ -34,11 +36,11 @@ export interface SearchHit {
 const DEFAULT_STATUSES = ["published", "possibly_stale"];
 
 /**
- * Keyword search over article sections and findings (Postgres FTS).
- *
- * Terms are OR-ed so a symptom phrased differently still matches; chunks that
- * match every term get a boost. Results keep the best chunk per item, then
- * list article sections before findings (source of truth first).
+ * Hybrid search over article sections and findings: Postgres full-text
+ * (terms OR-ed, chunks matching every term ranked higher) fused with
+ * embedding similarity by reciprocal rank fusion. Results keep the best chunk
+ * per item, boosted for published items and the current project, then list
+ * article sections before findings (source of truth first).
  */
 export async function searchKnowledge(ctx: RequestContext, input: SearchInput): Promise<{ articles: SearchHit[]; findings: SearchHit[] }> {
   const query = input.query.trim();
@@ -81,6 +83,24 @@ export async function searchKnowledge(ctx: RequestContext, input: SearchInput): 
   const currentProject = filter.mode === "ids" && filter.currentProjectId ? p(filter.currentProjectId) : "NULL";
   const limitParam = p(limit);
 
+  // Semantic candidates when an embedder is configured; keyword-only otherwise
+  // (or if the model can't be loaded).
+  let queryVector: string | null = null;
+  if (ctx.embedder) {
+    try {
+      queryVector = toPgVector(await ctx.embedder.embedQuery(query));
+    } catch {
+      queryVector = null;
+    }
+  }
+  const vec = queryVector
+    ? `SELECT id, row_number() OVER (ORDER BY dist) AS r, 1 - dist AS sim
+         FROM (SELECT id, embedding <=> ${p(queryVector)}::vector AS dist FROM filtered
+                WHERE embedding IS NOT NULL AND embedding_model = ${p(ctx.embedder!.model)}) d
+        WHERE 1 - dist >= ${p(ctx.settings.searchMinSimilarity)}
+        ORDER BY dist LIMIT 50`
+    : "SELECT NULL::bigint AS id, NULL::bigint AS r, NULL::float AS sim WHERE false";
+
   const sql = `
     WITH q AS (
       SELECT to_tsquery('simple', coalesce(string_agg(t, ' | '), '')) AS any_term,
@@ -89,23 +109,39 @@ export async function searchKnowledge(ctx: RequestContext, input: SearchInput): 
                 FROM unnest(tsvector_to_array(to_tsvector('english', $1))) AS l) terms
        WHERE t <> ''
     ),
-    scored AS (
-      SELECT DISTINCT ON (c.parent_kind, c.parent_id)
-             c.parent_kind, c.parent_id, c.heading, c.ord, c.text, c.scope_id,
-             (${usesLinked}) AS via_uses_link,
-             ts_rank_cd(c.tsv, q.any_term)
-               * CASE WHEN c.tsv @@ q.all_terms THEN 2.0 ELSE 1.0 END
-               * CASE coalesce(a.status, f.status) WHEN 'published' THEN 1.0 WHEN 'possibly_stale' THEN 0.6 ELSE 0.4 END
-               * CASE WHEN c.scope_id = ${currentProject} THEN 1.3 ELSE 1.0 END AS score
+    filtered AS MATERIALIZED (
+      SELECT c.id, c.parent_kind, c.parent_id, c.heading, c.ord, c.text, c.scope_id, c.tsv, c.embedding, c.embedding_model,
+             coalesce(a.status, f.status) AS status, (${usesLinked}) AS via_uses_link
         FROM chunks c
-        CROSS JOIN q
         LEFT JOIN articles a ON c.parent_kind = 'article' AND a.id = c.parent_id
         LEFT JOIN findings f ON c.parent_kind = 'finding' AND f.id = c.parent_id
-       WHERE ${where.join("\n         AND ")}
+       WHERE ${where.filter((w) => w !== "c.tsv @@ q.any_term").join("\n         AND ")}
+    ),
+    fts AS (
+      SELECT id, row_number() OVER (ORDER BY rank DESC) AS r
+        FROM (SELECT f.id, ts_rank_cd(f.tsv, q.any_term) * CASE WHEN f.tsv @@ q.all_terms THEN 2.0 ELSE 1.0 END AS rank
+                FROM filtered f CROSS JOIN q WHERE f.tsv @@ q.any_term) x
+       ORDER BY rank DESC LIMIT 50
+    ),
+    vec AS (${vec}),
+    -- Reciprocal rank fusion of keyword and semantic candidates, then status/scope boosts.
+    fused AS (
+      SELECT coalesce(fts.id, vec.id) AS id,
+             coalesce(1.0 / (60 + fts.r), 0) + coalesce(1.0 / (60 + vec.r), 0) AS rrf,
+             vec.sim, fts.id IS NOT NULL AS keyword_match
+        FROM fts FULL OUTER JOIN vec ON fts.id = vec.id
+    ),
+    scored AS (
+      SELECT DISTINCT ON (c.parent_kind, c.parent_id)
+             c.parent_kind, c.parent_id, c.heading, c.ord, c.text, c.scope_id, c.via_uses_link, fused.sim, fused.keyword_match,
+             fused.rrf
+               * CASE c.status WHEN 'published' THEN 1.0 WHEN 'possibly_stale' THEN 0.6 ELSE 0.4 END
+               * CASE WHEN c.scope_id = ${currentProject} THEN 1.3 ELSE 1.0 END AS score
+        FROM fused JOIN filtered c ON c.id = fused.id
        ORDER BY c.parent_kind, c.parent_id, score DESC, c.ord
     ),
     top AS (SELECT * FROM scored ORDER BY score DESC LIMIT ${limitParam})
-    SELECT top.parent_kind AS kind, top.parent_id AS id, top.score, top.via_uses_link,
+    SELECT top.parent_kind AS kind, top.parent_id AS id, top.score, top.via_uses_link, top.sim, top.keyword_match,
            CASE WHEN top.parent_kind = 'article' AND top.heading <> a.title THEN top.heading END AS section,
            ts_headline('english', top.text, q.any_term,
                        'MaxWords=35, MinWords=12, MaxFragments=2, StartSel=**, StopSel=**') AS snippet,
@@ -136,7 +172,8 @@ export async function searchKnowledge(ctx: RequestContext, input: SearchInput): 
     via_uses_link: r.via_uses_link,
     last_verified_at: r.last_verified_at?.toISOString() ?? null,
     updated_at: r.updated_at.toISOString(),
-    score: Number(Number(r.score).toFixed(4)),
+    score: Number(Number(r.score).toFixed(5)),
+    match: r.keyword_match ? (r.sim !== null ? "keyword+semantic" : "keyword") : "semantic",
     ...(r.status === "possibly_stale" ? { warning: "Not verified recently; confirm before relying on it." } : {}),
   }));
   return {

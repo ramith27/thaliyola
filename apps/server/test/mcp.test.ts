@@ -15,7 +15,7 @@ let url: URL;
 
 beforeAll(async () => {
   ({ db, ids } = await freshDb());
-  server = createApp(db, devAuthenticator("secret-token=alice@example.com,admin-token=admin@example.com"), TEST_SETTINGS).listen(0);
+  server = createApp({ db, authenticate: devAuthenticator("secret-token=alice@example.com,admin-token=admin@example.com"), settings: TEST_SETTINGS }).listen(0);
   await new Promise((r) => server.once("listening", r));
   url = new URL(`http://127.0.0.1:${(server.address() as AddressInfo).port}/mcp`);
 });
