@@ -123,10 +123,16 @@ exec runuser -u cairn -- /usr/bin/node /opt/cairn/dist/scripts/admin.js "$@"
 ADMIN
 chmod 755 /usr/local/bin/cairn-admin
 
+log "Backups (daily to /var/backups/cairn)"
+install -m 755 deploy/native/backup.sh /usr/local/bin/cairn-backup
+install -m 755 deploy/native/restore.sh /usr/local/bin/cairn-restore
+install -m 644 deploy/native/cairn-backup.service deploy/native/cairn-backup.timer /etc/systemd/system/
+
 log "systemd"
 install -m 644 deploy/native/cairn.service /etc/systemd/system/cairn.service
 systemctl daemon-reload
 systemctl enable cairn >/dev/null
+systemctl enable --now cairn-backup.timer >/dev/null
 systemctl restart cairn
 
 for _ in $(seq 1 30); do

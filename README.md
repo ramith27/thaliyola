@@ -164,6 +164,8 @@ sudo ADMIN_EMAIL=you@example.com deploy/native/install.sh
 - Config lives in `/etc/cairn/cairn.env`.
 - Re-run the script to upgrade. It keeps the config and the database.
 - Logs: `journalctl -u cairn -f`.
+- Backups run daily at 03:15 (`cairn-backup.timer`). Each one is a database dump plus an archive of uploaded files, written to `/var/backups/cairn`, and the newest 14 are kept. Run one now with `sudo cairn-backup`.
+- Restore with `sudo cairn-restore /var/backups/cairn/cairn-….dump`. To check a backup without touching the live data, add `TARGET_DB=cairn_check` to restore it into a scratch database. Copy backups off the machine too.
 
 **Without Docker, for development**
 
