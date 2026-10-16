@@ -8,6 +8,7 @@ import { getArticle, getFinding } from "./items.js";
 import { onDecision, onImpactNotices, track } from "./notify.js";
 import { assertCanApprove, assertCanRead, canApprove, readableScopes } from "./permissions.js";
 import { getReadableScope } from "./scopes.js";
+import { moveItems } from "./move.js";
 import { findItem } from "./writes.js";
 
 interface RevisionRow {
@@ -15,7 +16,7 @@ interface RevisionRow {
   target_kind: "article" | "finding";
   target_id: string;
   scope_id: string;
-  op: "create" | "update" | "promote" | "verify" | "share";
+  op: "create" | "update" | "promote" | "verify" | "share" | "move";
   base_version: number | null;
   payload: Record<string, any>;
   author_id: string;
@@ -99,7 +100,8 @@ export async function approveRevision(
   id: string,
   edits?: ReviewerEdits,
 ): Promise<{ revision_id: string; state: string } & Record<string, unknown>> {
-  const result = await approveInTx(ctx, id, edits);
+  const peek = await loadRevision(ctx.db, id);
+  const result = peek.op === "move" ? await approveMove(ctx, peek, edits) : await approveInTx(ctx, id, edits);
   ctx.onWrite?.();
   track(afterDecision(ctx, id, result));
   return result;
@@ -147,6 +149,30 @@ async function approveInTx(ctx: RequestContext, id: string, edits?: ReviewerEdit
     await audit(db, ctx.actor.id, "approve_revision", r.target_id);
     return { revision_id: id, state: "approved", ...result };
   });
+}
+
+/**
+ * A move runs the same path as a person's move (approval rights in both scopes,
+ * search index, open proposals and files follow the item), then closes the proposal.
+ */
+async function approveMove(ctx: RequestContext, r: RevisionRow, edits?: ReviewerEdits) {
+  if (r.state !== "pending") throw new ValidationError(`revision is already ${r.state}`);
+  if (edits && Object.values(edits).some((v) => v !== undefined)) throw new ValidationError("a move can't be edited; reject it and move the item yourself");
+  await assertCanApprove(ctx, r.scope_id);
+  const item = await findItem(ctx.db, r.target_id);
+  const from = (await ctx.db.query<{ slug: string }>("SELECT slug FROM scopes WHERE id = $1", [item.scope_id])).rows[0]!.slug;
+  const p = r.payload as { to: string; folder: string | null; repo: string | null };
+  const moved = await moveItems(ctx, {
+    from,
+    to: p.to,
+    ids: [item.id],
+    ...(item.kind === "article" ? { into_folder: p.folder ?? (from === p.to ? undefined : "") } : {}),
+    ...(p.repo ? { component: p.repo } : from !== p.to ? { component: "" } : {}),
+  });
+  const { rowCount } = await ctx.db.query("UPDATE revisions SET state = 'approved', reviewer_id = $2, decided_at = now() WHERE id = $1 AND state = 'pending'", [r.id, ctx.actor.id]);
+  if (!rowCount) throw new ValidationError("revision was decided while moving");
+  await audit(ctx.db, ctx.actor.id, "approve_revision", r.target_id);
+  return { revision_id: r.id, state: "approved", moved_to: p.to, moved: moved.moved };
 }
 
 /** Notifications after a decision; failures are logged, never surfaced to the reviewer. */

@@ -15,6 +15,7 @@ import { exportMarkdown } from "../core/exporter.js";
 import { importDocs } from "../core/importer.js";
 import { dismissGap, knowledgeGaps, successMetrics } from "../core/metrics.js";
 import { onboarding } from "../core/onboarding.js";
+import { taskSummary } from "../core/tasks.js";
 import { listPurges, purgeItem } from "../core/purge.js";
 import { insights, knowledgeGraph } from "../core/insights.js";
 import { listSuggestions } from "../core/suggestions.js";
@@ -243,6 +244,7 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
     ),
   );
   router.get("/purges", handle("list_purges", async (ctx) => ({ purges: await listPurges(ctx) })));
+  router.get("/tasks", handle("task_summary", (ctx, req) => taskSummary(ctx, { project: z.string().optional().parse(req.query.project) })));
   router.get("/onboarding", handle("onboarding", (ctx) => onboarding(ctx)));
   router.get("/favourites", handle("list_favourites", async (ctx) => ({ favourites: await listFavourites(ctx) })));
   router.put("/favourites/:id", handle("add_favourite", (ctx, req) => setFavourite(ctx, uuid.parse(req.params.id), true)));

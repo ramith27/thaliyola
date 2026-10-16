@@ -206,7 +206,8 @@ X-Cairn-Component: frontend
 ## Agent integrations
 
 [`integrations/`](integrations) has everything needed to make agents use Cairn by default:
-- **Prompts:** `investigate`, `start-coding`, `capture`, `draft-from-paste` and `review-stale`, served by every Cairn server.
+- **Prompts:** `investigate`, `start-coding`, `capture`, `draft-from-paste`, `curate` and `review-stale`, served by every Cairn server.
+- **Curation by the client's model:** Cairn has no LLM, so it hands judgment work to connected agents. `get_tasks` returns tasks with instructions: entries filed in the team space that belong to a project, project pages missing their repository, look-alike findings, recurring problems, empty outline sections, stale entries, projects without an overview, unlinked entries, and (for admins) searches that found nothing. The agent acts through normal tools (`move_entry` proposes moving an entry to a project, folder and/or repository) and reports with `complete_task`; handed-out tasks are reserved for an hour and finished ones stay hidden. `get_project_context` mentions open tasks so agents tidy as they go. Run it with the `curate` prompt (`/mcp__cairn__curate` in Claude Code), on demand or on a schedule (e.g. `claude -p "/mcp__cairn__curate"` from cron). Review → Suggestions shows the queue and what agents did. (MCP sampling isn't used: the endpoint is stateless and most clients don't support it.)
 - **Claude Code:** a plugin with the `cairn` skill, a per-repo `.mcp.json` template, and a CLAUDE.md snippet.
 - **claude.ai:** connector setup.
 - **Scheduled jobs:** recipes for agents that turn Slack threads and Sentry issues into proposals.
@@ -266,7 +267,7 @@ claude mcp add --transport http cairn http://localhost:8080/mcp \
 ### Acceptance
 
 [`docs/acceptance.md`](docs/acceptance.md) describes the full acceptance run and its latest results:
-- a sweep of all 23 MCP tools (`pnpm --filter @cairn/server acceptance`);
+- a sweep of all 26 MCP tools (`pnpm --filter @cairn/server acceptance`);
 - real Claude Code sessions acting as designer, backend developer, frontend developer, on-call engineer, admin and outsider.
 
 ### Behind a reverse proxy

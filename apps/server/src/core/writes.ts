@@ -625,3 +625,38 @@ export async function linkEntries(ctx: RequestContext, input: { from: string; to
   );
   return { relation_id: rows[0]!.id, from: { kind: from.kind, id: from.id }, relation: input.relation, to: { kind: to.kind, id: to.id } };
 }
+
+/**
+ * Proposes moving an article or finding into another scope (usually a
+ * project), a folder there, and/or onto one of its repositories. Reviewed
+ * like any proposal; approving it needs approval rights in both scopes.
+ */
+export async function proposeMove(ctx: RequestContext, input: { id: string; to: string; folder?: string; repo?: string; summary?: string }) {
+  const item = await findItemFor(ctx, input.id);
+  assertEditable(item);
+  await assertCanPropose(ctx, item.scope_id);
+  const to = await getReadableScope(ctx, input.to);
+  if (input.repo) {
+    if (to.kind !== "project") throw new ValidationError("only projects have repositories");
+    const c = await ctx.db.query("SELECT 1 FROM components WHERE scope_id = $1 AND slug = $2", [to.id, input.repo]);
+    if (!c.rowCount) throw new ValidationError(`${to.slug} has no repository '${input.repo}'; its repositories are listed by get_project_context`);
+  }
+  if (item.kind === "finding" && input.folder) throw new ValidationError("findings have no folders; pass repo to group a finding with a repository");
+  if (to.id === item.scope_id && input.folder === undefined && input.repo === undefined) throw new ValidationError(`it's already in ${to.slug}; pass a folder or repo to re-file it`);
+  const pending = await ctx.db.query("SELECT id FROM revisions WHERE target_id = $1 AND op = 'move' AND state = 'pending'", [item.id]);
+  if (pending.rowCount) throw new ValidationError(`a move of this ${item.kind} is already waiting for review (${pending.rows[0].id})`);
+  const where = [to.name ?? to.slug, input.folder, input.repo && `repository ${input.repo}`].filter(Boolean).join(" / ");
+  const summary = redactFields({ s: input.summary?.trim() || `Move "${item.title}" to ${where}` }).fields.s;
+  const revisionId = await insertRevision(ctx.db, {
+    targetKind: item.kind,
+    targetId: item.id,
+    scopeId: item.scope_id,
+    op: "move",
+    baseVersion: item.version,
+    payload: { to: to.slug, to_name: to.name, folder: input.folder?.trim() ?? null, repo: input.repo ?? null },
+    authorId: ctx.actor.id,
+    summary: summary.slice(0, LIMITS.summary),
+    redactions: [],
+  });
+  return announce(ctx, { status: "pending_review" as const, revision_id: revisionId, move: { to: to.slug, folder: input.folder ?? null, repo: input.repo ?? null } });
+}

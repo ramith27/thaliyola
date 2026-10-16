@@ -29,6 +29,16 @@ Cairn holds what the team already knows: systems, metrics, runbooks, project des
 - Handled an impact notice → `ack_notice`.
 - Something reusable across projects → `share_to_library`.
 
+## Curating (when asked to tidy, or in a scheduled run)
+
+Cairn has no model of its own; you supply the judgment. `get_tasks` returns work with instructions: entries filed in the team space that belong to a project, project pages missing their repository, look-alike findings, recurring problems, empty outline sections, stale entries, projects without an overview, unlinked entries, and (for admins) searches that found nothing.
+
+1. Read what each task names before acting, and check facts against code, config or docs you can access.
+2. Act with Cairn tools: `move_entry` (to a project, folder and/or repository), `propose_article_edit`, `update_finding`, `link_entries`, `verify_entry`, `promote_finding`, `create_article`.
+3. Finish each with `complete_task`: `done` (with the `revision_id`), `not_applicable`, or `skipped` with a reason when unsure.
+
+The `curate` prompt (`/mcp__cairn__curate`) runs this loop. When `get_project_context` reports `curation` tasks, mention them to the user; don't let them derail the user's request.
+
 ## Rules
 
 - Everything you write is a proposal; a person approves it. Say what you proposed and give the id.

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Curation by connected agents: `get_tasks` / `complete_task` hand judgment work to the client's model (misfiled entries, missing repositories, duplicates, recurring problems, empty outlines, stale entries, missing overviews, unlinked entries, unanswered searches), a `curate` prompt runs the loop, `get_project_context` reports open tasks, and Review → Suggestions shows the queue (`GET /api/tasks`)
+- `move_entry` MCP tool: agents propose moving an entry to a project, folder and/or repository; reviewers see and approve move proposals like any other
+
 - Knowledge graph: project articles and findings link to the repository they're about, or to the project, so a project and its pages form one cluster
 
 - Move a single article or finding (Move… on its page) to a project, into a folder there and onto a repository; re-file items inside a project (`into_folder`, `component` on `POST /api/move`)

@@ -109,7 +109,7 @@ describe("REST API", () => {
     expect(body.account).toMatchObject({ email: "alice@example.com", admin: false });
     expect(body.projects.map((p: { slug: string }) => p.slug)).toEqual(["merchant-portal", "order-service"]);
     expect(body.projects[1].components).toEqual(["backend", "frontend"]);
-    expect(body.catalog.tools).toHaveLength(23);
+    expect(body.catalog.tools).toHaveLength(26);
     expect(body.catalog.prompts.map((p: { name: string }) => p.name)).toContain("start-coding");
     expect(body.catalog.instructions).toMatch(/search_knowledge first/);
     expect(body.has_connected).toBe(false);

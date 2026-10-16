@@ -18,11 +18,13 @@ import {
   promoteFinding,
   proposeArticleEdit,
   proposeFinding,
+  proposeMove,
   shareToLibrary,
   updateFinding,
   verifyEntry,
 } from "../core/writes.js";
 import { resolveRepo } from "../core/scopes.js";
+import { completeTask, getTasks, TASK_KINDS } from "../core/tasks.js";
 import { getProjectContext } from "../core/projects.js";
 import { listProjects } from "../core/scopes.js";
 import { searchKnowledge } from "../core/search.js";
@@ -35,7 +37,8 @@ Scopes: "team" (org-wide systems, metrics, runbooks), one scope per project, and
 How to use it:
 - Before investigating an alert, bug or question, call search_knowledge first. Phrase the query the way the symptom first appeared.
 - Before changing code in a project, call get_project_context (pass the project, and the component if you know it: backend, frontend, ...; or pass the repo's git remote URL as repo and Cairn finds both). Read open impact notices first.
-- Project knowledge belongs in that project's scope (project argument), not in "team": each project has its own members and access. Use "team" only for org-wide systems, metrics and runbooks.
+- Project knowledge belongs in that project's scope (project argument), not in "team": each project has its own members and access. Use "team" only for org-wide systems, metrics and runbooks. If you find something filed in the wrong place, propose move_entry.
+- Cairn has no model of its own; you are its judgment. get_tasks returns curation work (misfiled entries, missing repositories, duplicates, empty outlines, stale entries, unanswered searches). Do it when the user asks you to tidy or curate, or in a scheduled run, and report each with complete_task.
 - Open only the relevant hits with get_article / get_finding; search results are compact summaries.
 - Items marked possibly_stale were not verified recently: confirm before relying on them.
 - When a search result solved your problem, call verify_entry so it stays fresh.
@@ -495,6 +498,56 @@ export function buildMcpServer(ctx: RequestContext): McpServer {
       },
     },
     (args) => run("link_entries", null, () => linkEntries(ctx, args)),
+  );
+
+  server.registerTool(
+    "move_entry",
+    {
+      title: "Propose moving an entry",
+      description:
+        "Propose moving an article or finding to where it belongs: another project (or team/library), a folder there (articles), and/or one of the project's repositories (repo). " +
+        "Use it when knowledge was filed in the wrong place, e.g. a project's page in the shared team space, or a project page that's really about one repository. A person approves it.",
+      inputSchema: {
+        id: z.string().uuid(),
+        to: z.string().describe("Destination scope slug: a project, 'team' or 'library'. Use the current scope to re-file inside it."),
+        folder: z.string().optional().describe("Articles only: folder path in the destination, e.g. 'api/Runbooks'. Omit for the top level (or to keep the folder when re-filing)."),
+        repo: z.string().optional().describe("Repository (component) slug in the destination project, as listed by get_project_context."),
+        summary: z.string().optional().describe("Why it belongs there, for the reviewer"),
+      },
+    },
+    (args) => run("move_entry", args.id, () => proposeMove(ctx, args)),
+  );
+
+  server.registerTool(
+    "get_tasks",
+    {
+      title: "Get curation tasks",
+      description:
+        "Curation work that needs judgment: entries filed in the wrong place or missing their repository, look-alike findings, recurring problems, empty outline sections, stale entries, " +
+        "projects without an overview, unlinked entries, and searches that found nothing. Each task says what to do and which tools to use. " +
+        "Use it when the user asks you to tidy, curate or improve the knowledge base, or in a scheduled curation run. Returned tasks are reserved for you for an hour.",
+      inputSchema: {
+        kind: z.enum(TASK_KINDS).optional().describe("Only this kind of task"),
+        project: projectArg,
+        limit: z.number().int().min(1).max(20).optional().describe("Default 5"),
+      },
+    },
+    (args) => run("get_tasks", null, () => getTasks(ctx, { kind: args.kind, project: args.project, limit: args.limit })),
+  );
+
+  server.registerTool(
+    "complete_task",
+    {
+      title: "Complete a curation task",
+      description: "Record how a task from get_tasks ended: done (pass the revision_id of what you proposed, if any), skipped (unsure; say why) or not_applicable (nothing to change).",
+      inputSchema: {
+        task_id: z.string(),
+        outcome: z.enum(["done", "skipped", "not_applicable"]),
+        note: z.string().optional(),
+        revision_id: z.string().uuid().optional(),
+      },
+    },
+    (args) => run("complete_task", null, () => completeTask(ctx, args)),
   );
 
   server.registerTool(

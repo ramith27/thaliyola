@@ -4,7 +4,7 @@ import { Badge, Diff, ErrorBox, formatDate, Loading, Markdown, Notice, ScopeBadg
 import { useApi, useShortcuts } from "../hooks";
 import { href, navigate, type Route } from "../router";
 
-const OP_TEXT: Record<string, string> = { create: "new", update: "edit", promote: "promote", verify: "retire", share: "share" };
+const OP_TEXT: Record<string, string> = { create: "new", update: "edit", promote: "promote", verify: "retire", share: "share", move: "move" };
 
 export function ReviewQueuePage({ route }: { route: Route }) {
   if (route.query.get("tab") === "suggestions") return <SuggestionsPage />;
@@ -456,6 +456,31 @@ function ProposedChange({ data }: { data: RevisionDetail }) {
       </section>
     );
   }
+  if (op === "move") {
+    return (
+      <section>
+        <h2>Move</h2>
+        <dl className="facts">
+          <dt>From</dt>
+          <dd>
+            {current.scope?.slug}
+            {current.path ? ` / ${current.path}` : ""}
+          </dd>
+          <dt>To</dt>
+          <dd>
+            <strong>{payload.to_name ?? payload.to}</strong>
+            {payload.folder ? ` / ${payload.folder}` : target_kind !== "article" ? "" : payload.to === current.scope?.slug ? " (same folder)" : " (top level)"}
+            {payload.repo ? ` · repository ${payload.repo}` : ""}
+          </dd>
+        </dl>
+        <p className="muted small">On approval it keeps its history and links; the destination's members and settings apply. Approving needs owner rights in both places.</p>
+        <div className="preview-box">
+          <h3>{current.title}</h3>
+          {target_kind === "article" ? <Markdown text={String(current.body_md ?? "").slice(0, 1500)} /> : <Markdown text={`**Symptoms.** ${current.symptoms}\n\n**Root cause.** ${current.root_cause}`} />}
+        </div>
+      </section>
+    );
+  }
   if (op === "verify") {
     return (
       <section>
@@ -529,6 +554,7 @@ function SuggestionsPage() {
         </a>
       </div>
       <ErrorBox error={error ?? actionError} />
+      <AgentTasks />
       {!data ? (
         !error && <Loading />
       ) : (
@@ -604,5 +630,77 @@ function SuggestionsPage() {
         </>
       )}
     </div>
+  );
+}
+
+const TASK_TEXT: Record<string, string> = {
+  file_into_project: "Filed in Team but about a project",
+  tag_repository: "Project pages without their repository",
+  merge_duplicates: "Look-alike findings",
+  promote_recurring: "Recurring problems to fold into articles",
+  fill_outline: "Articles with empty sections",
+  verify_stale: "Entries to re-check",
+  write_overview: "Projects without an overview",
+  link_related: "Entries with no links",
+  answer_gap: "Searches that found nothing",
+};
+
+interface TaskSummary {
+  open: number;
+  by_kind: Record<string, number>;
+  done_this_week: number;
+  recent: { key: string; kind: string; outcome: string; note: string | null; completed_at: string; revision_id: string | null; by: string }[];
+  sample: { id: string; kind: string; title: string; project: string | null }[];
+}
+
+/** Curation work Cairn hands to connected Claude sessions, and what they did with it. */
+function AgentTasks() {
+  const { data } = useApi<TaskSummary>("/tasks");
+  if (!data) return null;
+  return (
+    <section className="card agent-tasks">
+      <div className="card-head">
+        <div>
+          <h3>Work for Claude</h3>
+          <p>
+            Cairn finds what needs judgment; a connected Claude does it with its own model and proposes changes here for review. Run <code>/mcp__cairn__curate</code> in Claude
+            Code (or ask it to “curate the Cairn knowledge base”), or schedule it.
+          </p>
+        </div>
+        <span className="muted small">{data.done_this_week} done this week</span>
+      </div>
+      {!data.open ? (
+        <p className="muted small">Nothing waiting. The knowledge base looks tidy.</p>
+      ) : (
+        <ul className="plain task-kinds">
+          {Object.entries(data.by_kind)
+            .sort((a, b) => b[1] - a[1])
+            .map(([k, n]) => (
+              <li key={k}>
+                <span className="metric-count-inline">{n}</span> {TASK_TEXT[k] ?? k}
+              </li>
+            ))}
+        </ul>
+      )}
+      {data.recent.length > 0 && (
+        <details className="small">
+          <summary>Recently handled by agents</summary>
+          <ul>
+            {data.recent.map((r) => (
+              <li key={r.key}>
+                {TASK_TEXT[r.kind] ?? r.kind}: <strong>{r.outcome.replace("_", " ")}</strong> by {r.by} · {formatDate(r.completed_at)}
+                {r.revision_id && (
+                  <>
+                    {" "}
+                    · <a href={href(`/review/${r.revision_id}`)}>proposal</a>
+                  </>
+                )}
+                {r.note && <span className="muted"> · {r.note}</span>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </section>
   );
 }

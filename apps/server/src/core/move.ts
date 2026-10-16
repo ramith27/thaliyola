@@ -96,7 +96,8 @@ export async function moveItems(ctx: RequestContext, input: MoveInput) {
       // Picked one by one: it goes straight into the destination folder.
       rel = "";
     }
-    const path = [into, rel].filter(Boolean).join("/");
+    // Re-filing inside the same scope without a folder keeps the current one.
+    const path = !inFolder(a.path ?? "") && sameScope && input.into_folder === undefined ? (a.path ?? "") : [into, rel].filter(Boolean).join("/");
     // A repository folder stays a folder (so the tree keeps its shape) and also tags its pages with the repository.
     let component: string | null = fixedComponent === undefined ? null : (fixedComponent?.slug ?? null);
     const first = rel.split("/")[0];
