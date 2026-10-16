@@ -7,6 +7,7 @@ import { href, navigate, type Route } from "../router";
 const OP_TEXT: Record<string, string> = { create: "new", update: "edit", promote: "promote", verify: "retire", share: "share" };
 
 export function ReviewQueuePage({ route }: { route: Route }) {
+  if (route.query.get("tab") === "suggestions") return <SuggestionsPage />;
   const state = route.query.get("state") ?? "pending";
   const mine = route.query.get("mine") === "1";
   const { data, error } = useApi<{ revisions: RevisionSummary[] }>(`/revisions?state=${state}${mine ? "&mine=true" : ""}`);
@@ -22,6 +23,9 @@ export function ReviewQueuePage({ route }: { route: Route }) {
         ))}
         <a className={`chip ${mine ? "active" : ""}`} href={href("/review", { state, mine: mine ? undefined : "1" })}>
           Mine only
+        </a>
+        <a className="chip" href={href("/review", { tab: "suggestions" })}>
+          Suggestions
         </a>
       </div>
       <ErrorBox error={error} />
@@ -209,5 +213,121 @@ function ProposedChange({ data }: { data: RevisionDetail }) {
         </div>
       ))}
     </section>
+  );
+}
+
+interface Suggestions {
+  promote: {
+    finding: { id: string; title: string; scope: string };
+    recurrences: number;
+    verifications: number;
+    suggested_article: { id: string; title: string; type: string; version: number } | null;
+  }[];
+  duplicates: { similarity: number; a: { id: string; title: string; scope: string }; b: { id: string; title: string; scope: string } }[];
+  note?: string;
+}
+
+function SuggestionsPage() {
+  const { data, error, reload } = useApi<Suggestions>("/suggestions");
+  const [done, setDone] = useState<Record<string, string>>({});
+  const [actionError, setActionError] = useState<Error | null>(null);
+
+  async function act(key: string, fn: () => Promise<{ revision_id?: string }>, label: string) {
+    setActionError(null);
+    try {
+      const res = await fn();
+      setDone((d) => ({ ...d, [key]: res.revision_id ? `${label}: proposal ${res.revision_id.slice(0, 8)}` : label }));
+    } catch (e) {
+      setActionError(e as Error);
+    }
+  }
+
+  return (
+    <div className="page">
+      <h1>Review</h1>
+      <div className="filters">
+        <a className="chip" href={href("/review")}>
+          pending
+        </a>
+        <a className="chip active" href={href("/review", { tab: "suggestions" })}>
+          Suggestions
+        </a>
+      </div>
+      <ErrorBox error={error ?? actionError} />
+      {!data ? (
+        !error && <Loading />
+      ) : (
+        <>
+          <section>
+            <h2>Recurring root causes</h2>
+            <p className="muted small">Findings that keep coming back. Fold them into the article people read first.</p>
+            {!data.promote.length && <p className="muted">Nothing recurring right now.</p>}
+            <ul className="hits">
+              {data.promote.map((p) => (
+                <li key={p.finding.id} className="hit">
+                  <div className="hit-head">
+                    <a href={href(`/finding/${p.finding.id}`)}>{p.finding.title}</a> <ScopeBadge scope={p.finding.scope} />
+                  </div>
+                  <p className="small muted">
+                    {p.recurrences ? `${p.recurrences} linked recurrence${p.recurrences > 1 ? "s" : ""}` : ""}
+                    {p.recurrences && p.verifications ? " · " : ""}
+                    {p.verifications ? `verified ${p.verifications} times` : ""}
+                  </p>
+                  {done[p.finding.id] ? (
+                    <Notice kind="ok">{done[p.finding.id]}</Notice>
+                  ) : p.suggested_article ? (
+                    <button
+                      className="btn btn-small"
+                      onClick={() =>
+                        act(
+                          p.finding.id,
+                          () => api("/promote", { method: "POST", body: { finding_id: p.finding.id, article_id: p.suggested_article!.id, version: p.suggested_article!.version } }),
+                          "Promotion proposed",
+                        )
+                      }
+                    >
+                      Promote into “{p.suggested_article.title}”
+                    </button>
+                  ) : (
+                    <p className="small muted">No obvious article yet: consider writing a runbook.</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+          <section>
+            <h2>Possible duplicates</h2>
+            {data.note && <p className="muted small">{data.note}</p>}
+            {!data.note && !data.duplicates.length && <p className="muted">No unlinked look-alikes.</p>}
+            <ul className="hits">
+              {data.duplicates.map((d) => {
+                const key = `${d.a.id}:${d.b.id}`;
+                return (
+                  <li key={key} className="hit">
+                    <div>
+                      <a href={href(`/finding/${d.a.id}`)}>{d.a.title}</a> <ScopeBadge scope={d.a.scope} />
+                    </div>
+                    <div>
+                      <a href={href(`/finding/${d.b.id}`)}>{d.b.title}</a> <ScopeBadge scope={d.b.scope} />
+                    </div>
+                    <p className="small muted">{Math.round(d.similarity * 100)}% similar</p>
+                    {done[key] ? (
+                      <Notice kind="ok">{done[key]}</Notice>
+                    ) : (
+                      <button className="btn btn-small" onClick={() => act(key, () => api("/links", { method: "POST", body: { from: d.a.id, to: d.b.id, relation: "same_root_cause" } }), "Linked")}>
+                        Same root cause
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+          <button className="btn" onClick={reload}>
+            Refresh
+          </button>
+        </>
+      )}
+    </div>
   );
 }

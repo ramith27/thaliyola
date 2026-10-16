@@ -5,6 +5,7 @@ import { ASSET_MIME_TYPES, getAsset, uploadAsset } from "../core/assets.js";
 import { audit } from "../core/audit.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError, type RequestContext } from "../core/context.js";
 import { needsAttention } from "../core/freshness.js";
+import { listSuggestions } from "../core/suggestions.js";
 import { browseKb, getArticle, getFinding } from "../core/items.js";
 import { ackNotice, listImpactNotices } from "../core/notices.js";
 import { listReviewQueue } from "../core/review.js";
@@ -219,6 +220,23 @@ export function buildMcpServer(ctx: RequestContext): McpServer {
       annotations: { readOnlyHint: true },
     },
     (args) => run("list_stale_entries", null, () => needsAttention(ctx, args)),
+  );
+
+  server.registerTool(
+    "list_suggestions",
+    {
+      title: "List maintenance suggestions",
+      description:
+        "Recurring root causes worth promoting into an article (with a suggested target), and pairs of findings that look like " +
+        "the same problem but aren't linked. Act with promote_finding or link_entries (same_root_cause); all of it is reviewed.",
+      inputSchema: {
+        scope: z.string().optional(),
+        project: projectArg,
+        limit: z.number().int().min(1).max(100).optional(),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    (args) => run("list_suggestions", null, () => listSuggestions(ctx, args)),
   );
 
   // ---- Design assets and sharing ---------------------------------------------

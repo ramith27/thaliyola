@@ -40,6 +40,7 @@ A project can declare that it **uses** an item from the library or from another 
 | `list_review_queue` | Pending and decided proposals (`mine: true` for your own) |
 | `get_article_template` | Expected sections for an article type |
 | `list_stale_entries` | Entries not verified recently and articles past their review date |
+| `list_suggestions` | Recurring root causes to fold into an article (with a suggested target), and unlinked near-duplicate findings |
 | `get_asset` | A screenshot, exported frame, token file or spec attached to an item. Images come back as MCP image content the agent can look at |
 
 **Write tools.** Every write is a proposal that a person reviews before it is published:
@@ -86,6 +87,7 @@ The server also serves a web UI at `/` for people:
 - **Files and links:** attach screenshots and files, add Figma/PR/Sentry links, and share project items to the library.
 - **Read and edit:** articles (markdown with preview) and findings. Edits by scope owners and admins publish immediately; everyone else's edits become proposals.
 - **Review queue:** line diffs of current vs proposed text, with approve and reject.
+- **Suggestions:** recurring root causes to promote into the article people read first, and possible duplicates to link, each with a one-click action. Both actions create proposals.
 
 Behind Cloudflare Access, the browser is already signed in. In dev mode the UI asks for a dev token.
 
@@ -280,5 +282,6 @@ apps/server/
 - ~~**M3b** Semantic search (pgvector + local embedding model), duplicate detection~~ (done)
 - ~~Local sign-in with built-in accounts and personal API tokens~~ (done)
 - ~~**M4** Freshness jobs, OAuth for claude.ai connectors in local mode~~ (done)
-- Next: Slack and Sentry integrations, promotion suggestions from recurring findings, backups guide
+- ~~Workflow prompts, Claude Code plugin, backups, promotion and duplicate suggestions~~ (done)
+- Next: Trello cards for recurring root causes, S3-compatible asset store, per-scope read restrictions
 - **M5** Integrations with existing agent skills, Slack and Sentry

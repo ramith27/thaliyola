@@ -7,13 +7,14 @@ import { audit } from "../core/audit.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError, type Actor, type RequestContext } from "../core/context.js";
 import { editArticle, editFinding, newArticle, newFinding } from "../core/direct.js";
 import { needsAttention } from "../core/freshness.js";
+import { listSuggestions } from "../core/suggestions.js";
 import { browseKb, getArticle, getFinding } from "../core/items.js";
 import { ackNotice, listImpactNotices } from "../core/notices.js";
 import { isAdmin } from "../core/permissions.js";
 import { getProjectContext } from "../core/projects.js";
 import { approveRevision, getRevision, listReviewQueue, rejectRevision } from "../core/review.js";
 import { searchKnowledge } from "../core/search.js";
-import { addSourceLinkTo, shareToLibrary, verifyEntry } from "../core/writes.js";
+import { addSourceLinkTo, LINK_KINDS, linkEntries, promoteFinding, shareToLibrary, verifyEntry } from "../core/writes.js";
 import { ARTICLE_TEMPLATES, templateFor } from "../core/templates.js";
 import type { Embedder } from "../core/embeddings.js";
 import type { Db } from "../db/pool.js";
@@ -150,6 +151,23 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
         component: z.string().optional().parse(req.query.component),
         include_acked: req.query.include_acked === "true",
       }),
+    ),
+  );
+  router.get(
+    "/suggestions",
+    handle("list_suggestions", (ctx, req) => listSuggestions(ctx, { scope: z.string().optional().parse(req.query.scope) })),
+  );
+  router.post(
+    "/links",
+    handle("link_entries", (ctx, req) => linkEntries(ctx, z.object({ from: z.string(), to: z.string(), relation: z.enum(LINK_KINDS) }).parse(req.body))),
+  );
+  router.post(
+    "/promote",
+    handle("promote_finding", (ctx, req) =>
+      promoteFinding(
+        ctx,
+        z.object({ finding_id: uuid, article_id: uuid, version: z.number().int().min(1), section: z.string().max(200).optional() }).parse(req.body),
+      ),
     ),
   );
   router.get(

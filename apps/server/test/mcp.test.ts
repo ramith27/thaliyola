@@ -50,7 +50,7 @@ describe("MCP over streamable HTTP", () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
       "ack_notice", "add_source_link", "browse_kb", "create_article", "get_article", "get_article_template", "get_asset", "get_finding",
-      "get_project_context", "link_entries", "list_impact_notices", "list_projects", "list_review_queue", "list_stale_entries",
+      "get_project_context", "link_entries", "list_impact_notices", "list_projects", "list_review_queue", "list_stale_entries", "list_suggestions",
       "promote_finding", "propose_article_edit", "propose_finding", "search_knowledge", "share_to_library",
       "update_finding", "upload_asset", "verify_entry",
     ]);
