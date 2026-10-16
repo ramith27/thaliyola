@@ -40,7 +40,7 @@ const DEFAULT_STATUSES = ["published", "possibly_stale"];
 /**
  * Hybrid search over article sections and findings: Postgres full-text
  * (terms OR-ed, chunks matching every term ranked higher) fused with
- * embedding similarity by reciprocal rank fusion. Results keep the best chunk
+ * embedding similarity by normalized score fusion. Results keep the best chunk
  * per item, boosted for published items and the current project, then list
  * article sections before findings (source of truth first).
  */
@@ -127,7 +127,7 @@ export async function searchKnowledge(ctx: RequestContext, input: SearchInput): 
        WHERE t <> ''
     ),
     fts AS (
-      SELECT id, row_number() OVER (ORDER BY rank DESC) AS r
+      SELECT id, rank
         FROM (SELECT c.id, ts_rank(c.tsv, q.any_term, 1) * CASE WHEN c.tsv @@ q.all_terms THEN 2.0 ELSE 1.0 END AS rank
                 FROM chunks c CROSS JOIN q
                 LEFT JOIN articles a ON c.parent_kind = 'article' AND a.id = c.parent_id
@@ -138,20 +138,26 @@ export async function searchKnowledge(ctx: RequestContext, input: SearchInput): 
     ),
     vec_raw AS (${vec}),
     vec AS (${vecWindowed}),
-    -- Reciprocal rank fusion of keyword and semantic candidates, then status/scope boosts.
+    -- Score fusion: keyword relevance relative to the best keyword hit, and similarity relative to the
+    -- best semantic hit (within the window), each in [0, 1]. Unlike rank-only fusion this keeps how much
+    -- better a hit is, so a boost can't lift a weak match over a much stronger one.
+    fts_n AS (SELECT id, rank / nullif(max(rank) OVER (), 0) AS kw FROM fts),
+    vec_n AS (
+      SELECT id, sim, CASE WHEN max(sim) OVER () > min(sim) OVER () THEN (sim - min(sim) OVER ()) / (max(sim) OVER () - min(sim) OVER ()) ELSE 1 END AS vs
+        FROM vec
+    ),
     fused AS (
-      SELECT coalesce(fts.id, vec.id) AS id,
-             -- Meaning-only matches weigh a little less than ones that also share the query's words.
-             coalesce(1.0 / (60 + fts.r), 0) + coalesce(1.0 / (60 + vec.r), 0) * CASE WHEN fts.id IS NULL THEN 0.8 ELSE 1.0 END AS rrf,
-             vec.sim, fts.id IS NOT NULL AS keyword_match
-        FROM fts FULL OUTER JOIN vec ON fts.id = vec.id
+      SELECT coalesce(k.id, v.id) AS id,
+             0.6 * coalesce(k.kw, 0) + 0.4 * coalesce(v.vs, 0) AS rrf,
+             v.sim, k.id IS NOT NULL AS keyword_match
+        FROM fts_n k FULL OUTER JOIN vec_n v ON k.id = v.id
     ),
     scored AS (
       SELECT DISTINCT ON (c.parent_kind, c.parent_id)
              c.parent_kind, c.parent_id, c.heading, c.ord, c.text, c.scope_id, (${usesLinked}) AS via_uses_link, fused.sim, fused.keyword_match,
              fused.rrf
                * CASE coalesce(a.status, f.status) WHEN 'published' THEN 1.0 WHEN 'possibly_stale' THEN 0.6 ELSE 0.4 END
-               * CASE WHEN c.scope_id = ${currentProject} THEN 1.3 ELSE 1.0 END AS score
+               * CASE WHEN c.scope_id = ${currentProject} THEN 1.15 ELSE 1.0 END AS score
         FROM fused JOIN chunks c ON c.id = fused.id
         LEFT JOIN articles a ON c.parent_kind = 'article' AND a.id = c.parent_id
         LEFT JOIN findings f ON c.parent_kind = 'finding' AND f.id = c.parent_id

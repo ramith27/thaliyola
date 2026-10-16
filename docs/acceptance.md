@@ -63,6 +63,9 @@ Then give each persona plain-language tasks and check the stored result after ea
 
 ### Issues the run found, all fixed
 
+- **Search ranking:** found by the Docker CI job, where the embedding model was still downloading. With keyword-only results, rank-based fusion let a weak current-project match outrank a much stronger team match, because a 30% project boost outweighed a one-position rank gap. Fusion now combines normalized scores (and the boost is 15%). A regression test covers it.
+- **Docker Compose:** `docker compose up` failed for anyone without a Cloudflare tunnel token, even with the tunnel profile off.
+
 - The `investigate` prompt took a second `project` argument. Claude Code splits prompt arguments on spaces, so a multi-word symptom spilled into it. The prompt now takes only the symptom; the project comes from the client header.
 - Sharing to the library required the item to be published first, so agents had to come back after review. Drafts can now be proposed for sharing, and reviewers approve the item, then the share.
 - Asset uploads and deletions were written to the audit log twice.

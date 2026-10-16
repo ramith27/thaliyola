@@ -25,6 +25,14 @@ describe("searchKnowledge", () => {
     expect(rca.snippet).toMatch(/\*\*/);
   });
 
+  it("doesn't let the current-project boost lift a weak match over a much stronger one", async () => {
+    // Regression: with rank-only fusion the project's export issue (matches "fail") beat the team RCA
+    // that matches every term, because a 1.3x boost outweighs a one-position rank gap.
+    const ctx = await ctxFor(db, { project: "order-service" });
+    const res = await searchKnowledge(ctx, { query: "payments failing with 429 during a sale" });
+    expect(res.findings[0]?.id).toBe(ids.rca);
+  });
+
   it("points at the matching article section", async () => {
     const ctx = await ctxFor(db);
     const res = await searchKnowledge(ctx, { query: "aria-sort accessibility" });

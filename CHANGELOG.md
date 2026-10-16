@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Search fuses normalized keyword and semantic scores instead of ranks, so the current-project boost can't lift a weak match over a much stronger one (found by the Docker CI job)
+- Fix: `docker compose up` no longer requires a Cloudflare tunnel token when the tunnel profile is off
+
 - Acceptance sweep (`pnpm --filter @cairn/server acceptance`) and a documented Claude Code acceptance run (`docs/acceptance.md`)
 - CI builds the Docker image and smoke-tests the Compose stack
 - `investigate` prompt takes a single argument (multi-word symptoms survive clients that split prompt arguments on spaces)

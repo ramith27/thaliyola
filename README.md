@@ -99,11 +99,11 @@ Knowledge goes stale:
 
 ### Search
 
-Search is hybrid. Postgres full-text search and embedding similarity are merged with reciprocal rank fusion, then boosted for published, recently verified and current-project items. Embeddings come from a small model (`bge-small-en-v1.5`, int8) that runs in-process on CPU. It is not an LLM, needs no API key, and is downloaded once (~35 MB). New text is embedded in the background, so writes stay fast.
+Search is hybrid. Postgres full-text relevance and embedding similarity are each normalized against the query's best hit and combined, then boosted for published and current-project items. Unlike rank-only fusion, this keeps how much better a hit is, so a boost can't lift a weak match over a much stronger one. Embeddings come from a small model (`bge-small-en-v1.5`, int8) that runs in-process on CPU. It is not an LLM, needs no API key, and is downloaded once (~35 MB). New text is embedded in the background, so writes stay fast.
 
 - "card processor is throttling us" finds the payment-provider rate-limit RCA, even though they share no keywords.
 - Duplicate detection uses the same embeddings: a reworded copy of an existing finding is flagged. Thresholds were calibrated on real text and can be tuned (`DUPLICATE_SIMILARITY`, `SEARCH_MIN_SIMILARITY`, `SEARCH_SIMILARITY_WINDOW`).
-- Small embedding models put most text in a narrow similarity band. So a meaning-only hit must be above a floor *and* close to the best meaning match for the query, and it weighs a little less than hits that also share the query's words.
+- Small embedding models put most text in a narrow similarity band. So a meaning-only hit must be above a floor *and* close to the best meaning match for the query, and it weighs less than hits that also share the query's words.
 - `EMBEDDINGS=off` falls back to keyword search only, e.g. for machines without internet access.
 
 On every write the server:
