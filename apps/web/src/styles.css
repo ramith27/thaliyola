@@ -610,3 +610,15 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .starter-toggle span { display: inline; }
 .import-results li { padding: 0.25rem 0; }
 .invite-card { margin: 0 0 1.5rem; padding: 1rem 1.2rem; }
+
+/* Metrics */
+.metric-notes { margin: -0.4rem 0 1.2rem; max-width: 70rem; }
+.metric-list li { padding: 0.55rem 0; border-top: 1px solid var(--border); position: relative; padding-right: 3rem; }
+.metric-list li:first-child { border-top: 0; }
+.metric-count { position: absolute; right: 0; top: 0.55rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.gaps { margin-top: 1.2rem; }
+.gaps-head { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
+.row-actions { display: flex; gap: 0.75rem; justify-content: flex-end; }
+.purge-zone { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.purge-zone.open { border: 1px solid var(--danger, #dc2626); border-radius: var(--radius); padding: 1rem 1.2rem; }
+.purge-zone h3 { margin-top: 0; color: var(--danger, #dc2626); }

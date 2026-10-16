@@ -51,6 +51,7 @@ export function Layout({ me, scopes, route, children }: { me: Me; scopes: ScopeI
           <NavLink to="/" icon="home" label="Home" active={section === undefined} />
           <NavLink to="/graph" icon="graph" label="Knowledge graph" active={section === "graph"} />
           <NavLink to="/review" icon="review" label="Review" active={section === "review"} count={pendingCount} />
+          <NavLink to="/metrics" icon="chart" label="Metrics" active={section === "metrics"} />
           <NavLink to="/connect" icon="plug" label="Connect" active={section === "connect"} />
         </nav>
         {favourites.length > 0 && (

@@ -1,3 +1,4 @@
+import { sendDigests } from "./digest.js";
 import type { Settings } from "../config.js";
 import type { Db } from "../db/pool.js";
 import { onStale } from "./notify.js";
@@ -72,6 +73,8 @@ export function startJobs(db: Db, opts: { findingDays: number; articleDays: numb
         await db.query("DELETE FROM oauth_requests WHERE expires_at < now()");
         await db.query("DELETE FROM oauth_codes WHERE expires_at < now() - interval '1 day'");
         await db.query("DELETE FROM oauth_tokens WHERE expires_at < now() - interval '7 days'");
+        await db.query("DELETE FROM invitations WHERE expires_at < now() - interval '30 days' AND accepted_at IS NULL");
+        if (opts.settings) await db.query("DELETE FROM search_log WHERE at < now() - make_interval(days => $1)", [opts.settings.searchLogDays]);
         if (stale.findings || stale.articles) log(`marked ${stale.findings} finding(s) and ${stale.articles} article(s) possibly stale`);
       } finally {
         await client.query("SELECT pg_advisory_unlock($1)", [LOCK]);
@@ -82,13 +85,36 @@ export function startJobs(db: Db, opts: { findingDays: number; articleDays: numb
       client.release();
     }
   }
+  // Weekly digests: checked every 15 minutes, sent once per person per week (one instance at a time).
+  const DIGEST_LOCK = 7_402_212;
+  async function digests() {
+    if (!opts.settings || opts.settings.mailTransport === "off") return;
+    const client = await db.connect();
+    try {
+      const { rows } = await client.query<{ locked: boolean }>("SELECT pg_try_advisory_lock($1) AS locked", [DIGEST_LOCK]);
+      if (!rows[0]?.locked) return;
+      try {
+        const r = await sendDigests(db, opts.settings);
+        if (r.sent) log(`sent ${r.sent} weekly digest(s)`);
+      } finally {
+        await client.query("SELECT pg_advisory_unlock($1)", [DIGEST_LOCK]);
+      }
+    } catch (err) {
+      log(`digest failed: ${(err as Error).message}`);
+    } finally {
+      client.release();
+    }
+  }
   const first = setTimeout(run, 30_000);
   const timer = setInterval(run, opts.intervalHours * 3600_000);
+  const digestTimer = setInterval(digests, 15 * 60_000);
   return {
     run,
+    digests,
     stop() {
       clearTimeout(first);
       clearInterval(timer);
+      clearInterval(digestTimer);
     },
   };
 }

@@ -131,7 +131,7 @@ export function ChartCard({
 }
 
 /** Stat tile: label, value, optional note and a sparkline (de-emphasised hue, current point in the accent). */
-export function StatTile({ label, value, note, trend, icon, href, tone }: { label: string; value: number; note?: string; trend?: number[]; icon: IconName; href?: string; tone?: "warn" }) {
+export function StatTile({ label, value, note, trend, icon, href, tone }: { label: string; value: number | string; note?: string; trend?: number[]; icon: IconName; href?: string; tone?: "warn" }) {
   const body = (
     <>
       <div className="tile-head">
@@ -140,7 +140,7 @@ export function StatTile({ label, value, note, trend, icon, href, tone }: { labe
         </span>
         <span className="tile-label">{label}</span>
       </div>
-      <div className="tile-value">{compact(value)}</div>
+      <div className="tile-value">{typeof value === "number" ? compact(value) : value}</div>
       <div className="tile-foot">
         {note && <span className="muted small">{note}</span>}
         {trend && trend.length > 1 && <Sparkline values={trend} />}

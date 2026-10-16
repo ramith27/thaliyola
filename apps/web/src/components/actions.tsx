@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api } from "../api";
-import { href } from "../router";
+import { href, navigate } from "../router";
 import { ErrorBox, Notice } from "./ui";
 
 const SYSTEMS = ["figma", "pr", "sentry", "slack", "trello", "dashboard", "repo", "other"];
@@ -108,5 +108,65 @@ export function ShareToLibrary({ id, scopeKind, status, publishedAs }: { id: str
       </div>
       <ErrorBox error={error} />
     </form>
+  );
+}
+
+/** Admins only: permanently delete an item (leaked secret, personal data). Needs a reason and the exact title. */
+export function PurgeZone({ id, title, kind }: { id: string; title: string; kind: "article" | "finding" }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  if (!open)
+    return (
+      <div className="purge-zone">
+        <button className="link-btn small danger" onClick={() => setOpen(true)}>
+          Purge this {kind} permanently…
+        </button>
+      </div>
+    );
+  return (
+    <section className="purge-zone open" aria-label="Purge">
+      <h3>Purge permanently</h3>
+      <p className="small">
+        Deletes this {kind} with its history, proposals, comments, links and attachments. It can't be undone, and only the reason is kept. Use it for content that must
+        not exist (a leaked secret, personal data). To retire something that's simply wrong, mark it no longer valid instead.
+      </p>
+      <form
+        className="mini-form wide"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          setError(null);
+          try {
+            await api(`/purge/${id}`, { method: "POST", body: { reason, confirm_title: confirm } });
+            navigate("/");
+          } catch (err) {
+            setError(err as Error);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <label className="small">
+          Reason (kept in the purge log)
+          <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. contained a production database password" required minLength={5} />
+        </label>
+        <label className="small">
+          Type the title to confirm: <strong>{title}</strong>
+          <input value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
+        </label>
+        <ErrorBox error={error} />
+        <div className="actions">
+          <button className="btn btn-danger" disabled={busy || confirm.trim() !== title.trim() || reason.trim().length < 5}>
+            {busy ? "Purging…" : "Purge permanently"}
+          </button>
+          <button type="button" className="btn" onClick={() => setOpen(false)}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </section>
   );
 }

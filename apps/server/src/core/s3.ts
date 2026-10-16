@@ -83,4 +83,10 @@ export class S3AssetStore implements AssetStore {
     if (!res.ok) throw new Error(`S3 GET ${key} failed: ${res.status} ${(await res.text()).slice(0, 300)}`);
     return Buffer.from(await res.arrayBuffer());
   }
+
+  async delete(key: string): Promise<void> {
+    const url = this.objectUrl(key);
+    const res = await fetch(url, { method: "DELETE", headers: this.signedHeaders("DELETE", url, null) });
+    if (!res.ok && res.status !== 404) throw new Error(`S3 DELETE ${key} failed: ${res.status} ${(await res.text()).slice(0, 300)}`);
+  }
 }

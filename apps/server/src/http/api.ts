@@ -10,7 +10,9 @@ import { ask, getEntity, listFavourites, searchEntities, setFavourite } from "..
 import { needsAttention } from "../core/freshness.js";
 import { exportMarkdown } from "../core/exporter.js";
 import { importDocs } from "../core/importer.js";
+import { dismissGap, knowledgeGaps, successMetrics } from "../core/metrics.js";
 import { onboarding } from "../core/onboarding.js";
+import { listPurges, purgeItem } from "../core/purge.js";
 import { insights, knowledgeGraph } from "../core/insights.js";
 import { listSuggestions } from "../core/suggestions.js";
 import { browseKb, getArticle, getFinding } from "../core/items.js";
@@ -217,6 +219,16 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
       next(err);
     }
   });
+  router.get("/success", handle("success_metrics", (ctx, req) => successMetrics(ctx, { days: z.coerce.number().int().optional().parse(req.query.days) })));
+  router.get("/gaps", handle("knowledge_gaps", (ctx, req) => knowledgeGaps(ctx, { days: z.coerce.number().int().optional().parse(req.query.days) })));
+  router.post("/gaps/dismiss", handle("dismiss_gap", (ctx, req) => dismissGap(ctx, z.object({ query: z.string().min(1).max(300) }).parse(req.body).query)));
+  router.post(
+    "/purge/:id",
+    handle("purge", (ctx, req) =>
+      purgeItem(ctx, uuid.parse(req.params.id), z.object({ reason: z.string().max(1000), confirm_title: z.string().max(300) }).parse(req.body)),
+    ),
+  );
+  router.get("/purges", handle("list_purges", async (ctx) => ({ purges: await listPurges(ctx) })));
   router.get("/onboarding", handle("onboarding", (ctx) => onboarding(ctx)));
   router.get("/favourites", handle("list_favourites", async (ctx) => ({ favourites: await listFavourites(ctx) })));
   router.put("/favourites/:id", handle("add_favourite", (ctx, req) => setFavourite(ctx, uuid.parse(req.params.id), true)));
@@ -243,6 +255,7 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
         statuses: q.statuses,
         limit: q.limit ?? 20,
         prefix: q.prefix === "true",
+        source: "web",
       });
     }),
   );

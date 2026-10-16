@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ForbiddenError, NotFoundError, ValidationError, type RequestContext } from "./context.js";
 import { assertCanRead, canApprove } from "./permissions.js";
@@ -17,6 +17,7 @@ import { findItemFor } from "./writes.js";
 export interface AssetStore {
   put(key: string, data: Buffer): Promise<void>;
   get(key: string): Promise<Buffer>;
+  delete(key: string): Promise<void>;
 }
 
 /** Local-disk store; an S3-compatible store can implement the same interface. */
@@ -39,10 +40,14 @@ export class LocalAssetStore implements AssetStore {
   async get(key: string) {
     return readFile(this.file(key));
   }
+
+  async delete(key: string) {
+    await rm(this.file(key), { force: true });
+  }
 }
 
 const stores = new Map<string, AssetStore>();
-function storeFor(ctx: RequestContext): AssetStore {
+export function storeFor(ctx: RequestContext): AssetStore {
   const s3 = ctx.settings.s3;
   const cacheKey = s3 ? `s3:${s3.endpoint}/${s3.bucket}/${s3.prefix ?? ""}` : `local:${ctx.settings.assetDir}`;
   let store = stores.get(cacheKey);

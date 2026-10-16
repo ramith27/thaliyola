@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api, ApiError, type Article, type Finding, type ScopeInfo, type WriteResult } from "../api";
+import { api, ApiError, type Article, type Finding, type Me, type ScopeInfo, type WriteResult } from "../api";
 import {
   ErrorBox,
   formatDate,
@@ -13,7 +13,7 @@ import {
   TypeBadge,
   WriteOutcome,
 } from "../components/ui";
-import { AddLinkForm, ShareToLibrary } from "../components/actions";
+import { AddLinkForm, PurgeZone, ShareToLibrary } from "../components/actions";
 import { Attachments } from "../components/assets";
 import { useApi } from "../hooks";
 import { RelationsPanel } from "./graph";
@@ -122,7 +122,7 @@ async function verify(id: string) {
 
 // ---- Articles ----------------------------------------------------------------
 
-export function ArticlePage({ id, route }: { id: string; route: Route }) {
+export function ArticlePage({ id, route, me }: { id: string; route: Route; me?: Me }) {
   const editing = route.path[2] === "edit";
   const section = route.query.get("section");
   const { data, error, reload } = useApi<Article>(`/articles/${id}`);
@@ -166,6 +166,7 @@ export function ArticlePage({ id, route }: { id: string; route: Route }) {
         </div>
         <SectionedMarkdown body={data.body_md} articleId={id} />
         <RelationsPanel id={id} />
+        {me?.admin && <PurgeZone id={id} title={data.title} kind="article" />}
       </article>
       <aside className="side">
         {data.sections.length > 1 && (
@@ -301,7 +302,7 @@ function ArticleEditor({ article, onSaved }: { article: Article; onSaved: () => 
 
 // ---- Findings ----------------------------------------------------------------
 
-export function FindingPage({ id, route }: { id: string; route: Route }) {
+export function FindingPage({ id, route, me }: { id: string; route: Route; me?: Me }) {
   const editing = route.path[2] === "edit";
   const { data, error, reload } = useApi<Finding>(`/findings/${id}`);
   useEffect(() => {
@@ -344,6 +345,7 @@ export function FindingPage({ id, route }: { id: string; route: Route }) {
           </>
         )}
         <RelationsPanel id={id} />
+        {me?.admin && <PurgeZone id={id} title={data.title} kind="finding" />}
         {data.history.length > 0 && (
           <>
             <h2>History</h2>

@@ -3,6 +3,8 @@ import { ValidationError } from "./context.js";
 import { VECTOR_CANDIDATES } from "../db/pool.js";
 import { toPgVector } from "./embeddings.js";
 import { readableScopes } from "./permissions.js";
+import { track } from "./notify.js";
+import { redact } from "./redaction.js";
 import { resolveScopeFilter } from "./scopes.js";
 
 export interface SearchInput {
@@ -17,6 +19,8 @@ export interface SearchInput {
   limit?: number;
   /** Search as you type: the last word also matches as a prefix ("conv" finds "conversion"). */
   prefix?: boolean;
+  /** Where the search came from, for the hit rate and knowledge gaps; unset searches aren't logged. */
+  source?: "web" | "mcp";
 }
 
 export interface SearchHit {
@@ -208,8 +212,20 @@ export async function searchKnowledge(ctx: RequestContext, input: SearchInput): 
     match: r.keyword_match ? (r.sim !== null ? "keyword+semantic" : "keyword") : "semantic",
     ...(r.status === "possibly_stale" ? { warning: "Not verified recently; confirm before relying on it." } : {}),
   }));
+  if (input.source && !input.prefix) logSearch(ctx, input.source, query, hits);
   return {
     articles: hits.filter((h) => h.kind === "article"),
     findings: hits.filter((h) => h.kind === "finding"),
   };
+}
+
+/** Records a search in the background; the text only when no keyword matched, redacted. */
+function logSearch(ctx: RequestContext, source: "web" | "mcp", query: string, hits: SearchHit[]) {
+  const keywordHits = hits.filter((h) => h.match !== "semantic").length;
+  const text = keywordHits === 0 ? redact(query.trim().replace(/\s+/g, " ").slice(0, 200)).text : null;
+  track(
+    ctx.db
+      .query("INSERT INTO search_log (actor_id, source, results, keyword_hits, query) VALUES ($1, $2, $3, $4, $5)", [ctx.actor.id, source, hits.length, keywordHits, text])
+      .catch((err) => console.error(`[search] log failed: ${(err as Error).message}`)),
+  );
 }

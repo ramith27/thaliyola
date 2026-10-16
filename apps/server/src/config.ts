@@ -54,6 +54,11 @@ const Env = z
     STALE_AFTER_DAYS: z.coerce.number().int().positive().default(90),
     STALE_AFTER_DAYS_ARTICLES: z.coerce.number().int().positive().optional(),
     MAINTENANCE_INTERVAL_HOURS: z.coerce.number().positive().default(6),
+    // Weekly digest email: day (0 = Sunday … 6 = Saturday) and hour, server local time
+    DIGEST_DAY: z.coerce.number().int().min(0).max(6).default(1),
+    DIGEST_HOUR: z.coerce.number().int().min(0).max(23).default(8),
+    // How long searches are kept for the hit rate and knowledge gaps
+    SEARCH_LOG_DAYS: z.coerce.number().int().positive().default(180),
     // Email: smtp (SMTP_URL, e.g. smtps://user:pass@mail.example.com:465), json (log only) or off
     MAIL_TRANSPORT: z.enum(["smtp", "json", "off"]).default("off"),
     SMTP_URL: z.string().optional(),
@@ -108,6 +113,9 @@ export function settingsFrom(config: Config): Settings {
     duplicateSimilarity: config.DUPLICATE_SIMILARITY,
     assetMaxBytes: config.ASSET_MAX_BYTES,
     importMaxBytes: config.IMPORT_MAX_BYTES,
+    digestDay: config.DIGEST_DAY,
+    digestHour: config.DIGEST_HOUR,
+    searchLogDays: config.SEARCH_LOG_DAYS,
   };
 }
 
@@ -132,6 +140,9 @@ export interface Settings {
   duplicateSimilarity: number;
   assetMaxBytes: number;
   importMaxBytes: number;
+  digestDay: number;
+  digestHour: number;
+  searchLogDays: number;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {

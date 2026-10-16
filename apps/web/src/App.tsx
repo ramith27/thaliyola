@@ -6,6 +6,7 @@ import { ConnectPage } from "./pages/connect";
 import { Dashboard } from "./pages/dashboard";
 import { EntityPage } from "./pages/entity";
 import { GraphPage } from "./pages/graph";
+import { MetricsPage } from "./pages/metrics";
 import { InviteAcceptPage } from "./pages/invite";
 import { ImportPage, NewProjectPage } from "./pages/setup";
 import { PasteDraftPage } from "./pages/paste";
@@ -102,10 +103,10 @@ export function App() {
       page = <ProjectPage slug={id!} route={route} me={boot.me} />;
       break;
     case "article":
-      page = <ArticlePage id={id!} route={route} />;
+      page = <ArticlePage id={id!} route={route} me={boot.me} />;
       break;
     case "finding":
-      page = <FindingPage id={id!} route={route} />;
+      page = <FindingPage id={id!} route={route} me={boot.me} />;
       break;
     case "new":
       page =
@@ -124,6 +125,9 @@ export function App() {
       break;
     case "entity":
       page = <EntityPage kind={id!} name={route.path[2] ?? ""} />;
+      break;
+    case "metrics":
+      page = <MetricsPage me={boot.me} route={route} />;
       break;
     case "import":
       page = <ImportPage scopes={boot.scopes} articleTypes={boot.articleTypes} />;

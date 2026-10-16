@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Metrics page (`/api/success`): searches answered, reuse rate, review time, repeat problems, unowned and stale items; knowledge gaps for admins (`/api/gaps`), from a search log that keeps query text only for misses, redacted (`SEARCH_LOG_DAYS`)
+- Admin purge of an article or finding with a required reason and a purge log (`POST /api/purge/:id`, `/api/purges`); stored files are removed when nothing else uses them
+- Weekly digest email (`DIGEST_DAY`, `DIGEST_HOUR`)
+
 - Email invitations for local sign-in: one-time links (7 days) where the invitee chooses a password, optional project and role, managed on the Users page (`/api/invitations`)
 - First-run checklist on the home page, derived from what has happened (`/api/onboarding`)
 - New project page with components and a starter pack (overview, design doc, on-call runbook, and a linked API contract when there is a backend and a client)

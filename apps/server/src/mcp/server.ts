@@ -134,6 +134,7 @@ export function buildMcpServer(ctx: RequestContext): McpServer {
           tags: args.tags,
           updatedAfter: args.updated_after,
           limit: args.limit,
+          source: "mcp",
         }),
       ),
   );

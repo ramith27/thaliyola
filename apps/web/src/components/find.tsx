@@ -389,6 +389,7 @@ export function CommandPalette({ scopes, onClose }: { scopes: ScopeInfo[]; onClo
     const nav: Command[] = ([
       { id: "home", group: "Go to", label: "Home", text: "home dashboard", icon: "home", run: go(href("/")) },
       { id: "review", group: "Go to", label: "Review queue", text: "review queue proposals approve", icon: "review", run: go(href("/review")) },
+      { id: "metrics", group: "Go to", label: "Metrics", text: "metrics success reuse knowledge gaps", icon: "chart", run: go(href("/metrics")) },
       { id: "graph", group: "Go to", label: "Knowledge graph", text: "knowledge graph", icon: "graph", run: go(href("/graph")) },
       { id: "connect", group: "Go to", label: "Connect your tools", text: "connect claude mcp token", icon: "plug", run: go(href("/connect")) },
       { id: "account", group: "Go to", label: "Account and tokens", text: "account tokens password notifications", icon: "user", run: go(href("/account")) },
