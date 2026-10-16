@@ -18,6 +18,8 @@ import { Attachments } from "../components/assets";
 import { useApi } from "../hooks";
 import { RelationsPanel } from "./graph";
 import { WatchButton } from "../components/notifications";
+import { FavouriteButton, recordVisit, SectionLink, ShareButton } from "../components/find";
+import { I } from "../components/icons";
 import { href, navigate, type Route } from "../router";
 
 function Meta({ item }: { item: Article | Finding }) {
@@ -59,7 +61,13 @@ function Facts({ item, reload }: { item: Article | Finding; reload: () => void }
           )}
           {item.entities.length > 0 && (
             <p className="small">
-              <span className="muted">About:</span> {item.entities.map((e) => e.name).join(", ")}
+              <span className="muted">About:</span>{" "}
+              {item.entities.map((e, i) => (
+                <span key={`${e.kind}:${e.name}`}>
+                  {i > 0 && ", "}
+                  <a href={href(`/entity/${e.kind}/${e.name}`)}>{e.name}</a>
+                </span>
+              ))}
             </p>
           )}
           {item.tags.length > 0 && (
@@ -118,6 +126,10 @@ export function ArticlePage({ id, route }: { id: string; route: Route }) {
   const { data, error, reload } = useApi<Article>(`/articles/${id}`);
 
   useEffect(() => {
+    if (data) recordVisit({ kind: "article", id, title: data.title, link: href(`/article/${id}`) });
+  }, [data, id]);
+
+  useEffect(() => {
     if (!data || !section) return;
     const el = document.getElementById(`section-${slugify(section)}`);
     el?.scrollIntoView({ block: "start" });
@@ -142,13 +154,15 @@ export function ArticlePage({ id, route }: { id: string; route: Route }) {
             Edit
           </a>
           <a className="btn" href={href(`/history/${id}`)}>
-            History
+            <I name="history" size={16} /> History
           </a>
           <VerifyButton id={id} status={data.status} onDone={reload} />
           <ShareToLibrary id={id} scopeKind={data.scope.kind} status={data.status} publishedAs={publishedAs(data)} />
           <WatchButton id={id} />
+          <FavouriteButton id={id} />
+          <ShareButton title={data.title} />
         </div>
-        <SectionedMarkdown body={data.body_md} />
+        <SectionedMarkdown body={data.body_md} articleId={id} />
         <RelationsPanel id={id} />
       </article>
       <aside className="side">
@@ -179,14 +193,15 @@ function slugify(s: string) {
 }
 
 /** Renders markdown with an anchor before each ## section so search hits can jump to it. */
-function SectionedMarkdown({ body }: { body: string }) {
+function SectionedMarkdown({ body, articleId }: { body: string; articleId: string }) {
   const chunks = body.split(/\n(?=#{1,2}\s)/);
   return (
     <>
       {chunks.map((chunk, i) => {
         const heading = /^#{1,2}\s+(.+?)\s*#*\s*$/m.exec(chunk.split("\n")[0] ?? "")?.[1];
         return (
-          <div key={i} id={heading ? `section-${slugify(heading)}` : undefined}>
+          <div key={i} id={heading ? `section-${slugify(heading)}` : undefined} className={heading ? "section-wrap" : undefined}>
+            {heading && <SectionLink link={href(`/article/${articleId}`, { section: heading })} />}
             <Markdown text={chunk} />
           </div>
         );
@@ -282,6 +297,9 @@ function ArticleEditor({ article, onSaved }: { article: Article; onSaved: () => 
 export function FindingPage({ id, route }: { id: string; route: Route }) {
   const editing = route.path[2] === "edit";
   const { data, error, reload } = useApi<Finding>(`/findings/${id}`);
+  useEffect(() => {
+    if (data) recordVisit({ kind: "finding", id, title: data.title, link: href(`/finding/${id}`) });
+  }, [data, id]);
   if (error) return <ErrorBox error={error} />;
   if (!data) return <Loading />;
   if (editing) return <FindingEditor finding={data} onSaved={reload} />;
@@ -300,11 +318,13 @@ export function FindingPage({ id, route }: { id: string; route: Route }) {
             Edit
           </a>
           <a className="btn" href={href(`/history/${id}`)}>
-            History
+            <I name="history" size={16} /> History
           </a>
           <VerifyButton id={id} status={data.status} onDone={reload} />
           <ShareToLibrary id={id} scopeKind={data.scope.kind} status={data.status} publishedAs={publishedAs(data)} />
           <WatchButton id={id} />
+          <FavouriteButton id={id} />
+          <ShareButton title={data.title} />
         </div>
         <h2>Symptoms</h2>
         <Markdown text={data.symptoms} />

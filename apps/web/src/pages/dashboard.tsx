@@ -3,6 +3,7 @@ import { ChartCard, HBars, LineChart, StackedColumns, StatTile, StatusBar } from
 import { I } from "../components/icons";
 import { formatDate, itemHref, Loading, ScopeBadge, TypeBadge } from "../components/ui";
 import { useApi } from "../hooks";
+import { AskBox } from "../components/find";
 import { href } from "../router";
 import { GetStartedBanner } from "./connect";
 import { NewProjectForm } from "./settings";
@@ -50,6 +51,7 @@ export function Dashboard({ scopes, me }: { scopes: ScopeInfo[]; me: Me }) {
           </a>
         </div>
       </div>
+      <AskBox />
 
       {!data ? (
         <Loading />

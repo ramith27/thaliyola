@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Finding things: an answer card above search results (the best section or finding, quoted, with a confidence label), an "Ask Cairn" box on the home page, results as you type in the search box (`/api/search?prefix=true` matches the last word as a prefix), and a ⌘K command palette for search, entities, navigation, favourites, recent items and theme
+- Favourites (per person, `GET /api/favourites`, `PUT`/`DELETE /api/favourites/:id`) and recently viewed items in the sidebar
+- Entity pages (`/api/entities?q=`, `/api/entities/:kind/:name`) linked from each item's "About" list
+- Copy a link to an article section; Share button on articles and findings
+
 - Review workflow: edit a proposal before approving it, comment threads on proposals (participants are notified), assign a proposal to a reviewer ("Assigned to me" filter), bulk approve, and keyboard shortcuts in the queue and on proposals
 - Version history: every published version of an article or finding is stored; the History page diffs versions and restores an old one as a new version (a proposal for non-owners)
 - Notifications: in-app bell, email (SMTP) with per-type preferences and a one-click approve link behind a confirmation page, optional Slack webhook; watch articles, findings and projects; reviewers, authors, consuming projects and owners of stale items are told what concerns them

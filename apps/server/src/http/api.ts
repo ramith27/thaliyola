@@ -6,6 +6,7 @@ import { ASSET_MIME_TYPES, deleteAsset, getAsset, uploadAsset } from "../core/as
 import { audit } from "../core/audit.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError, type Actor, type RequestContext } from "../core/context.js";
 import { editArticle, editFinding, newArticle, newFinding } from "../core/direct.js";
+import { ask, getEntity, listFavourites, searchEntities, setFavourite } from "../core/discover.js";
 import { needsAttention } from "../core/freshness.js";
 import { insights, knowledgeGraph } from "../core/insights.js";
 import { listSuggestions } from "../core/suggestions.js";
@@ -166,6 +167,24 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
     handle("browse", (ctx, req) => browseKb(ctx, String(req.params.slug), z.string().optional().parse(req.query.path))),
   );
   router.get(
+    "/ask",
+    handle("ask", (ctx, req) => {
+      const q = z.object({ q: z.string().min(1).max(500), project: z.string().optional() }).parse(req.query);
+      return ask(ctx, q.q, { project: q.project });
+    }),
+  );
+  router.get(
+    "/entities",
+    handle("search_entities", async (ctx, req) => {
+      const q = z.object({ q: z.string().max(200).default(""), limit: z.coerce.number().int().min(1).max(50).optional() }).parse(req.query);
+      return { entities: await searchEntities(ctx, q.q, q.limit) };
+    }),
+  );
+  router.get("/entities/:kind/:name", handle("get_entity", (ctx, req) => getEntity(ctx, String(req.params.kind), String(req.params.name))));
+  router.get("/favourites", handle("list_favourites", async (ctx) => ({ favourites: await listFavourites(ctx) })));
+  router.put("/favourites/:id", handle("add_favourite", (ctx, req) => setFavourite(ctx, uuid.parse(req.params.id), true)));
+  router.delete("/favourites/:id", handle("remove_favourite", (ctx, req) => setFavourite(ctx, uuid.parse(req.params.id), false)));
+  router.get(
     "/search",
     handle("search", (ctx, req) => {
       const q = z
@@ -176,9 +195,18 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
           types: list,
           statuses: list.pipe(z.array(z.enum(STATUSES)).optional()),
           limit: z.coerce.number().int().min(1).max(25).optional(),
+          prefix: z.enum(["true", "false"]).optional(),
         })
         .parse(req.query);
-      return searchKnowledge(ctx, { query: q.q, scope: q.scope, project: q.project, types: q.types, statuses: q.statuses, limit: q.limit ?? 20 });
+      return searchKnowledge(ctx, {
+        query: q.q,
+        scope: q.scope,
+        project: q.project,
+        types: q.types,
+        statuses: q.statuses,
+        limit: q.limit ?? 20,
+        prefix: q.prefix === "true",
+      });
     }),
   );
   router.get(

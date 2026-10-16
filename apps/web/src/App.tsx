@@ -4,6 +4,7 @@ import { AccountPage, ForcedPasswordChange, LoginPage, UsersPage } from "./pages
 import { ScopeSettingsPage } from "./pages/settings";
 import { ConnectPage } from "./pages/connect";
 import { Dashboard } from "./pages/dashboard";
+import { EntityPage } from "./pages/entity";
 import { GraphPage } from "./pages/graph";
 import { HistoryPage } from "./pages/history";
 import { Layout } from "./components/Layout";
@@ -111,6 +112,9 @@ export function App() {
       break;
     case "graph":
       page = <GraphPage route={route} scopes={boot.scopes} />;
+      break;
+    case "entity":
+      page = <EntityPage kind={id!} name={route.path[2] ?? ""} />;
       break;
     case "history":
       page = <HistoryPage id={id!} />;

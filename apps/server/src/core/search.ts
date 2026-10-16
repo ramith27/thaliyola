@@ -15,6 +15,8 @@ export interface SearchInput {
   tags?: string[];
   updatedAfter?: string;
   limit?: number;
+  /** Search as you type: the last word also matches as a prefix ("conv" finds "conversion"). */
+  prefix?: boolean;
 }
 
 export interface SearchHit {
@@ -32,6 +34,13 @@ export interface SearchHit {
   score: number;
   match: "keyword" | "semantic" | "keyword+semantic";
   warning?: string;
+}
+
+/** The last word as a tsquery prefix term (`conv:*`), or null. Only letters, digits and underscores survive. */
+function prefixTerm(query: string, enabled?: boolean): string | null {
+  if (!enabled) return null;
+  const last = query.toLowerCase().split(/\s+/).at(-1)?.replace(/[^\p{L}\p{N}_]/gu, "") ?? "";
+  return last.length >= 2 ? `${last}:*` : null;
 }
 
 /** Hidden unless asked for: drafts are unreviewed, superseded/rejected are history. */
@@ -120,7 +129,7 @@ export async function searchKnowledge(ctx: RequestContext, input: SearchInput): 
 
   const sql = `
     WITH q AS (
-      SELECT to_tsquery('simple', coalesce(string_agg(t, ' | '), '')) AS any_term,
+      SELECT to_tsquery('simple', concat_ws(' | ', nullif(string_agg(t, ' | '), ''), ${p(prefixTerm(query, input.prefix))}::text)) AS any_term,
              websearch_to_tsquery('english', $1) AS all_terms
         FROM (SELECT regexp_replace(l, '[^[:alnum:]_]', '', 'g') AS t
                 FROM unnest(tsvector_to_array(to_tsvector('english', $1))) AS l) terms

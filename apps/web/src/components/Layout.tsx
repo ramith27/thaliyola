@@ -4,25 +4,28 @@ import { useApi } from "../hooks";
 import { href, navigate, type Route } from "../router";
 import { getTheme, setTheme, type Theme } from "../theme";
 import { I, type IconName } from "./icons";
+import { CommandPalette, favouriteLink, InstantSearch, useFavourites, useRecent } from "./find";
 import { NotificationBell } from "./notifications";
 
 export function Layout({ me, scopes, route, children }: { me: Me; scopes: ScopeInfo[]; route: Route; children: ReactNode }) {
-  const [q, setQ] = useState(route.path[0] === "search" ? (route.query.get("q") ?? "") : "");
+  const q = route.path[0] === "search" ? (route.query.get("q") ?? "") : "";
   const [menuOpen, setMenuOpen] = useState(false);
+  const [palette, setPalette] = useState(false);
   const pending = useApi<{ revisions: unknown[] }>("/revisions?state=pending&limit=200");
-  const searchRef = useRef<HTMLInputElement>(null);
+  const favourites = useFavourites();
+  const recent = useRecent();
 
   useEffect(() => {
     setMenuOpen(false);
     pending.reload();
   }, [route, pending.reload]);
 
-  // ⌘K / Ctrl+K focuses search.
+  // ⌘K / Ctrl+K opens the command palette.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        searchRef.current?.focus();
+        setPalette((p) => !p);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -34,7 +37,8 @@ export function Layout({ me, scopes, route, children }: { me: Me; scopes: ScopeI
   const shared = scopes.filter((s) => s.kind !== "project");
   const projects = scopes.filter((s) => s.kind === "project");
   const pendingCount = pending.data?.revisions.length ?? 0;
-  const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
+  const favIds = new Set(favourites.map((f) => f.id));
+  const recentOnly = recent.filter((r) => !favIds.has(r.id)).slice(0, 5);
 
   return (
     <div className="app">
@@ -49,6 +53,17 @@ export function Layout({ me, scopes, route, children }: { me: Me; scopes: ScopeI
           <NavLink to="/review" icon="review" label="Review" active={section === "review"} count={pendingCount} />
           <NavLink to="/connect" icon="plug" label="Connect" active={section === "connect"} />
         </nav>
+        {favourites.length > 0 && (
+          <div className="nav-group">
+            <div className="nav-title">Favourites</div>
+            {favourites.map((f) => (
+              <a key={f.id} className="nav-link nav-link-sm" href={favouriteLink(f)} title={f.title}>
+                <I name="star" size={16} />
+                <span>{f.title}</span>
+              </a>
+            ))}
+          </div>
+        )}
         <div className="nav-group">
           <div className="nav-title">Shared</div>
           {shared.map((s) => (
@@ -62,6 +77,17 @@ export function Layout({ me, scopes, route, children }: { me: Me; scopes: ScopeI
           ))}
           {!projects.length && <div className="muted small nav-empty">No projects yet</div>}
         </div>
+        {recentOnly.length > 0 && (
+          <div className="nav-group">
+            <div className="nav-title">Recent</div>
+            {recentOnly.map((r) => (
+              <a key={r.id} className="nav-link nav-link-sm" href={r.link} title={r.title}>
+                <I name="clock" size={16} />
+                <span>{r.title}</span>
+              </a>
+            ))}
+          </div>
+        )}
         <div className="sidebar-foot">
           <a className="btn btn-block" href={href("/new/article", { scope: activeScope })}>
             <I name="plus" size={16} /> New article
@@ -75,18 +101,7 @@ export function Layout({ me, scopes, route, children }: { me: Me; scopes: ScopeI
           <button className="icon-btn menu-btn" aria-label="Menu" onClick={() => setMenuOpen((o) => !o)}>
             <I name="menu" />
           </button>
-          <form
-            className="search-form"
-            role="search"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (q.trim()) navigate("/search", { q: q.trim() });
-            }}
-          >
-            <I name="search" size={16} />
-            <input ref={searchRef} type="search" placeholder="Search knowledge…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" />
-            <kbd>{isMac ? "⌘K" : "Ctrl K"}</kbd>
-          </form>
+          <InstantSearch key={route.path.join("/") + q} initial={q} onOpenPalette={() => setPalette(true)} />
           <div className="topbar-right">
             <NotificationBell />
             <UserMenu me={me} />
@@ -94,6 +109,7 @@ export function Layout({ me, scopes, route, children }: { me: Me; scopes: ScopeI
         </header>
         <main className="content">{children}</main>
       </div>
+      {palette && <CommandPalette scopes={scopes} onClose={() => setPalette(false)} />}
     </div>
   );
 }

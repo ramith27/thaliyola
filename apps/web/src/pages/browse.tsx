@@ -1,5 +1,6 @@
 import type { Folder, Me, Notice as NoticeT, ScopeInfo, SearchHit } from "../api";
 import { WatchButton } from "../components/notifications";
+import { AnswerCard, FavouriteButton } from "../components/find";
 import { api } from "../api";
 import { ErrorBox, formatDate, itemHref, Loading, Notice, ScopeBadge, Snippet, StatusBadge, TypeBadge } from "../components/ui";
 import { useApi } from "../hooks";
@@ -32,6 +33,7 @@ export function SearchPage({ route }: { route: Route }) {
         </a>
       </div>
       <ErrorBox error={error} />
+      {q && <AnswerCard q={q} />}
       {loading && <Loading />}
       {data && (
         <>
@@ -99,6 +101,7 @@ export function ScopePage({ slug, scopes, me }: { slug: string; scopes: ScopeInf
           New finding
         </a>
         {scope && <WatchButton id={scope.id} />}
+        {scope && <FavouriteButton id={scope.id} />}
         {me.admin && (
           <a className="btn" href={href(`/scope/${slug}/settings`)}>
             Settings
@@ -218,6 +221,7 @@ export function ProjectPage({ slug, route, me }: { slug: string; route: Route; m
           Graph
         </a>
         <WatchButton id={data.project.id} />
+        <FavouriteButton id={data.project.id} />
         {me.admin && (
           <a className="btn" href={href(`/scope/${slug}/settings`)}>
             Settings

@@ -120,7 +120,11 @@ The server also serves a web UI at `/` for people:
 
 - **Browse:** team, library and project scopes, each with a folder tree.
 - **Project view:** pick a component (backend, frontend, ...) to see the contracts it provides and consumes, upstream changes it still has to handle, the shared library items it uses, recent decisions and known issues.
-- **Search:** results are highlighted, and a hit jumps to the matching section.
+- **Search:** results are highlighted, and a hit jumps to the matching section. The search box shows the best matches as you type (the last word also matches as a prefix), and the results page opens with an **answer card**: the single best section or finding, quoted from the knowledge base (never generated), marked "Best answer" when both keywords and meaning match and "Closest match" otherwise. The home page has an "Ask Cairn" box for questions.
+- **Command palette:** ⌘K / Ctrl+K searches knowledge and entities, asks, and jumps to pages, scopes, favourites and recent items, or switches theme. `/` focuses the search box.
+- **Favourites and recent:** star any article, finding or project to pin it to the sidebar (stored per person on the server); the last items you opened are listed under Recent (stored in your browser).
+- **Entity pages:** every system, table, metric or service tagged on an item has a page listing what mentions it and what it's often mentioned with (`/#/entity/metric/Conversion rate`; aliases resolve).
+- **Links:** copy a link to any article section from the icon beside its heading, or share an item with the Share button (the native share sheet on phones).
 - **Files and links:** attach screenshots and files, add Figma/PR/Sentry links, and share project items to the library.
 - **Connect:** after signing in, people see their access and roles. They can create a token in place and copy ready-made setup for Claude Code (global or per repository, with the project and component chosen from lists), claude.ai and other MCP clients. The page also lists the workflow prompts and all tools. A home-page banner points new users there until they connect.
 - **Read and edit:** articles (markdown with preview) and findings. Edits by scope owners and admins publish immediately; everyone else's edits become proposals.

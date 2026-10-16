@@ -171,6 +171,39 @@ export const icons = {
       <path d="M8 16v-4M12 16V8M16 16v-6" />
     </Icon>
   ),
+  clock: (p: SVGProps<SVGSVGElement>) => (
+    <Icon {...p}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
+    </Icon>
+  ),
+  share: (p: SVGProps<SVGSVGElement>) => (
+    <Icon {...p}>
+      <path d="M12 3v12M7.5 7.5 12 3l4.5 4.5" />
+      <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
+    </Icon>
+  ),
+  sparkle: (p: SVGProps<SVGSVGElement>) => (
+    <Icon {...p}>
+      <path d="M12 3.5 13.8 10.2 20.5 12l-6.7 1.8L12 20.5l-1.8-6.7L3.5 12l6.7-1.8L12 3.5Z" />
+    </Icon>
+  ),
+  hash: (p: SVGProps<SVGSVGElement>) => (
+    <Icon {...p}>
+      <path d="M9 4 7 20M17 4l-2 16M4.5 9h16M3.5 15h16" />
+    </Icon>
+  ),
+  arrow: (p: SVGProps<SVGSVGElement>) => (
+    <Icon {...p}>
+      <path d="M5 12h14M13 6l6 6-6 6" />
+    </Icon>
+  ),
+  history: (p: SVGProps<SVGSVGElement>) => (
+    <Icon {...p}>
+      <path d="M3.5 12a8.5 8.5 0 1 0 2.5-6" />
+      <path d="M3.5 4v4h4M12 8v4l3 2" />
+    </Icon>
+  ),
 };
 
 export type IconName = keyof typeof icons;
