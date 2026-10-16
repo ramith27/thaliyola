@@ -5,6 +5,7 @@ import { ScopeSettingsPage } from "./pages/settings";
 import { ConnectPage } from "./pages/connect";
 import { Dashboard } from "./pages/dashboard";
 import { GraphPage } from "./pages/graph";
+import { HistoryPage } from "./pages/history";
 import { Layout } from "./components/Layout";
 import { ErrorBox, Loading } from "./components/ui";
 import { ProjectPage, ScopePage, SearchPage } from "./pages/browse";
@@ -110,6 +111,9 @@ export function App() {
       break;
     case "graph":
       page = <GraphPage route={route} scopes={boot.scopes} />;
+      break;
+    case "history":
+      page = <HistoryPage id={id!} />;
       break;
     case "connect":
       page = <ConnectPage />;

@@ -141,6 +141,9 @@ export function ArticlePage({ id, route }: { id: string; route: Route }) {
           <a className="btn" href={href(`/article/${id}/edit`)}>
             Edit
           </a>
+          <a className="btn" href={href(`/history/${id}`)}>
+            History
+          </a>
           <VerifyButton id={id} status={data.status} onDone={reload} />
           <ShareToLibrary id={id} scopeKind={data.scope.kind} status={data.status} publishedAs={publishedAs(data)} />
           <WatchButton id={id} />
@@ -295,6 +298,9 @@ export function FindingPage({ id, route }: { id: string; route: Route }) {
         <div className="actions">
           <a className="btn" href={href(`/finding/${id}/edit`)}>
             Edit
+          </a>
+          <a className="btn" href={href(`/history/${id}`)}>
+            History
           </a>
           <VerifyButton id={id} status={data.status} onDone={reload} />
           <ShareToLibrary id={id} scopeKind={data.scope.kind} status={data.status} publishedAs={publishedAs(data)} />

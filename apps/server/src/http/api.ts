@@ -17,6 +17,7 @@ import { approveRevision, getRevision, listReviewQueue, rejectRevision } from ".
 import { searchKnowledge } from "../core/search.js";
 import { addSourceLinkTo, LINK_KINDS, linkEntries, promoteFinding, shareToLibrary, verifyEntry } from "../core/writes.js";
 import { ARTICLE_TEMPLATES, templateFor } from "../core/templates.js";
+import { addComment, bulkApprove, getVersion, listComments, listReviewers, listVersions, restoreVersion, setAssignee } from "../core/workflow.js";
 import type { Embedder } from "../core/embeddings.js";
 import type { Db } from "../db/pool.js";
 import { mcpCatalog } from "../mcp/catalog.js";
@@ -374,14 +375,53 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
           scope: z.string().optional(),
           state: z.enum(["pending", "approved", "rejected"]).optional(),
           mine: z.enum(["true", "false"]).optional(),
+          assigned: z.enum(["true", "false"]).optional(),
           limit: z.coerce.number().int().min(1).max(200).optional(),
         })
         .parse(req.query);
-      return { revisions: await listReviewQueue(ctx, { ...q, mine: q.mine === "true" }) };
+      return { revisions: await listReviewQueue(ctx, { ...q, mine: q.mine === "true", assigned: q.assigned === "true" }) };
     }),
   );
   router.get("/revisions/:id", handle("get_revision", (ctx, req) => getRevision(ctx, uuid.parse(req.params.id))));
-  router.post("/revisions/:id/approve", handle("approve", (ctx, req) => approveRevision(ctx, uuid.parse(req.params.id))));
+  router.post(
+    "/revisions/bulk-approve",
+    handle("bulk_approve", (ctx, req) => bulkApprove(ctx, z.object({ ids: z.array(uuid).min(1).max(100) }).parse(req.body).ids)),
+  );
+  router.post(
+    "/revisions/:id/approve",
+    handle("approve", (ctx, req) => {
+      // Optional reviewer edits (edit-then-approve).
+      const text = z.string().max(200_000).optional();
+      const edits = z
+        .object({
+          title: z.string().max(300).optional(),
+          body_md: text,
+          patch: z.object({ title: z.string().max(300).optional(), symptoms: text, root_cause: text, fix: text }).optional(),
+        })
+        .optional()
+        .parse(req.body && Object.keys(req.body).length ? req.body.edits : undefined);
+      return approveRevision(ctx, uuid.parse(req.params.id), edits);
+    }),
+  );
+  router.get("/revisions/:id/comments", handle("list_comments", async (ctx, req) => ({ comments: await listComments(ctx, uuid.parse(req.params.id)) })));
+  router.post(
+    "/revisions/:id/comments",
+    handle("add_comment", (ctx, req) => addComment(ctx, uuid.parse(req.params.id), z.object({ body: z.string().max(5000) }).parse(req.body).body)),
+  );
+  router.get("/revisions/:id/reviewers", handle("list_reviewers", async (ctx, req) => ({ reviewers: await listReviewers(ctx, uuid.parse(req.params.id)) })));
+  router.put(
+    "/revisions/:id/assignee",
+    handle("assign_revision", (ctx, req) => setAssignee(ctx, uuid.parse(req.params.id), z.object({ user_id: uuid.nullable() }).parse(req.body).user_id)),
+  );
+  router.get("/items/:id/versions", handle("list_versions", (ctx, req) => listVersions(ctx, uuid.parse(req.params.id))));
+  router.get(
+    "/items/:id/versions/:v",
+    handle("get_version", (ctx, req) => getVersion(ctx, uuid.parse(req.params.id), z.coerce.number().int().min(1).parse(req.params.v))),
+  );
+  router.post(
+    "/items/:id/restore",
+    handle("restore_version", (ctx, req) => restoreVersion(ctx, uuid.parse(req.params.id), z.object({ version: z.number().int().min(1) }).parse(req.body).version)),
+  );
   router.post(
     "/revisions/:id/reject",
     handle("reject", (ctx, req) => rejectRevision(ctx, uuid.parse(req.params.id), z.object({ reason: z.string() }).parse(req.body).reason)),

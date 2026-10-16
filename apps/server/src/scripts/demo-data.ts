@@ -109,5 +109,13 @@ export async function seedDemo(db: Queryable) {
     body: `## Context\nMerchants sign up and verify their payout details.\n\n## Design\nThree-step wizard with bank account verification.`,
   });
 
+  // History starts at the seeded versions.
+  await db.query(
+    `INSERT INTO item_versions (target_kind, target_id, version, title, content, summary, author_id)
+     SELECT 'article', id, version, title, jsonb_build_object('body_md', body_md), 'Initial version', created_by FROM articles WHERE status <> 'draft'
+     UNION ALL
+     SELECT 'finding', id, version, title, jsonb_build_object('symptoms', symptoms, 'root_cause', root_cause, 'fix', fix, 'tags', tags), 'Initial version', author_id FROM findings WHERE status <> 'draft'
+     ON CONFLICT (target_id, version) DO NOTHING`,
+  );
   return { team, library, project, other, backend, frontend, cvr, runbook, rca, dataTable, tokens, webhookPattern, overview, contract, screen, decision, knownIssue, draft, otherDoc };
 }

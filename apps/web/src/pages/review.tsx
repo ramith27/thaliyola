@@ -1,54 +1,146 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, type RevisionSummary } from "../api";
 import { Badge, Diff, ErrorBox, formatDate, Loading, Markdown, Notice, ScopeBadge, StatusBadge, TypeBadge } from "../components/ui";
-import { useApi } from "../hooks";
+import { useApi, useShortcuts } from "../hooks";
 import { href, navigate, type Route } from "../router";
 
 const OP_TEXT: Record<string, string> = { create: "new", update: "edit", promote: "promote", verify: "retire", share: "share" };
 
 export function ReviewQueuePage({ route }: { route: Route }) {
   if (route.query.get("tab") === "suggestions") return <SuggestionsPage />;
+  return <Queue route={route} />;
+}
+
+function Queue({ route }: { route: Route }) {
   const state = route.query.get("state") ?? "pending";
   const mine = route.query.get("mine") === "1";
-  const { data, error } = useApi<{ revisions: RevisionSummary[] }>(`/revisions?state=${state}${mine ? "&mine=true" : ""}`);
+  const assigned = route.query.get("assigned") === "1";
+  const { data, error, reload } = useApi<{ revisions: RevisionSummary[] }>(
+    `/revisions?state=${state}${mine ? "&mine=true" : ""}${assigned ? "&assigned=true" : ""}`,
+  );
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [cursor, setCursor] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ approved: number; failed: { id: string; error?: string }[] } | null>(null);
+  const [actionError, setActionError] = useState<Error | null>(null);
+  const rows = data?.revisions ?? [];
+  const pending = state === "pending";
+  const listRef = useRef<HTMLUListElement>(null);
+
+  const toggle = (id: string) =>
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const keys = useMemo(
+    () => ({
+      j: () => setCursor((c) => Math.min(c + 1, rows.length - 1)),
+      k: () => setCursor((c) => Math.max(c - 1, 0)),
+      x: () => pending && rows[cursor] && toggle(rows[cursor]!.id),
+      o: () => rows[cursor] && navigate(`/review/${rows[cursor]!.id}`),
+      Enter: () => rows[cursor] && navigate(`/review/${rows[cursor]!.id}`),
+    }),
+    [rows, cursor, pending],
+  );
+  useShortcuts(keys);
+  useEffect(() => {
+    listRef.current?.querySelector<HTMLElement>(`[data-row="${cursor}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [cursor]);
+
+  async function approveSelected() {
+    setBusy(true);
+    setActionError(null);
+    try {
+      const out = await api<{ approved: number; results: { id: string; ok: boolean; error?: string }[] }>("/revisions/bulk-approve", {
+        method: "POST",
+        body: { ids: [...selected] },
+      });
+      setResult({ approved: out.approved, failed: out.results.filter((r) => !r.ok) });
+      setSelected(new Set());
+      reload();
+    } catch (e) {
+      setActionError(e as Error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const link = (q: Record<string, string | undefined>) => href("/review", { state, mine: mine ? "1" : undefined, assigned: assigned ? "1" : undefined, ...q });
+  const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
+
   return (
     <div className="page">
       <h1>Review</h1>
       <p className="lead">Agent and teammate proposals. Scope owners and admins approve them.</p>
       <div className="filters">
         {["pending", "approved", "rejected"].map((s) => (
-          <a key={s} className={`chip ${state === s ? "active" : ""}`} href={href("/review", { state: s, mine: mine ? "1" : undefined })}>
+          <a key={s} className={`chip ${state === s ? "active" : ""}`} href={link({ state: s })}>
             {s}
           </a>
         ))}
-        <a className={`chip ${mine ? "active" : ""}`} href={href("/review", { state, mine: mine ? undefined : "1" })}>
+        <a className={`chip ${mine ? "active" : ""}`} href={link({ mine: mine ? undefined : "1" })}>
           Mine only
+        </a>
+        <a className={`chip ${assigned ? "active" : ""}`} href={link({ assigned: assigned ? undefined : "1" })}>
+          Assigned to me
         </a>
         <a className="chip" href={href("/review", { tab: "suggestions" })}>
           Suggestions
         </a>
       </div>
-      <ErrorBox error={error} />
+      <ErrorBox error={error ?? actionError} />
+      {result && (
+        <Notice kind={result.failed.length ? "warn" : "ok"}>
+          Approved {result.approved}.
+          {result.failed.map((f) => (
+            <span key={f.id}>
+              {" "}
+              <a href={href(`/review/${f.id}`)}>One could not be approved</a>: {f.error}.
+            </span>
+          ))}
+        </Notice>
+      )}
+      {pending && rows.length > 0 && (
+        <div className="bulk-bar">
+          <label className="inline">
+            <input type="checkbox" checked={allSelected} onChange={() => setSelected(allSelected ? new Set() : new Set(rows.map((r) => r.id)))} /> Select all
+          </label>
+          <button className="btn btn-primary btn-small" disabled={busy || selected.size === 0} onClick={approveSelected}>
+            Approve selected{selected.size ? ` (${selected.size})` : ""}
+          </button>
+          <span className="muted small shortcut-hint">
+            <kbd>j</kbd> <kbd>k</kbd> move · <kbd>x</kbd> select · <kbd>o</kbd> open
+          </span>
+        </div>
+      )}
       {!data ? (
         !error && <Loading />
-      ) : data.revisions.length === 0 ? (
-        <p className="muted">Nothing {state}.</p>
+      ) : rows.length === 0 ? (
+        <p className="muted">Nothing {state}{assigned ? " assigned to you" : ""}.</p>
       ) : (
-        <ul className="hits">
-          {data.revisions.map((r) => (
-            <li key={r.id} className="hit">
-              <div className="hit-head">
-                <a href={href(`/review/${r.id}`)}>{r.summary || r.target_title}</a>
-              </div>
-              <div className="badges">
-                <Badge kind="op">{OP_TEXT[r.op] ?? r.op}</Badge>
-                <TypeBadge type={r.target_type} />
-                <ScopeBadge scope={r.scope} />
-                {r.redactions.length > 0 && <Badge kind="possibly_stale">redacted</Badge>}
-                <span className="muted small">
-                  {r.author} · {formatDate(r.created_at)}
-                  {r.reviewer ? ` · ${r.state} by ${r.reviewer}` : ""}
-                </span>
+        <ul className="hits" ref={listRef}>
+          {rows.map((r, i) => (
+            <li key={r.id} data-row={i} className={`hit ${pending ? "hit-select" : ""} ${i === cursor ? "hit-cursor" : ""}`} onMouseEnter={() => setCursor(i)}>
+              {pending && <input type="checkbox" aria-label={`Select ${r.summary}`} checked={selected.has(r.id)} onChange={() => toggle(r.id)} />}
+              <div>
+                <div className="hit-head">
+                  <a href={href(`/review/${r.id}`)}>{r.summary || r.target_title}</a>
+                </div>
+                <div className="badges">
+                  <Badge kind="op">{OP_TEXT[r.op] ?? r.op}</Badge>
+                  <TypeBadge type={r.target_type} />
+                  <ScopeBadge scope={r.scope} />
+                  {r.redactions.length > 0 && <Badge kind="possibly_stale">redacted</Badge>}
+                  <span className="muted small">
+                    {r.author} · {formatDate(r.created_at)}
+                    {r.assignee ? ` · assigned to ${r.assignee}` : ""}
+                    {r.comments ? ` · ${r.comments} comment${r.comments > 1 ? "s" : ""}` : ""}
+                    {r.reviewer ? ` · ${r.state} by ${r.reviewer}` : ""}
+                  </span>
+                </div>
               </div>
             </li>
           ))}
@@ -66,6 +158,7 @@ interface RevisionDetail {
   stale: boolean;
   target_kind: "article" | "finding";
   target_id: string;
+  assignee_id: string | null;
   payload: Record<string, any>;
   current: Record<string, any>;
   proposed: Record<string, any>;
@@ -78,22 +171,62 @@ const FINDING_FIELDS = [
   ["fix", "Fix"],
 ] as const;
 
+type Edits = { title?: string; body_md?: string; patch?: Record<string, string> };
+
+/** What the reviewer can edit, pre-filled from the proposal; null if this kind of proposal can't be edited. */
+function editableFields(d: RevisionDetail): { fields: { key: string; label: string; value: string; long: boolean }[] } | null {
+  const { op, target_kind, current, payload } = d;
+  if (op === "create" && target_kind === "article") {
+    return { fields: [{ key: "title", label: "Title", value: current.title, long: false }, { key: "body_md", label: "Body", value: current.body_md, long: true }] };
+  }
+  if (op === "create" && target_kind === "finding") {
+    return { fields: FINDING_FIELDS.map(([k, label]) => ({ key: `patch.${k}`, label, value: current[k] ?? "", long: k !== "title" })) };
+  }
+  if ((op === "update" || op === "promote") && target_kind === "article") {
+    return {
+      fields: [
+        ...(payload.title ? [{ key: "title", label: "Title", value: payload.title as string, long: false }] : []),
+        { key: "body_md", label: payload.section ? `New text for “${payload.section}”` : "New body", value: payload.text ?? "", long: true },
+      ],
+    };
+  }
+  if (op === "update" && target_kind === "finding") {
+    const patch = (payload.patch ?? {}) as Record<string, unknown>;
+    return {
+      fields: FINDING_FIELDS.filter(([k]) => typeof patch[k] === "string").map(([k, label]) => ({ key: `patch.${k}`, label, value: patch[k] as string, long: k !== "title" })),
+    };
+  }
+  return null;
+}
+
 export function RevisionPage({ id }: { id: string }) {
   const { data, error, reload } = useApi<RevisionDetail>(`/revisions/${id}`);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<Record<string, string> | null>(null);
   const [actionError, setActionError] = useState<Error | null>(null);
+  const reasonRef = useRef<HTMLInputElement>(null);
 
-  if (error) return <ErrorBox error={error} />;
-  if (!data) return <Loading />;
-
-  const itemLink = href(`/${data.target_kind}/${data.target_id}`);
+  const editable = data ? editableFields(data) : null;
+  const canAct = data?.state === "pending" && !data.stale;
 
   async function decide(action: "approve" | "reject") {
     setBusy(true);
     setActionError(null);
     try {
-      await api(`/revisions/${id}/${action}`, { method: "POST", body: action === "reject" ? { reason } : {} });
+      let body: unknown = action === "reject" ? { reason } : {};
+      if (action === "approve" && editing && editable) {
+        const edits: Edits = {};
+        for (const f of editable.fields) {
+          const v = editing[f.key];
+          if (v === undefined || v === f.value) continue;
+          if (f.key.startsWith("patch.")) edits.patch = { ...edits.patch, [f.key.slice(6)]: v };
+          else (edits as Record<string, string>)[f.key] = v;
+        }
+        if (Object.keys(edits).length) body = { edits };
+      }
+      await api(`/revisions/${id}/${action}`, { method: "POST", body });
+      setEditing(null);
       reload();
     } catch (e) {
       setActionError(e as Error);
@@ -101,6 +234,33 @@ export function RevisionPage({ id }: { id: string }) {
       setBusy(false);
     }
   }
+
+  async function next() {
+    const { revisions } = await api<{ revisions: { id: string }[] }>("/revisions?state=pending&limit=200");
+    const after = revisions.findIndex((r) => r.id === id);
+    const target = revisions[after + 1] ?? revisions.find((r) => r.id !== id);
+    navigate(target ? `/review/${target.id}` : "/review");
+  }
+
+  const startEdit = () => editable && setEditing(Object.fromEntries(editable.fields.map((f) => [f.key, f.value])));
+
+  const keys = useMemo(
+    () => ({
+      a: () => canAct && !busy && decide("approve"),
+      r: () => data?.state === "pending" && reasonRef.current?.focus(),
+      e: () => canAct && !editing && startEdit(),
+      n: () => void next(),
+      u: () => navigate("/review"),
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [canAct, busy, data, editing, id],
+  );
+  useShortcuts(keys);
+
+  if (error) return <ErrorBox error={error} />;
+  if (!data) return <Loading />;
+
+  const itemLink = href(`/${data.target_kind}/${data.target_id}`);
 
   return (
     <div className="page">
@@ -110,6 +270,7 @@ export function RevisionPage({ id }: { id: string }) {
       <h1>{data.summary}</h1>
       <div className="badges">
         <StatusBadge status={data.state} />
+        {data.payload.reviewer_edited && <Badge kind="op">edited by reviewer</Badge>}
         <TypeBadge type={data.current.type} />
         <ScopeBadge scope={data.current.scope} />
         <a href={itemLink} className="small">
@@ -119,31 +280,145 @@ export function RevisionPage({ id }: { id: string }) {
       {data.stale && data.state === "pending" && (
         <Notice kind="warn">The {data.target_kind} changed after this was proposed. Approving is refused; reject it and ask for a new proposal.</Notice>
       )}
+      {data.state === "pending" && <AssigneePicker id={id} assigneeId={data.assignee_id} onChange={reload} />}
 
-      <ProposedChange data={data} />
+      {editing && editable ? (
+        <section className="editor">
+          <h2>Edit before approving</h2>
+          <p className="muted small">Your changes are applied with the proposal and noted in its history. The author is told it was approved.</p>
+          {editable.fields.map((f) => (
+            <label key={f.key}>
+              {f.label}
+              {f.long ? (
+                <textarea className="body-input" rows={f.key === "body_md" ? 16 : 5} value={editing[f.key] ?? ""} onChange={(e) => setEditing({ ...editing, [f.key]: e.target.value })} />
+              ) : (
+                <input value={editing[f.key] ?? ""} onChange={(e) => setEditing({ ...editing, [f.key]: e.target.value })} />
+              )}
+            </label>
+          ))}
+        </section>
+      ) : (
+        <ProposedChange data={data} />
+      )}
 
       {data.state === "pending" && (
         <section className="decide">
           <ErrorBox error={actionError instanceof ApiError && actionError.status === 403 ? new Error(`You can't approve here: ${actionError.message}`) : actionError} />
           <div className="actions">
             <button className="btn btn-primary" disabled={busy || data.stale} onClick={() => decide("approve")}>
-              Approve
+              {editing ? "Approve with my edits" : "Approve"}
             </button>
-            <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason for rejecting" aria-label="Reason for rejecting" />
+            {editable && !data.stale && (
+              <button className="btn" disabled={busy} onClick={() => (editing ? setEditing(null) : startEdit())}>
+                {editing ? "Discard edits" : "Edit before approving"}
+              </button>
+            )}
+            <input ref={reasonRef} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason for rejecting" aria-label="Reason for rejecting" />
             <button className="btn btn-danger" disabled={busy || !reason.trim()} onClick={() => decide("reject")}>
               Reject
             </button>
           </div>
+          <p className="muted small shortcut-hint">
+            <kbd>a</kbd> approve · <kbd>e</kbd> edit · <kbd>r</kbd> reject reason · <kbd>n</kbd> next · <kbd>u</kbd> back to queue
+          </p>
         </section>
       )}
       {data.state !== "pending" && (
-        <p>
+        <p className="actions">
           <button className="btn" onClick={() => navigate("/review")}>
             Back to the queue
           </button>
+          <button className="btn" onClick={() => void next()}>
+            Next pending
+          </button>
         </p>
       )}
+      <Comments id={id} />
     </div>
+  );
+}
+
+function AssigneePicker({ id, assigneeId, onChange }: { id: string; assigneeId: string | null; onChange: () => void }) {
+  const { data } = useApi<{ reviewers: { id: string; email: string; name: string }[] }>(`/revisions/${id}/reviewers`);
+  const [error, setError] = useState<Error | null>(null);
+  if (!data) return null;
+  return (
+    <div className="assignee">
+      <label className="inline small">
+        Reviewer
+        <select
+          value={assigneeId ?? ""}
+          onChange={async (e) => {
+            setError(null);
+            try {
+              await api(`/revisions/${id}/assignee`, { method: "PUT", body: { user_id: e.target.value || null } });
+              onChange();
+            } catch (err) {
+              setError(err as Error);
+            }
+          }}
+        >
+          <option value="">Unassigned</option>
+          {data.reviewers.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {error && <span className="error small">{error.message}</span>}
+    </div>
+  );
+}
+
+function Comments({ id }: { id: string }) {
+  const { data, reload } = useApi<{ comments: { id: string; body: string; author: string; created_at: string; mine: boolean }[] }>(`/revisions/${id}/comments`);
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  return (
+    <section className="comments">
+      <h2>Discussion</h2>
+      {data && !data.comments.length && <p className="muted small">No comments yet. Ask the author a question or explain a change.</p>}
+      <ul className="plain comment-list">
+        {data?.comments.map((c) => (
+          <li key={c.id} className={c.mine ? "mine" : ""}>
+            <div className="comment-head">
+              <span className="avatar">{c.author[0]?.toUpperCase()}</span>
+              <strong>{c.author}</strong>
+              <span className="muted small">{formatDate(c.created_at)}</span>
+            </div>
+            <Markdown text={c.body} />
+          </li>
+        ))}
+      </ul>
+      <form
+        className="mini-form wide"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (!body.trim()) return;
+          setBusy(true);
+          setError(null);
+          try {
+            await api(`/revisions/${id}/comments`, { method: "POST", body: { body } });
+            setBody("");
+            reload();
+          } catch (err) {
+            setError(err as Error);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <textarea rows={3} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write a comment (Markdown)" aria-label="Comment" />
+        <ErrorBox error={error} />
+        <div>
+          <button className="btn btn-small" disabled={busy || !body.trim()}>
+            Comment
+          </button>
+        </div>
+      </form>
+    </section>
   );
 }
 

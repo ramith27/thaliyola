@@ -124,7 +124,8 @@ The server also serves a web UI at `/` for people:
 - **Files and links:** attach screenshots and files, add Figma/PR/Sentry links, and share project items to the library.
 - **Connect:** after signing in, people see their access and roles. They can create a token in place and copy ready-made setup for Claude Code (global or per repository, with the project and component chosen from lists), claude.ai and other MCP clients. The page also lists the workflow prompts and all tools. A home-page banner points new users there until they connect.
 - **Read and edit:** articles (markdown with preview) and findings. Edits by scope owners and admins publish immediately; everyone else's edits become proposals.
-- **Review queue:** line diffs of current vs proposed text, with approve and reject.
+- **Review queue:** line diffs of current vs proposed text, with approve and reject. Reviewers can correct a proposal before approving it (the change is marked "edited by reviewer"), discuss it in a comment thread, assign it to another reviewer, and select several proposals to approve at once. Keyboard: `j`/`k` move, `x` select, `o` open in the queue; `a` approve, `e` edit, `r` reject, `n` next on a proposal.
+- **History:** every published version of an article or finding is kept. The History page diffs any version against the one before it and restores an old version as a new one (directly for owners, as a proposal for everyone else).
 - **Suggestions:** recurring root causes to promote into the article people read first, and possible duplicates to link, each with a one-click action. Both actions create proposals.
 
 Behind Cloudflare Access, the browser is already signed in. In dev mode the UI asks for a dev token.
@@ -151,8 +152,14 @@ curl -H "Authorization: Bearer $TOKEN" localhost:8080/api/revisions             
 curl -H "Authorization: Bearer $TOKEN" localhost:8080/api/revisions/$ID                   # current vs proposed
 curl -X POST -H "Authorization: Bearer $TOKEN" localhost:8080/api/revisions/$ID/approve
 curl -X POST -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+     -d '{"edits":{"patch":{"fix":"Use integer cents."}}}' localhost:8080/api/revisions/$ID/approve  # edit, then approve
+curl -X POST -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+     -d '{"ids":["…","…"]}' localhost:8080/api/revisions/bulk-approve
+curl -X POST -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
      -d '{"reason":"not confirmed"}' localhost:8080/api/revisions/$ID/reject
 ```
+
+Also: `GET/POST /api/revisions/:id/comments`, `GET /api/revisions/:id/reviewers`, `PUT /api/revisions/:id/assignee` (`{"user_id": …}` or `null`), `GET /api/revisions?assigned=true`, and for history `GET /api/items/:id/versions[/:version]` and `POST /api/items/:id/restore` (`{"version": n}`).
 
 ### Permissions
 

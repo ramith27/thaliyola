@@ -25,3 +25,25 @@ export function useApi<T>(path: string | null) {
   const reload = useCallback(() => setTick((t) => t + 1), []);
   return { data, error, loading, reload };
 }
+
+/**
+ * Single-key shortcuts (no modifiers), ignored while typing in a field.
+ * `keys` maps a key ("j", "a", "?") to its handler.
+ */
+export function useShortcuts(keys: Record<string, () => void>, enabled = true) {
+  useEffect(() => {
+    if (!enabled) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      const fn = keys[e.key];
+      if (fn) {
+        e.preventDefault();
+        fn();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [keys, enabled]);
+}

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Review workflow: edit a proposal before approving it, comment threads on proposals (participants are notified), assign a proposal to a reviewer ("Assigned to me" filter), bulk approve, and keyboard shortcuts in the queue and on proposals
+- Version history: every published version of an article or finding is stored; the History page diffs versions and restores an old one as a new version (a proposal for non-owners)
+- Notifications: in-app bell, email (SMTP) with per-type preferences and a one-click approve link behind a confirmation page, optional Slack webhook; watch articles, findings and projects; reviewers, authors, consuming projects and owners of stale items are told what concerns them
+- Theme switch (system, light, dark) in the avatar menu
+
 - Redesigned web UI: Inter typeface, slate/blue palette with full dark mode, icon sidebar, avatar menu, ⌘K search
 - Dashboard with stat tiles and charts (knowledge added, activity, freshness, knowledge by type, top contributors), built to the dataviz method: validated palette, legends, hover tooltips, table view for every chart
 - Interactive knowledge graph of projects, components, articles and findings and how they link

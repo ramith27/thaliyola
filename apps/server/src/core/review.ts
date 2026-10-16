@@ -2,6 +2,7 @@ import pg from "pg";
 import { withTx, type Queryable } from "../db/pool.js";
 import { audit } from "./audit.js";
 import { reindexArticle, reindexFinding, replaceSection } from "./chunking.js";
+import { redact } from "./redaction.js";
 import { ConflictError, NotFoundError, ValidationError, type RequestContext } from "./context.js";
 import { getArticle, getFinding } from "./items.js";
 import { onDecision, onImpactNotices, track } from "./notify.js";
@@ -18,28 +19,32 @@ interface RevisionRow {
   base_version: number | null;
   payload: Record<string, any>;
   author_id: string;
+  assignee_id: string | null;
   state: string;
   summary: string;
 }
 
-export async function listReviewQueue(ctx: RequestContext, opts: { scope?: string; state?: string; mine?: boolean; limit?: number } = {}) {
+export async function listReviewQueue(ctx: RequestContext, opts: { scope?: string; state?: string; mine?: boolean; assigned?: boolean; limit?: number } = {}) {
   const scopeId = opts.scope ? (await getReadableScope(ctx, opts.scope)).id : null;
   const readable = await readableScopes(ctx);
   const { rows } = await ctx.db.query(
     `SELECT r.id, r.op, r.state, r.summary, r.redactions, r.base_version, r.created_at, r.decided_at, r.reason,
             r.target_kind, r.target_id, coalesce(a.title, f.title) AS target_title, coalesce(a.type, f.type) AS target_type,
-            s.slug AS scope, coalesce(u.email, u.subject) AS author, coalesce(rv.email, rv.subject) AS reviewer
+            s.slug AS scope, coalesce(u.email, u.subject) AS author, coalesce(rv.email, rv.subject) AS reviewer,
+            r.assignee_id, coalesce(asg.display_name, asg.email) AS assignee,
+            (SELECT count(*) FROM revision_comments c WHERE c.revision_id = r.id)::int AS comments
        FROM revisions r
        JOIN scopes s ON s.id = r.scope_id
        JOIN users u ON u.id = r.author_id
        LEFT JOIN users rv ON rv.id = r.reviewer_id
+       LEFT JOIN users asg ON asg.id = r.assignee_id
        LEFT JOIN articles a ON r.target_kind = 'article' AND a.id = r.target_id
        LEFT JOIN findings f ON r.target_kind = 'finding' AND f.id = r.target_id
-      WHERE r.state = $1 AND ($2::uuid IS NULL OR r.scope_id = $2) AND (NOT $3 OR r.author_id = $4)
+      WHERE r.state = $1 AND ($2::uuid IS NULL OR r.scope_id = $2) AND (NOT $3 OR r.author_id = $4) AND (NOT $7 OR r.assignee_id = $4)
         AND ($6::uuid[] IS NULL OR (r.scope_id = ANY($6) AND (r.op = 'share' OR coalesce(a.scope_id, f.scope_id) = ANY($6))))
       ORDER BY r.created_at ${opts.state && opts.state !== "pending" ? "DESC" : "ASC"}
       LIMIT $5`,
-    [opts.state ?? "pending", scopeId, !!opts.mine, ctx.actor.id, Math.min(opts.limit ?? 50, 200), readable],
+    [opts.state ?? "pending", scopeId, !!opts.mine, ctx.actor.id, Math.min(opts.limit ?? 50, 200), readable, !!opts.assigned],
   );
   return rows;
 }
@@ -67,7 +72,7 @@ export async function getRevision(ctx: RequestContext, id: string) {
 
 async function loadRevision(db: Queryable, id: string, lock = false): Promise<RevisionRow> {
   const { rows } = await db.query<RevisionRow>(
-    `SELECT id, target_kind, target_id, scope_id, op, base_version, payload, author_id, state, summary
+    `SELECT id, target_kind, target_id, scope_id, op, base_version, payload, author_id, assignee_id, state, summary
        FROM revisions WHERE id = $1 ${lock ? "FOR UPDATE" : ""}`,
     [id],
   );
@@ -80,14 +85,27 @@ function nextArticleBody(body: string, payload: Record<string, any>): string {
   return replaceSection(body, payload.section, payload.text, payload.mode === "append" ? "append" : "replace");
 }
 
-export async function approveRevision(ctx: RequestContext, id: string): Promise<{ revision_id: string; state: string } & Record<string, unknown>> {
-  const result = await approveInTx(ctx, id);
+/** What a reviewer may change before approving (edit-then-approve). */
+export interface ReviewerEdits {
+  title?: string;
+  /** New-article body, or the new text of an edit (section or whole body). */
+  body_md?: string;
+  /** Finding fields (new findings and finding updates). */
+  patch?: { title?: string; symptoms?: string; root_cause?: string; fix?: string };
+}
+
+export async function approveRevision(
+  ctx: RequestContext,
+  id: string,
+  edits?: ReviewerEdits,
+): Promise<{ revision_id: string; state: string } & Record<string, unknown>> {
+  const result = await approveInTx(ctx, id, edits);
   ctx.onWrite?.();
   track(afterDecision(ctx, id, result));
   return result;
 }
 
-async function approveInTx(ctx: RequestContext, id: string): Promise<{ revision_id: string; state: string } & Record<string, unknown>> {
+async function approveInTx(ctx: RequestContext, id: string, edits?: ReviewerEdits): Promise<{ revision_id: string; state: string } & Record<string, unknown>> {
   return withTx(ctx.db, async (db) => {
     const r = await loadRevision(db, id, true);
     if (r.state !== "pending") throw new ValidationError(`revision is already ${r.state}`);
@@ -99,6 +117,8 @@ async function approveInTx(ctx: RequestContext, id: string): Promise<{ revision_
         { version: item.version },
       );
     }
+
+    if (edits && Object.values(edits).some((v) => v !== undefined)) await applyReviewerEdits(db, r, item, edits);
 
     let result: Record<string, unknown>;
     switch (r.op) {
@@ -118,6 +138,10 @@ async function approveInTx(ctx: RequestContext, id: string): Promise<{ revision_
       default:
         throw new ValidationError(`cannot apply '${r.op}' revisions yet`);
     }
+
+    // Every published version is kept in full for history and restore.
+    if (r.op === "create" || r.op === "update" || r.op === "promote") await snapshot(db, item.kind, item.id, r.author_id, ctx.actor.id, r.summary);
+    if (r.op === "share" && typeof result.library_copy_id === "string") await snapshot(db, item.kind, result.library_copy_id, r.author_id, ctx.actor.id, r.summary);
 
     await db.query("UPDATE revisions SET state = 'approved', reviewer_id = $2, decided_at = now() WHERE id = $1", [id, ctx.actor.id]);
     await audit(db, ctx.actor.id, "approve_revision", r.target_id);
@@ -167,6 +191,49 @@ async function rejectInTx(ctx: RequestContext, id: string, reason: string) {
 // ---------------------------------------------------------------------------
 
 type Tx = pg.PoolClient;
+
+/** Applies a reviewer's corrections to the proposal (redacted like any write) before it is approved. */
+async function applyReviewerEdits(db: Tx, r: RevisionRow, item: { kind: string; id: string; scope_id: string }, edits: ReviewerEdits) {
+  const clean = (v?: string) => (v === undefined ? undefined : redact(v).text);
+  if (r.op === "create" && item.kind === "article") {
+    const { rows } = await db.query(
+      "UPDATE articles SET title = coalesce($2, title), body_md = coalesce($3, body_md) WHERE id = $1 RETURNING id, scope_id, title, body_md",
+      [item.id, clean(edits.title?.trim()) || null, clean(edits.body_md) ?? null],
+    );
+    await reindexArticle(db, rows[0]);
+  } else if (r.op === "create" && item.kind === "finding") {
+    const p = edits.patch ?? {};
+    const { rows } = await db.query(
+      `UPDATE findings SET title = coalesce($2, title), symptoms = coalesce($3, symptoms), root_cause = coalesce($4, root_cause), fix = coalesce($5, fix)
+        WHERE id = $1 RETURNING id, scope_id, title, symptoms, root_cause, fix`,
+      [item.id, clean(p.title?.trim()) || null, clean(p.symptoms) ?? null, clean(p.root_cause) ?? null, clean(p.fix) ?? null],
+    );
+    await reindexFinding(db, rows[0]);
+  } else if ((r.op === "update" || r.op === "promote") && item.kind === "article") {
+    if (edits.body_md !== undefined) r.payload.text = clean(edits.body_md);
+    if (edits.title !== undefined) r.payload.title = clean(edits.title.trim());
+  } else if (r.op === "update" && item.kind === "finding") {
+    const p = Object.fromEntries(Object.entries(edits.patch ?? {}).filter(([, v]) => v !== undefined).map(([k, v]) => [k, clean(v)]));
+    r.payload.patch = { ...r.payload.patch, ...p };
+  } else {
+    throw new ValidationError(`a '${r.op}' proposal can't be edited before approval`);
+  }
+  r.payload.reviewer_edited = true;
+  await db.query("UPDATE revisions SET payload = $2 WHERE id = $1", [r.id, JSON.stringify(r.payload)]);
+}
+
+/** Stores the item's current content as a version snapshot. */
+export async function snapshot(db: Queryable, kind: string, id: string, authorId: string | null, approverId: string | null, summary: string) {
+  const sql =
+    kind === "article"
+      ? `INSERT INTO item_versions (target_kind, target_id, version, title, content, summary, author_id, approver_id)
+         SELECT 'article', id, version, title, jsonb_build_object('body_md', body_md), $2, $3, $4 FROM articles WHERE id = $1
+         ON CONFLICT (target_id, version) DO NOTHING`
+      : `INSERT INTO item_versions (target_kind, target_id, version, title, content, summary, author_id, approver_id)
+         SELECT 'finding', id, version, title, jsonb_build_object('symptoms', symptoms, 'root_cause', root_cause, 'fix', fix, 'tags', tags), $2, $3, $4 FROM findings WHERE id = $1
+         ON CONFLICT (target_id, version) DO NOTHING`;
+  await db.query(sql, [id, summary, authorId, approverId]);
+}
 
 async function applyCreate(db: Tx, item: { kind: string; id: string; status: string }) {
   if (item.status !== "draft") throw new ValidationError(`${item.kind} is ${item.status}, not a draft`);

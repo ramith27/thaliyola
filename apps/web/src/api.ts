@@ -205,6 +205,9 @@ export interface RevisionSummary {
   author: string;
   reviewer: string | null;
   reason: string | null;
+  assignee_id: string | null;
+  assignee: string | null;
+  comments: number;
 }
 
 export interface Notice {

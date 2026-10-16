@@ -490,3 +490,26 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .theme-switch button.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
 .prefs { display: flex; flex-direction: column; gap: 0.55rem; margin: 0.6rem 0; }
 @media (max-width: 860px) { .notif-menu { position: fixed; left: 0.5rem; right: 0.5rem; width: auto; top: 56px; } }
+
+/* Review workflow */
+.bulk-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin: 0 0 0.75rem; }
+.bulk-bar label.inline { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
+.shortcut-hint kbd { margin: 0 0.05rem; }
+.bulk-bar .shortcut-hint { margin-left: auto; }
+.hit-select { display: grid; grid-template-columns: auto 1fr; gap: 0.75rem; align-items: start; }
+.hit-select > input[type="checkbox"] { margin-top: 0.3rem; width: 16px; height: 16px; }
+.hit-cursor { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }
+.assignee { display: flex; align-items: center; gap: 0.75rem; margin: 0.6rem 0; }
+.assignee label.inline { display: flex; align-items: center; gap: 0.5rem; }
+.assignee select { padding: 0.3rem 0.5rem; }
+.comments { margin-top: 2rem; border-top: 1px solid var(--border); padding-top: 0.5rem; }
+.comment-list li { padding: 0.65rem 0.85rem; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 0.5rem; background: var(--surface); }
+.comment-list li.mine { background: var(--surface-2); }
+.comment-list .markdown p:last-child { margin-bottom: 0; }
+.comment-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; font-size: 0.9rem; }
+.comment-head .avatar { width: 22px; height: 22px; font-size: 0.7rem; }
+.versions { display: grid; grid-template-columns: minmax(220px, 300px) 1fr; gap: 1.25rem; align-items: start; }
+.version-list li { padding: 0.55rem 0.7rem; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 0.4rem; background: var(--surface); cursor: pointer; }
+.version-list li.active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }
+.version-list li .v { font-weight: 650; }
+@media (max-width: 760px) { .versions { grid-template-columns: 1fr; } }
