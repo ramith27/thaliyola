@@ -23,6 +23,8 @@ export const TEST_SETTINGS: Settings = {
   adminEmails: ["admin@example.com"],
   duplicateThreshold: 0.6,
   authMode: "dev",
+  rateLimitPerMinute: 0,
+  logRequests: false,
   publicUrl: undefined,
   sessionTtlHours: 24,
   cookieSecure: "false",

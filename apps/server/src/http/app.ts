@@ -12,6 +12,7 @@ import type { Db } from "../db/pool.js";
 import { buildMcpServer } from "../mcp/server.js";
 import { isAdmin } from "../core/permissions.js";
 import { apiErrorHandler, apiRouter } from "./api.js";
+import { accessLog, rateLimitPerActor } from "./middleware.js";
 import { accountRouter, publicAuthRouter, requirePasswordChanged } from "./auth.js";
 
 const DEFAULT_WEB_DIST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../web/dist");
@@ -41,16 +42,26 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
   app.disable("x-powered-by");
   // Honour X-Forwarded-* from a proxy or tunnel on the same machine (secure cookies, client IP for login throttling).
   app.set("trust proxy", "loopback");
-  app.use((_req, res, next) => {
+  app.use((req, res, next) => {
     res.set(SECURITY_HEADERS);
+    if (req.secure) res.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
     next();
   });
-  // Room for base64-encoded asset uploads.
-  app.use(express.json({ limit: Math.ceil(settings.assetMaxBytes * 1.4) + 1024 * 1024 }));
+  if (settings.logRequests) app.use(accessLog());
+  const rateLimit = rateLimitPerActor(settings.rateLimitPerMinute);
+  // Small bodies for everyone; the two routes that carry base64 uploads get a larger limit, but only after auth.
+  const UPLOAD_PATHS = new Set(["/mcp", "/api/assets"]);
+  const smallJson = express.json({ limit: "1mb" });
+  const uploadJson = express.json({ limit: Math.ceil(settings.assetMaxBytes * 1.4) + 1024 * 1024 });
+  app.use((req, res, next) => (UPLOAD_PATHS.has(req.path) ? next() : smallJson(req, res, next)));
 
   app.get("/healthz", async (_req, res) => {
-    await db.query("SELECT 1");
-    res.json({ ok: true });
+    try {
+      await db.query("SELECT 1");
+      res.json({ ok: true, database: "ok", embeddings: embedder ? embedder.model : "off" });
+    } catch {
+      res.status(503).json({ ok: false, database: "unreachable" });
+    }
   });
 
   // Stateless streamable HTTP: a fresh server + transport per request, bound to the caller.
@@ -62,13 +73,15 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
   app.use(
     "/api",
     requireAuth(db, authenticate),
+    rateLimit,
+    (req: Request, res: Response, next: NextFunction) => (req.path === "/assets" ? uploadJson(req, res, next) : next()),
     requirePasswordChanged,
     accountRouter(db, settings, (actor) => isAdmin({ db, actor, settings })),
     apiRouter({ db, settings, embedder, onWrite }),
     apiErrorHandler,
   );
 
-  app.post("/mcp", requireAuth(db, authenticate, oauth?.resourceMetadataUrl), requirePasswordChanged, async (req, res) => {
+  app.post("/mcp", requireAuth(db, authenticate, oauth?.resourceMetadataUrl), rateLimit, uploadJson, requirePasswordChanged, async (req, res) => {
     const server = buildMcpServer({
       db,
       settings,
@@ -103,8 +116,13 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
   }
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    if (res.headersSent) return;
+    // Body-parser errors are the client's: oversized or malformed JSON.
+    const type = (err as { type?: string })?.type;
+    if (type === "entity.too.large") return void res.status(413).json({ error: "request body too large" });
+    if (type === "entity.parse.failed") return void res.status(400).json({ error: "malformed JSON" });
     console.error(err);
-    if (!res.headersSent) res.status(500).json({ error: "internal error" });
+    res.status(500).json({ error: "internal error" });
   });
 
   return app;
