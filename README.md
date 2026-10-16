@@ -18,6 +18,12 @@ A project can declare that it **uses** an item from the library or from another 
 
 **Components.** A project can have several codebases (`backend`, `frontend`, `mobile`, ...). API contracts link the component that provides them to the components that consume them. When a contract or a shared design changes, consumers get an **impact notice** that shows up the next time an agent loads the project context.
 
+**Design knowledge.**
+- **Item types:** design tokens, UI component specs, UX patterns and screen specs.
+- **Attachments:** screenshots and token files, which can also be embedded in markdown with `![alt](asset:<id>)`.
+- **Figma:** frames are linked as source links. Figma stays the visual source of truth; Cairn holds the reviewed intent and rules.
+- **Wiring:** a screen spec `uses` library UI components and `depends_on` the API contract it calls. A change to either reaches the teams that depend on it as an impact notice.
+
 **Articles and findings.** Articles are curated, long-lived documents written to a template per type. Findings are episodic: incidents, RCAs, known issues, data gotchas, query recipes.
 
 ## MCP tools
@@ -33,6 +39,7 @@ A project can declare that it **uses** an item from the library or from another 
 | `list_impact_notices` / `ack_notice` | Upstream contract or shared-design changes a project or component hasn't handled yet |
 | `list_review_queue` | Pending and decided proposals (`mine: true` for your own) |
 | `get_article_template` | Expected sections for an article type |
+| `get_asset` | A screenshot, exported frame, token file or spec attached to an item. Images come back as MCP image content the agent can look at |
 
 **Write tools.** Every write is a proposal that a person reviews before it is published:
 
@@ -45,6 +52,9 @@ A project can declare that it **uses** an item from the library or from another 
 | `promote_finding` | Propose folding a recurring finding into an article section |
 | `verify_entry` | Mark an entry still valid (applied immediately), or propose that it is superseded |
 | `link_entries` | Add a typed link: `uses`, `provided_by`, `consumed_by`, `depends_on`, `related`, `same_root_cause`, `supersedes` |
+| `add_source_link` | Attach a Figma frame, PR, Sentry issue or dashboard to an item |
+| `upload_asset` | Attach a screenshot (PNG/JPEG/WebP/GIF), token JSON, markdown or PDF. Text files are redacted; images can't be |
+| `share_to_library` | Propose publishing a project item to the library. On approval by a library owner, a copy (with its links and files) is created and the project is linked to it |
 
 On every write the server:
 - redacts secrets and personal data (keys, tokens, passwords, connection-string credentials, JWTs, emails, phone numbers) with fixed rules, and refuses a write when a required field held nothing else;
@@ -57,6 +67,7 @@ The server also serves a web UI at `/` for people:
 - **Browse:** team, library and project scopes, each with a folder tree.
 - **Project view:** pick a component (backend, frontend, ...) to see the contracts it provides and consumes, upstream changes it still has to handle, the shared library items it uses, recent decisions and known issues.
 - **Search:** results are highlighted, and a hit jumps to the matching section.
+- **Files and links:** attach screenshots and files, add Figma/PR/Sentry links, and share project items to the library.
 - **Read and edit:** articles (markdown with preview) and findings. Edits by scope owners and admins publish immediately; everyone else's edits become proposals.
 - **Review queue:** line diffs of current vs proposed text, with approve and reject.
 
@@ -193,7 +204,7 @@ apps/server/
 
 - ~~**M1** Write tools, review queue, optimistic concurrency, redaction, impact notices on approval~~ (done)
 - ~~**M2** Web UI: browse by scope, markdown editor, review queue with diffs~~ (done)
-- **M3** Library sharing (`share_to_library`), design items with asset storage (screenshots, token files), Figma links
+- ~~**M3** Library sharing, design assets (screenshots, token files), Figma links~~ (done)
 - **M3b** Semantic search (pgvector + local embedding model), duplicate detection
 - **M4** Per-scope roles, nightly freshness jobs, production hardening
 - **M5** Integrations with existing agent skills, Slack and Sentry

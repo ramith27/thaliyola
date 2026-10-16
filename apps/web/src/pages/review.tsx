@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api, ApiError, type RevisionSummary } from "../api";
-import { Badge, Diff, ErrorBox, formatDate, Loading, Notice, ScopeBadge, StatusBadge, TypeBadge } from "../components/ui";
+import { Badge, Diff, ErrorBox, formatDate, Loading, Markdown, Notice, ScopeBadge, StatusBadge, TypeBadge } from "../components/ui";
 import { useApi } from "../hooks";
 import { href, navigate, type Route } from "../router";
 
@@ -153,6 +153,26 @@ function ProposedChange({ data }: { data: RevisionDetail }) {
           <Diff before="" after={`# ${current.title}\n\n${current.body_md}`} />
         ) : (
           <Diff before="" after={FINDING_FIELDS.map(([f, name]) => `${name}:\n${current[f] ?? ""}`).join("\n\n")} />
+        )}
+      </section>
+    );
+  }
+  if (op === "share") {
+    return (
+      <section>
+        <h2>Publish to the library{payload.path ? ` (folder “${payload.path}”)` : ""}</h2>
+        <p className="muted">
+          On approval a library copy is created, with its links and files, and {current.scope?.slug} is linked to it.
+        </p>
+        {target_kind === "article" ? (
+          <div className="preview-box">
+            <Markdown text={`# ${current.title}\n\n${current.body_md}`} />
+          </div>
+        ) : (
+          <div className="preview-box">
+            <h3>{current.title}</h3>
+            <Markdown text={`**Symptoms:** ${current.symptoms}\n\n**Root cause:** ${current.root_cause}\n\n**Fix:** ${current.fix}`} />
+          </div>
         )}
       </section>
     );

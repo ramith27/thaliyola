@@ -49,9 +49,10 @@ describe("MCP over streamable HTTP", () => {
     const client = await connect({ authorization: "Bearer secret-token" });
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
-      "ack_notice", "browse_kb", "create_article", "get_article", "get_article_template", "get_finding",
+      "ack_notice", "add_source_link", "browse_kb", "create_article", "get_article", "get_article_template", "get_asset", "get_finding",
       "get_project_context", "link_entries", "list_impact_notices", "list_projects", "list_review_queue",
-      "promote_finding", "propose_article_edit", "propose_finding", "search_knowledge", "update_finding", "verify_entry",
+      "promote_finding", "propose_article_edit", "propose_finding", "search_knowledge", "share_to_library",
+      "update_finding", "upload_asset", "verify_entry",
     ]);
     const readOnly = tools.filter((t) => t.annotations?.readOnlyHint).map((t) => t.name);
     expect(readOnly).not.toContain("propose_finding");

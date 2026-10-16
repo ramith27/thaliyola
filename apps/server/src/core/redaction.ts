@@ -38,7 +38,7 @@ const RULES: Rule[] = [
     // password=..., api_key: "...", "client_secret": "..." -> keep the key name
     kind: "secret",
     pattern:
-      /((?:password|passwd|pwd|secret|client[_-]?secret|api[_-]?key|access[_-]?key|auth[_-]?token|access[_-]?token|token)["']?\s*[:=]\s*)(["']?)([^\s"',;]{4,})\2/gi,
+      /((?:password|passwd|pwd|secret|client[_-]?secret|api[_-]?key|access[_-]?key|auth[_-]?token|access[_-]?token|token)["']?\s*[:=]\s*)(["']?)(?!\[REDACTED:)([^\s"',;]{4,})\2/gi,
     replace: (_m, prefix, quote) => `${prefix}${quote}${marker("secret")}${quote}`,
   },
   { kind: "email", pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g },

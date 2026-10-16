@@ -17,6 +17,9 @@ const Env = z
     // Share of a proposal's terms an existing finding must contain to count as a near-duplicate
     // Built web UI to serve at / (defaults to apps/web/dist in the repo)
     WEB_DIST: z.string().optional(),
+    // Where uploaded screenshots, token files and specs are stored
+    ASSET_DIR: z.string().default("./data/assets"),
+    ASSET_MAX_BYTES: z.coerce.number().int().positive().default(5 * 1024 * 1024),
     DUPLICATE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.6),
   })
   .superRefine((env, ctx) => {
@@ -34,12 +37,16 @@ export function settingsFrom(config: Config): Settings {
   return {
     adminEmails: config.ADMIN_EMAILS.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean),
     duplicateThreshold: config.DUPLICATE_THRESHOLD,
+    assetDir: config.ASSET_DIR,
+    assetMaxBytes: config.ASSET_MAX_BYTES,
   };
 }
 
 export interface Settings {
   adminEmails: string[];
   duplicateThreshold: number;
+  assetDir: string;
+  assetMaxBytes: number;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {

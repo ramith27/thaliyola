@@ -84,6 +84,31 @@ export interface SourceLink {
   label: string;
 }
 
+export interface AssetInfo {
+  id: string;
+  filename: string;
+  mime: string;
+  size_bytes: number;
+  alt_text: string;
+}
+
+/** Fetches a raw asset with the same credentials as API calls (dev tokens can't ride on <img> requests). */
+export async function fetchAssetBlob(id: string): Promise<Blob> {
+  const token = getToken();
+  const res = await fetch(`/api/assets/${id}`, { headers: token ? { authorization: `Bearer ${token}` } : {}, credentials: "same-origin" });
+  if (!res.ok) throw new ApiError(res.status, `could not load file (${res.status})`, null);
+  return res.blob();
+}
+
+export function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).replace(/^data:[^,]*,/, ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
 export interface Article {
   id: string;
   title: string;
@@ -102,6 +127,7 @@ export interface Article {
   related: Related[];
   source_links: SourceLink[];
   entities: { kind: string; name: string }[];
+  assets: AssetInfo[];
 }
 
 export interface Finding {
@@ -122,6 +148,7 @@ export interface Finding {
   related: Related[];
   source_links: SourceLink[];
   entities: { kind: string; name: string }[];
+  assets: AssetInfo[];
   history: { op: string; state: string; reason: string | null; created_at: string; author: string }[];
 }
 

@@ -429,6 +429,56 @@ export async function promoteFinding(ctx: RequestContext, input: { finding_id: s
   return { status: "pending_review" as const, revision_id: revisionId, section, text };
 }
 
+/** Evidence and design links (Figma frame, PR, Sentry issue) are metadata and apply directly. */
+export async function addSourceLinkTo(ctx: RequestContext, id: string, link: SourceLinkInput) {
+  const item = await findItem(ctx.db, id);
+  await assertCanPropose(ctx, item.scope_id);
+  if (!/^https?:\/\//.test(link.url)) throw new ValidationError("links must be http(s)");
+  await addLinks(ctx.db, { kind: item.kind, id: item.id }, [link]);
+  return { target_id: item.id, system: link.system, url: redactFields({ u: link.url }).fields.u };
+}
+
+// ---------------------------------------------------------------------------
+// Sharing
+
+/**
+ * Proposes publishing a project or team item to the Library. Library owners
+ * review it; on approval the item is copied into the Library and the source
+ * project starts `uses`-linking the shared copy (see review.ts).
+ */
+export async function shareToLibrary(ctx: RequestContext, input: { id: string; summary: string; path?: string }) {
+  const item = await findItem(ctx.db, input.id);
+  const library = await getScopeBySlug(ctx.db, "library");
+  if (item.scope_id === library.id) throw new ValidationError("this item is already in the library");
+  if (item.status !== "published" && item.status !== "possibly_stale") throw new ValidationError("only published items can be shared");
+  await assertCanPropose(ctx, item.scope_id);
+  const existing = await ctx.db.query(
+    "SELECT to_id FROM relations WHERE from_id = $1 AND kind = 'published_as'",
+    [item.id],
+  );
+  if (existing.rowCount) throw new ValidationError(`already published to the library as ${existing.rows[0].to_id}`);
+  const pending = await ctx.db.query("SELECT id FROM revisions WHERE target_id = $1 AND op = 'share' AND state = 'pending'", [item.id]);
+  if (pending.rowCount) throw new ValidationError(`a share proposal is already pending (${pending.rows[0].id})`);
+  const { fields } = redactFields({ summary: input.summary.trim(), path: (input.path ?? "").trim() });
+  requireText("summary", fields.summary);
+  const revisionId = await insertRevision(ctx.db, {
+    targetKind: item.kind,
+    targetId: item.id,
+    scopeId: library.id,
+    op: "share",
+    baseVersion: item.version,
+    payload: { path: fields.path.split("/").map((p) => p.trim()).filter(Boolean).join("/") || null },
+    authorId: ctx.actor.id,
+    summary: fields.summary.slice(0, LIMITS.summary),
+    redactions: [],
+  });
+  return {
+    status: "pending_review" as const,
+    revision_id: revisionId,
+    message: "Queued for library owners. On approval a library copy is created and this project is linked to it.",
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Verification and links
 

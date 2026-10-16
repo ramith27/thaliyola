@@ -14,7 +14,7 @@ const DEFAULT_WEB_DIST = path.resolve(path.dirname(fileURLToPath(import.meta.url
 
 const SECURITY_HEADERS: Record<string, string> = {
   "Content-Security-Policy":
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; " +
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; " +
     "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "same-origin",
@@ -27,7 +27,8 @@ export function createApp(db: Db, authenticate: Authenticator, settings: Setting
     res.set(SECURITY_HEADERS);
     next();
   });
-  app.use(express.json({ limit: "2mb" }));
+  // Room for base64-encoded asset uploads.
+  app.use(express.json({ limit: Math.ceil(settings.assetMaxBytes * 1.4) + 1024 * 1024 }));
 
   app.get("/healthz", async (_req, res) => {
     await db.query("SELECT 1");

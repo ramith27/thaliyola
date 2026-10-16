@@ -1,8 +1,9 @@
 import { diffLines } from "diff";
 import type { ReactNode } from "react";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Related, SourceLink } from "../api";
+import { AssetImage } from "./assets";
 import { href } from "../router";
 
 /**
@@ -14,13 +15,18 @@ export function Markdown({ text }: { text: string }) {
     <div className="markdown">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        urlTransform={(url) => (/^asset:[0-9a-f-]{36}$/.test(url) ? url : defaultUrlTransform(url))}
         components={{
           a: ({ href: url, children }) => (
             <a href={url} target="_blank" rel="noopener noreferrer nofollow">
               {children}
             </a>
           ),
-          img: ({ src, alt }) => (typeof src === "string" && /^https:\/\//.test(src) ? <img src={src} alt={alt ?? ""} loading="lazy" /> : null),
+          img: ({ src, alt }) => {
+            if (typeof src !== "string") return null;
+            if (src.startsWith("asset:")) return <AssetImage id={src.slice(6)} alt={alt ?? ""} />;
+            return /^https:\/\//.test(src) ? <img src={src} alt={alt ?? ""} loading="lazy" /> : null;
+          },
         }}
       >
         {text}

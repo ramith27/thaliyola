@@ -53,6 +53,9 @@ fi
 # pgvector needs a superuser to install; the app's migrations then find it present.
 psql_su "-d $DB_NAME -c \"CREATE EXTENSION IF NOT EXISTS vector\""
 
+log "Asset storage (/var/lib/cairn/assets)"
+install -d -m 750 -o cairn -g cairn /var/lib/cairn /var/lib/cairn/assets
+
 log "Configuration ($ENV_FILE)"
 install -d -m 750 -o root -g cairn /etc/cairn
 if [ ! -f "$ENV_FILE" ]; then
@@ -65,6 +68,7 @@ PORT=$PORT
 HOST=$HOST
 DATABASE_URL=postgres://$DB_USER:$NEW_PASSWORD@localhost:5432/$DB_NAME
 WEB_DIST=$APP_DIR/web
+ASSET_DIR=/var/lib/cairn/assets
 
 # Start in dev mode (static bearer tokens) until Cloudflare Access is set up.
 # Never expose dev mode beyond this machine.
@@ -80,6 +84,8 @@ CONF
   chmod 640 "$ENV_FILE"
   CREATED_TOKEN="$DEV_TOKEN"
 fi
+
+grep -q '^ASSET_DIR=' "$ENV_FILE" || echo "ASSET_DIR=/var/lib/cairn/assets" >> "$ENV_FILE"
 
 log "Build"
 cd "$REPO"

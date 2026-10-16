@@ -98,6 +98,9 @@ export async function approveRevision(ctx: RequestContext, id: string): Promise<
       case "verify":
         result = await applySupersede(db, item);
         break;
+      case "share":
+        result = await applyShare(db, ctx, item, r);
+        break;
       default:
         throw new ValidationError(`cannot apply '${r.op}' revisions yet`);
     }
@@ -178,6 +181,59 @@ async function applyArticleEdit(db: Tx, ctx: RequestContext, item: { id: string;
   }
   const notices = updated.status === "published" ? await raiseImpactNotices(db, updated, r.summary) : 0;
   return { version: updated.version, impact_notices: notices };
+}
+
+/** Copies an item into the Library, with its links, entities and assets, and links the source to the copy. */
+async function applyShare(db: Tx, ctx: RequestContext, item: { kind: string; id: string; scope_id: string }, r: RevisionRow) {
+  let copyId: string;
+  if (item.kind === "article") {
+    const { rows } = await db.query(
+      `INSERT INTO articles (scope_id, type, title, path, body_md, tags, status, owner_id, created_by, last_verified_at)
+       SELECT $2, type, title, coalesce($3, path), body_md, tags, 'published', owner_id, $4, now() FROM articles WHERE id = $1
+       RETURNING id, scope_id, title, body_md`,
+      [item.id, r.scope_id, r.payload.path ?? null, r.author_id],
+    );
+    copyId = rows[0].id;
+    await reindexArticle(db, rows[0]);
+  } else {
+    const { rows } = await db.query(
+      `INSERT INTO findings (scope_id, type, title, symptoms, root_cause, fix, tags, status, author_id, last_verified_at)
+       SELECT $2, type, title, symptoms, root_cause, fix, tags, 'published', author_id, now() FROM findings WHERE id = $1
+       RETURNING id, scope_id, title, symptoms, root_cause, fix`,
+      [item.id, r.scope_id],
+    );
+    copyId = rows[0].id;
+    await reindexFinding(db, rows[0]);
+  }
+  await db.query(
+    `INSERT INTO source_links (target_kind, target_id, system, url, label)
+     SELECT target_kind, $2, system, url, label FROM source_links WHERE target_id = $1`,
+    [item.id, copyId],
+  );
+  await db.query(
+    `INSERT INTO entity_links (entity_id, target_kind, target_id)
+     SELECT entity_id, target_kind, $2 FROM entity_links WHERE target_id = $1 ON CONFLICT DO NOTHING`,
+    [item.id, copyId],
+  );
+  await db.query(
+    `INSERT INTO assets (scope_id, target_kind, target_id, mime, sha256, size_bytes, storage_key, alt_text, filename, created_by)
+     SELECT $3, target_kind, $2, mime, sha256, size_bytes, storage_key, alt_text, filename, created_by
+       FROM assets WHERE target_id = $1 AND deleted_at IS NULL`,
+    [item.id, copyId, r.scope_id],
+  );
+  await db.query(
+    `INSERT INTO relations (from_kind, from_id, kind, to_kind, to_id, created_by) VALUES ($1, $2, 'published_as', $1, $3, $4)`,
+    [item.kind, item.id, copyId, ctx.actor.id],
+  );
+  const source = (await db.query<{ kind: string }>("SELECT kind FROM scopes WHERE id = $1", [item.scope_id])).rows[0]!;
+  if (source.kind === "project") {
+    await db.query(
+      `INSERT INTO relations (from_kind, from_id, kind, to_kind, to_id, created_by) VALUES ('scope', $1, 'uses', $2, $3, $4)
+       ON CONFLICT DO NOTHING`,
+      [item.scope_id, item.kind, copyId, ctx.actor.id],
+    );
+  }
+  return { library_copy_id: copyId };
 }
 
 async function applySupersede(db: Tx, item: { kind: string; id: string }) {

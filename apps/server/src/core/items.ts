@@ -58,6 +58,15 @@ async function entitiesFor(db: Queryable, id: string) {
   return rows;
 }
 
+async function assetsFor(db: Queryable, id: string) {
+  const { rows } = await db.query<{ id: string; filename: string; mime: string; size_bytes: number; alt_text: string }>(
+    `SELECT id, filename, mime, size_bytes::int AS size_bytes, alt_text FROM assets
+      WHERE target_id = $1 AND deleted_at IS NULL ORDER BY created_at`,
+    [id],
+  );
+  return rows;
+}
+
 async function componentSlugs(db: Queryable, ids: string[]): Promise<string[]> {
   if (!ids.length) return [];
   const { rows } = await db.query<{ slug: string }>("SELECT slug FROM components WHERE id = ANY($1::uuid[]) ORDER BY slug", [ids]);
@@ -101,6 +110,7 @@ export async function getArticle(ctx: RequestContext, id: string, section?: stri
     related: await relatedItems(ctx.db, id),
     source_links: await sourceLinks(ctx.db, id),
     entities: await entitiesFor(ctx.db, id),
+    assets: await assetsFor(ctx.db, id),
   };
 }
 
@@ -138,6 +148,7 @@ export async function getFinding(ctx: RequestContext, id: string) {
     related: await relatedItems(ctx.db, id),
     source_links: await sourceLinks(ctx.db, id),
     entities: await entitiesFor(ctx.db, id),
+    assets: await assetsFor(ctx.db, id),
     history: history.rows,
   };
 }

@@ -19,6 +19,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=true
+ReadWritePaths=/var/lib/cairn
 
 [Install]
 WantedBy=multi-user.target

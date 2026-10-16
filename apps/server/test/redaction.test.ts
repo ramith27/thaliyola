@@ -21,6 +21,13 @@ describe("redact", () => {
     expect(redact(input).text).toBe(expected);
   });
 
+  it("does not redact a marker twice", () => {
+    expect(redact('{"api_key": "sk-ant-api03-abcdefghijklmnopqrstuv"}')).toEqual({
+      text: '{"api_key": "[REDACTED:api_key]"}',
+      redactions: [{ kind: "api_key", count: 1 }],
+    });
+  });
+
   it("redacts a private key block", () => {
     const r = redact("before\n-----BEGIN RSA PRIVATE KEY-----\nMIIabc\n-----END RSA PRIVATE KEY-----\nafter");
     expect(r.text).toBe("before\n[REDACTED:private_key]\nafter");

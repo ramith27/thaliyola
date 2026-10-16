@@ -20,6 +20,9 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgres://cairn:${POSTGRES_PASSWORD:-cairn}@db:5432/cairn
+      ASSET_DIR: /data/assets
+    volumes:
+      - assets:/data/assets
     depends_on:
       db:
         condition: service_healthy
@@ -41,3 +44,4 @@ services:
 
 volumes:
   pgdata:
+  assets:

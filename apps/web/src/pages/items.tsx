@@ -13,6 +13,8 @@ import {
   TypeBadge,
   WriteOutcome,
 } from "../components/ui";
+import { AddLinkForm, ShareToLibrary } from "../components/actions";
+import { Attachments } from "../components/assets";
 import { useApi } from "../hooks";
 import { href, navigate, type Route } from "../router";
 
@@ -37,7 +39,7 @@ function StaleWarning({ status }: { status: string }) {
   return null;
 }
 
-function Facts({ item }: { item: Article | Finding }) {
+function Facts({ item, reload }: { item: Article | Finding; reload: () => void }) {
   const owner = "owner" in item ? item.owner : item.author;
   return (
     <>
@@ -67,6 +69,10 @@ function Facts({ item }: { item: Article | Finding }) {
       )}
       <RelatedList items={item.related} />
       <SourceLinks links={item.source_links} />
+      <div className="side-block-plain">
+        <AddLinkForm targetId={item.id} onAdded={reload} />
+      </div>
+      <Attachments targetId={item.id} assets={item.assets} onChange={reload} />
     </>
   );
 }
@@ -134,6 +140,7 @@ export function ArticlePage({ id, route }: { id: string; route: Route }) {
             Edit
           </a>
           <VerifyButton id={id} status={data.status} onDone={reload} />
+          <ShareToLibrary id={id} scopeKind={data.scope.kind} status={data.status} publishedAs={publishedAs(data)} />
         </div>
         <SectionedMarkdown body={data.body_md} />
       </article>
@@ -150,10 +157,14 @@ export function ArticlePage({ id, route }: { id: string; route: Route }) {
             </ul>
           </section>
         )}
-        <Facts item={data} />
+        <Facts item={data} reload={reload} />
       </aside>
     </div>
   );
+}
+
+function publishedAs(item: Article | Finding) {
+  return item.related.find((r) => r.relation === "published_as" && r.direction === "out")?.id;
 }
 
 function slugify(s: string) {
@@ -282,6 +293,7 @@ export function FindingPage({ id, route }: { id: string; route: Route }) {
             Edit
           </a>
           <VerifyButton id={id} status={data.status} onDone={reload} />
+          <ShareToLibrary id={id} scopeKind={data.scope.kind} status={data.status} publishedAs={publishedAs(data)} />
         </div>
         <h2>Symptoms</h2>
         <Markdown text={data.symptoms} />
@@ -308,7 +320,7 @@ export function FindingPage({ id, route }: { id: string; route: Route }) {
         )}
       </article>
       <aside className="side">
-        <Facts item={data} />
+        <Facts item={data} reload={reload} />
       </aside>
     </div>
   );

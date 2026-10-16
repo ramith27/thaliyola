@@ -2,6 +2,7 @@ import { Router, type NextFunction, type Request, type Response } from "express"
 import { z } from "zod";
 import type { Settings } from "../config.js";
 import { adminAddComponent, adminCreateProject, adminSetMember, listMembers } from "../core/admin.js";
+import { ASSET_MIME_TYPES, deleteAsset, getAsset, uploadAsset } from "../core/assets.js";
 import { audit } from "../core/audit.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError, type Actor, type RequestContext } from "../core/context.js";
 import { editArticle, editFinding, newArticle, newFinding } from "../core/direct.js";
@@ -11,7 +12,7 @@ import { isAdmin } from "../core/permissions.js";
 import { getProjectContext } from "../core/projects.js";
 import { approveRevision, getRevision, listReviewQueue, rejectRevision } from "../core/review.js";
 import { searchKnowledge } from "../core/search.js";
-import { verifyEntry } from "../core/writes.js";
+import { addSourceLinkTo, shareToLibrary, verifyEntry } from "../core/writes.js";
 import { ARTICLE_TEMPLATES, templateFor } from "../core/templates.js";
 import type { Db } from "../db/pool.js";
 
@@ -202,6 +203,61 @@ export function apiRouter(db: Db, settings: Settings) {
         })
         .parse(req.body);
       return editFinding(ctx, { id: uuid.parse(req.params.id), ...body });
+    }),
+  );
+
+  // ---- Assets and sharing ----------------------------------------------------
+
+  router.post(
+    "/assets",
+    handle("upload_asset", (ctx, req) => {
+      const body = z
+        .object({
+          target_id: uuid,
+          filename: z.string().min(1).max(200),
+          mime: z.enum(ASSET_MIME_TYPES),
+          data_base64: z.string().min(1),
+          alt_text: z.string().max(500).optional(),
+        })
+        .parse(req.body);
+      return uploadAsset(ctx, { ...body, data: Buffer.from(body.data_base64, "base64") });
+    }),
+  );
+  // Raw file. Sandboxed so an uploaded file can never run script in the app's origin.
+  router.get("/assets/:id", async (req, res, next) => {
+    try {
+      const ctx = ctxOf(req, res);
+      const { meta, data } = await getAsset(ctx, uuid.parse(req.params.id));
+      await audit(db, ctx.actor.id, "api:get_asset", meta.target_id);
+      const disposition = meta.mime.startsWith("image/") ? "inline" : "attachment";
+      res
+        .set({
+          "Content-Type": meta.mime,
+          "Content-Length": String(data.length),
+          "Content-Disposition": `${disposition}; filename="${meta.filename.replace(/["\\]/g, "_")}"`,
+          "Content-Security-Policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
+          "Cache-Control": "private, max-age=3600",
+        })
+        .send(data);
+    } catch (err) {
+      next(err);
+    }
+  });
+  router.delete("/assets/:id", handle("delete_asset", (ctx, req) => deleteAsset(ctx, uuid.parse(req.params.id))));
+  router.post(
+    "/items/:id/links",
+    handle("add_source_link", (ctx, req) => {
+      const body = z
+        .object({ system: z.enum(["slack", "sentry", "trello", "pr", "figma", "dashboard", "repo", "other"]), url: z.string().url(), label: z.string().max(200).optional() })
+        .parse(req.body);
+      return addSourceLinkTo(ctx, uuid.parse(req.params.id), body);
+    }),
+  );
+  router.post(
+    "/share/:id",
+    handle("share_to_library", (ctx, req) => {
+      const body = z.object({ summary: z.string().min(1).max(300), path: z.string().optional() }).parse(req.body);
+      return shareToLibrary(ctx, { id: uuid.parse(req.params.id), ...body });
     }),
   );
 

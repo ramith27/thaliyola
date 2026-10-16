@@ -21,6 +21,7 @@ COPY --from=build /out/package.json package.json
 COPY --from=build /repo/apps/server/dist dist
 COPY --from=build /repo/apps/server/migrations migrations
 COPY --from=build /repo/apps/web/dist web
+RUN mkdir -p /data/assets && chown node:node /data/assets
 USER node
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s CMD node -e "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"

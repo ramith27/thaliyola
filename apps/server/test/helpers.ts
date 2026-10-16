@@ -1,3 +1,6 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { migrate } from "../src/db/migrate.js";
 import { createPool, type Db } from "../src/db/pool.js";
 import type { Settings } from "../src/config.js";
@@ -16,7 +19,12 @@ export async function freshDb() {
   return { db, ids };
 }
 
-export const TEST_SETTINGS: Settings = { adminEmails: ["admin@example.com"], duplicateThreshold: 0.6 };
+export const TEST_SETTINGS: Settings = {
+  adminEmails: ["admin@example.com"],
+  duplicateThreshold: 0.6,
+  assetDir: mkdtempSync(path.join(tmpdir(), "cairn-assets-")),
+  assetMaxBytes: 1024 * 1024,
+};
 
 /** Context for a human user (tester@example.com unless another email is given). */
 export async function ctxFor(db: Db, extra: Partial<RequestContext> & { email?: string; service?: boolean } = {}): Promise<RequestContext> {
