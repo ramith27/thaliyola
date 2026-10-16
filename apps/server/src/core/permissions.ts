@@ -8,7 +8,8 @@ import { ForbiddenError, type RequestContext } from "./context.js";
  */
 
 export function isAdmin(ctx: RequestContext): boolean {
-  return ctx.actor.kind === "human" && !!ctx.actor.email && ctx.settings.adminEmails.includes(ctx.actor.email.toLowerCase());
+  if (ctx.actor.kind !== "human") return false;
+  return !!ctx.actor.isAdmin || (!!ctx.actor.email && ctx.settings.adminEmails.includes(ctx.actor.email.toLowerCase()));
 }
 
 async function roleIn(db: Queryable, scopeId: string, userId: string): Promise<string | undefined> {

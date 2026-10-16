@@ -195,3 +195,18 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent-soft
 .mini-form .actions { margin: 0.2rem 0; }
 .preview-box { border: 1px solid var(--border); border-radius: var(--radius); padding: 0.4rem 1rem; background: var(--panel); }
 .markdown img { display: block; margin: 0.5rem 0; border-radius: 6px; border: 1px solid var(--border); }
+
+/* Accounts */
+.gate h1 { display: flex; align-items: center; gap: 0.5rem; }
+.gate label, .stack-form label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.92rem; font-weight: 550; }
+.gate > div { width: min(420px, 100%); }
+.stack-form { display: flex; flex-direction: column; gap: 0.8rem; max-width: 420px; }
+.inline-form { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0.8rem 0; }
+.inline-form input:not([type=checkbox]) { flex: 1; min-width: 180px; }
+.inline-form label.inline { display: flex; align-items: center; gap: 0.3rem; }
+.code-block { font-family: var(--mono); font-size: 0.85rem; background: var(--code); padding: 0.6rem 0.8rem; border-radius: 6px; overflow-x: auto; white-space: pre; user-select: all; }
+.table-wrap { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.table th { text-align: left; font-weight: 600; color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+.table th, .table td { padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; justify-content: flex-end; }

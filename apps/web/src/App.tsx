@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { api, ApiError, getToken, setToken, type Me, type ScopeInfo } from "./api";
+import { api, ApiError, authApi, getToken, setToken, type Me, type ScopeInfo } from "./api";
+import { AccountPage, ForcedPasswordChange, LoginPage, UsersPage } from "./pages/account";
 import { Layout } from "./components/Layout";
 import { ErrorBox, Loading } from "./components/ui";
 import { HomePage, ProjectPage, ScopePage, SearchPage } from "./pages/browse";
@@ -17,31 +18,60 @@ interface Boot {
 export function App() {
   const route = useRoute();
   const [boot, setBoot] = useState<Boot | null>(null);
-  const [needsToken, setNeedsToken] = useState(false);
+  const [signIn, setSignIn] = useState<"local" | "cloudflare" | "dev" | null>(null);
+  const [mustChange, setMustChange] = useState<Me | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    Promise.all([api<Me>("/me"), api<{ scopes: ScopeInfo[]; article_types: string[]; finding_types: string[] }>("/scopes")])
-      .then(([me, s]) => setBoot({ me, scopes: s.scopes, articleTypes: s.article_types, findingTypes: s.finding_types }))
-      .catch((e) => {
-        if (e instanceof ApiError && e.status === 401) setNeedsToken(true);
-        else setError(e);
-      });
+    (async () => {
+      setError(null);
+      try {
+        const me = await api<Me>("/me");
+        if (me.must_change_password) return setMustChange(me);
+        const s = await api<{ scopes: ScopeInfo[]; article_types: string[]; finding_types: string[] }>("/scopes");
+        setMustChange(null);
+        setBoot({ me, scopes: s.scopes, articleTypes: s.article_types, findingTypes: s.finding_types });
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 401) {
+          const { mode } = await authApi<{ mode: "local" | "cloudflare" | "dev" }>("/config");
+          setSignIn(mode);
+        } else setError(e as Error);
+      }
+    })();
   }, [attempt]);
 
-  if (needsToken) {
+  const retry = () => {
+    setSignIn(null);
+    setAttempt((a) => a + 1);
+  };
+
+  if (signIn === "local") return <LoginPage onSignedIn={retry} />;
+  if (signIn === "dev") {
     return (
       <TokenGate
         hadToken={!!getToken()}
         onSubmit={(t) => {
           setToken(t);
-          setNeedsToken(false);
-          setAttempt((a) => a + 1);
+          retry();
         }}
       />
     );
   }
+  if (signIn === "cloudflare") {
+    return (
+      <div className="gate">
+        <div>
+          <h1>Cairn</h1>
+          <p className="muted">Your Cloudflare Access session has expired.</p>
+          <button className="btn btn-primary" onClick={() => window.location.reload()}>
+            Sign in again
+          </button>
+        </div>
+      </div>
+    );
+  }
+  if (mustChange) return <ForcedPasswordChange me={mustChange} onDone={retry} />;
   if (error) return <ErrorBox error={error} />;
   if (!boot) return <Loading />;
 
@@ -73,6 +103,12 @@ export function App() {
         ) : (
           <NewArticlePage route={route} scopes={boot.scopes} articleTypes={boot.articleTypes} />
         );
+      break;
+    case "account":
+      page = <AccountPage me={boot.me} />;
+      break;
+    case "admin":
+      page = <UsersPage me={boot.me} />;
       break;
     case "review":
       page = id ? <RevisionPage id={id} /> : <ReviewQueuePage route={route} />;

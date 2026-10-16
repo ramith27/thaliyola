@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import type { Folder, Me, ScopeInfo } from "../api";
+import { authApi, type Folder, type Me, type ScopeInfo } from "../api";
 import { useApi } from "../hooks";
 import { href, navigate, type Route } from "../router";
 
@@ -40,10 +40,26 @@ export function Layout({ me, scopes, route, children }: { me: Me; scopes: ScopeI
           <a href={href("/review")} className={route.path[0] === "review" ? "active" : ""}>
             Review{pending.data?.revisions.length ? <span className="count">{pending.data.revisions.length}</span> : null}
           </a>
-          <span className="muted small me" title={me.kind}>
+          {me.admin && me.auth_mode === "local" && (
+            <a href={href("/admin/users")} className={route.path[0] === "admin" ? "active" : ""}>
+              Users
+            </a>
+          )}
+          <a href={href("/account")} className={`small me ${route.path[0] === "account" ? "active" : ""}`} title="Account and API tokens">
             {me.email ?? "service"}
-            {me.admin ? " · admin" : ""}
-          </span>
+          </a>
+          {me.auth_mode === "local" && (
+            <button
+              className="link-btn small"
+              onClick={async () => {
+                await authApi("/logout", {});
+                window.location.hash = "";
+                window.location.reload();
+              }}
+            >
+              Sign out
+            </button>
+          )}
         </nav>
       </header>
       <div className="body">

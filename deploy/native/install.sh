@@ -60,7 +60,6 @@ log "Configuration ($ENV_FILE)"
 install -d -m 750 -o root -g cairn /etc/cairn
 if [ ! -f "$ENV_FILE" ]; then
   [ -n "$NEW_PASSWORD" ] || { echo "role $DB_USER exists but $ENV_FILE is missing; set its password and create the file" >&2; exit 1; }
-  DEV_TOKEN="$(head -c 32 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 40)"
   (umask 077 && : > "$ENV_FILE")
   cat > "$ENV_FILE" <<CONF
 # Cairn configuration. Restart after editing: systemctl restart cairn
@@ -75,19 +74,15 @@ ASSET_DIR=/var/lib/cairn/assets
 EMBEDDINGS=local
 EMBEDDING_CACHE_DIR=/var/lib/cairn/models
 
-# Start in dev mode (static bearer tokens) until Cloudflare Access is set up.
-# Never expose dev mode beyond this machine.
-AUTH_MODE=dev
-DEV_TOKENS=$DEV_TOKEN=${ADMIN_EMAIL:-admin@localhost}
-ADMIN_EMAILS=${ADMIN_EMAIL:-admin@localhost}
-
-# Production: AUTH_MODE=cloudflare plus
-# CF_ACCESS_TEAM_DOMAIN=https://<team>.cloudflareaccess.com
-# CF_ACCESS_AUD=<Access application AUD tag>
+# Sign-in: local = built-in accounts (manage with cairn-admin and the Users page).
+# For Cloudflare Access instead:
+#   AUTH_MODE=cloudflare
+#   CF_ACCESS_TEAM_DOMAIN=https://<team>.cloudflareaccess.com
+#   CF_ACCESS_AUD=<Access application AUD tag>
+AUTH_MODE=local
 CONF
   chown root:cairn "$ENV_FILE"
   chmod 640 "$ENV_FILE"
-  CREATED_TOKEN="$DEV_TOKEN"
 fi
 
 grep -q '^ASSET_DIR=' "$ENV_FILE" || echo "ASSET_DIR=/var/lib/cairn/assets" >> "$ENV_FILE"
@@ -115,6 +110,17 @@ rm -rf "$APP_DIR.old"
 if [ -e "$APP_DIR" ]; then mv "$APP_DIR" "$APP_DIR.old"; fi
 mv "$APP_DIR.new" "$APP_DIR"
 
+log "cairn-admin command"
+cat > /usr/local/bin/cairn-admin <<'ADMIN'
+#!/usr/bin/env bash
+# Cairn account administration, e.g.: cairn-admin create-user --email you@example.com --admin
+set -euo pipefail
+[ "$(id -u)" -eq 0 ] || { echo "run as root (sudo cairn-admin ...)" >&2; exit 1; }
+set -a; . /etc/cairn/cairn.env; set +a
+exec runuser -u cairn -- /usr/bin/node /opt/cairn/dist/scripts/admin.js "$@"
+ADMIN
+chmod 755 /usr/local/bin/cairn-admin
+
 log "systemd"
 install -m 644 deploy/native/cairn.service /etc/systemd/system/cairn.service
 systemctl daemon-reload
@@ -124,7 +130,15 @@ systemctl restart cairn
 for _ in $(seq 1 30); do
   if curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then
     log "Cairn is running on http://$HOST:$PORT"
-    [ -n "${CREATED_TOKEN:-}" ] && echo "Dev token (also in $ENV_FILE): $CREATED_TOKEN"
+    if grep -q '^AUTH_MODE=local' "$ENV_FILE" && [ -z "$(psql_su "-d $DB_NAME -c \"SELECT 1 FROM users WHERE subject LIKE 'local:%' LIMIT 1\"")" ]; then
+      if [ -n "${ADMIN_EMAIL:-}" ]; then
+        log "First admin"
+        /usr/local/bin/cairn-admin create-user --email "$ADMIN_EMAIL" --admin
+      else
+        echo "No accounts yet. Create the first admin with:"
+        echo "  sudo cairn-admin create-user --email you@example.com --admin"
+      fi
+    fi
     rm -rf "$APP_DIR.old"
     exit 0
   fi

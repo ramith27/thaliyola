@@ -7,6 +7,11 @@ export interface Actor {
   subject: string;
   email: string | null;
   kind: "human" | "service";
+  /** Admin flag stored on the account (local mode); ADMIN_EMAILS also grants admin. */
+  isAdmin?: boolean;
+  disabled?: boolean;
+  /** Signed in with a temporary password that must be changed before doing anything else. */
+  mustChangePassword?: boolean;
 }
 
 /** Everything a core service needs to serve one call. */

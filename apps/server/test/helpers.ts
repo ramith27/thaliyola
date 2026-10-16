@@ -22,6 +22,9 @@ export async function freshDb() {
 export const TEST_SETTINGS: Settings = {
   adminEmails: ["admin@example.com"],
   duplicateThreshold: 0.6,
+  authMode: "dev",
+  sessionTtlHours: 24,
+  cookieSecure: "false",
   assetDir: mkdtempSync(path.join(tmpdir(), "cairn-assets-")),
   assetMaxBytes: 1024 * 1024,
   searchMinSimilarity: 0.6,

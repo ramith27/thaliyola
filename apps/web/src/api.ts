@@ -57,6 +57,22 @@ export interface Me {
   email: string | null;
   kind: string;
   admin: boolean;
+  local_account: boolean;
+  must_change_password: boolean;
+  auth_mode: "local" | "cloudflare" | "dev";
+}
+
+/** Auth endpoints live outside /api. */
+export async function authApi<T = any>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`/auth${path}`, {
+    method: body === undefined ? "GET" : "POST",
+    headers: body === undefined ? {} : { "content-type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    credentials: "same-origin",
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(res.status, data?.error ?? res.statusText, data);
+  return data as T;
 }
 
 export interface ScopeInfo {

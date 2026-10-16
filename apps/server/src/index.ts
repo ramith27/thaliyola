@@ -30,7 +30,7 @@ const indexer = embedder ? startIndexer(db, embedder, (msg) => console.log(`[emb
 
 const server = createApp({
   db,
-  authenticate: authenticatorFor(config),
+  authenticate: authenticatorFor(config, db),
   settings: settingsFrom(config),
   webDist: config.WEB_DIST,
   embedder,

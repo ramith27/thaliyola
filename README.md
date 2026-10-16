@@ -127,8 +127,9 @@ Requirements: Node 22, pnpm 9, and either Docker or Postgres 16 with [pgvector](
 **With Docker**
 
 ```sh
-cp .env.example .env          # set DEV_TOKENS and POSTGRES_PASSWORD
+cp .env.example .env          # set POSTGRES_PASSWORD
 docker compose up -d --build
+docker compose exec server node dist/scripts/admin.js create-user --email you@example.com --admin
 docker compose exec server node dist/scripts/seed.js   # optional demo data
 ```
 
@@ -143,7 +144,8 @@ On Debian or Ubuntu, `deploy/native/install.sh` sets up everything:
 sudo ADMIN_EMAIL=you@example.com deploy/native/install.sh
 ```
 
-- Config lives in `/etc/cairn/cairn.env`. On first install it holds a generated dev token, which is printed at the end.
+- New installs use local sign-in. With `ADMIN_EMAIL` set, the first admin account is created and its temporary password printed at the end.
+- Config lives in `/etc/cairn/cairn.env`.
 - Re-run the script to upgrade. It keeps the config and the database.
 - Logs: `journalctl -u cairn -f`.
 
@@ -160,9 +162,11 @@ pnpm dev
 
 **Connect Claude Code**
 
+Create an API token on your Account page, then:
+
 ```sh
 claude mcp add --transport http cairn http://localhost:8080/mcp \
-  --header "Authorization: Bearer dev-token" \
+  --header "Authorization: Bearer cairn_pat_…" \
   --header "X-Cairn-Project: order-service"
 ```
 
@@ -183,6 +187,33 @@ Tests run against a real Postgres database (`TEST_DATABASE_URL`, default `postgr
 ```sh
 pnpm test
 ```
+
+## Sign-in
+
+Choose with `AUTH_MODE`:
+
+| Mode | For | How people and agents sign in |
+|---|---|---|
+| `local` (default) | Self-hosting without an identity provider | Built-in accounts with passwords (scrypt) and browser sessions. Admins manage users on the **Users** page or with `cairn-admin` |
+| `cloudflare` | Teams on Cloudflare Zero Trust | Cloudflare Access (and the MCP server portal) in front; the server verifies the Access JWT |
+| `dev` | Local development only | Static bearer tokens from `DEV_TOKENS` |
+
+In every mode, people can create **personal API tokens** on their Account page for Claude Code and other MCP clients. The page shows a ready-to-paste `claude mcp add` command. Tokens are stored hashed, can expire, and can be revoked.
+
+Local mode details:
+- New accounts get a temporary password that must be changed at first sign-in.
+- Failed sign-ins are throttled.
+- Browser writes made with the session cookie must come from the same origin (CSRF protection on top of `SameSite=Lax`).
+- Disabling a user ends their sessions and revokes their tokens.
+- Session length: `SESSION_TTL_HOURS`. The cookie is `Secure` whenever the request came in over https (`COOKIE_SECURE`).
+
+```sh
+sudo cairn-admin create-user --email you@example.com --admin      # first admin (prints a temporary password)
+sudo cairn-admin reset-password --email someone@example.com
+sudo cairn-admin create-token --service nightly-rca --name "RCA job"  # token for a bot account
+```
+
+(`cairn-admin` is installed by the native installer. Elsewhere, run `node dist/scripts/admin.js …` with `DATABASE_URL` set.)
 
 ## Deployment with Cloudflare Zero Trust
 
@@ -216,5 +247,6 @@ apps/server/
 - ~~**M2** Web UI: browse by scope, markdown editor, review queue with diffs~~ (done)
 - ~~**M3** Library sharing, design assets (screenshots, token files), Figma links~~ (done)
 - ~~**M3b** Semantic search (pgvector + local embedding model), duplicate detection~~ (done)
-- **M4** Per-scope roles, nightly freshness jobs, production hardening
+- ~~Local sign-in with built-in accounts and personal API tokens~~ (done)
+- **M4** Nightly freshness jobs, OAuth for claude.ai connectors in local mode, production hardening
 - **M5** Integrations with existing agent skills, Slack and Sentry

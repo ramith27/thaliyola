@@ -6,7 +6,11 @@ const Env = z
     // Interface to bind; 0.0.0.0 inside containers, 127.0.0.1 behind a local tunnel
     HOST: z.string().default("0.0.0.0"),
     DATABASE_URL: z.string().default("postgres://cairn:cairn@localhost:5432/cairn"),
-    AUTH_MODE: z.enum(["dev", "cloudflare"]).default("dev"),
+    // local = built-in accounts; cloudflare = Cloudflare Access; dev = static tokens (local development only)
+    AUTH_MODE: z.enum(["local", "cloudflare", "dev"]).default("local"),
+    SESSION_TTL_HOURS: z.coerce.number().int().positive().default(168),
+    // Secure cookies: auto = when the request arrived over https (directly or via a local proxy/tunnel)
+    COOKIE_SECURE: z.enum(["auto", "true", "false"]).default("auto"),
     // dev mode: comma-separated "token=email" pairs
     DEV_TOKENS: z.string().default(""),
     // cloudflare mode: https://<team>.cloudflareaccess.com and the Access app's AUD tag
@@ -44,6 +48,9 @@ export function settingsFrom(config: Config): Settings {
   return {
     adminEmails: config.ADMIN_EMAILS.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean),
     duplicateThreshold: config.DUPLICATE_THRESHOLD,
+    authMode: config.AUTH_MODE,
+    sessionTtlHours: config.SESSION_TTL_HOURS,
+    cookieSecure: config.COOKIE_SECURE,
     assetDir: config.ASSET_DIR,
     searchMinSimilarity: config.SEARCH_MIN_SIMILARITY,
     duplicateSimilarity: config.DUPLICATE_SIMILARITY,
@@ -54,6 +61,9 @@ export function settingsFrom(config: Config): Settings {
 export interface Settings {
   adminEmails: string[];
   duplicateThreshold: number;
+  authMode: "local" | "cloudflare" | "dev";
+  sessionTtlHours: number;
+  cookieSecure: "auto" | "true" | "false";
   assetDir: string;
   searchMinSimilarity: number;
   duplicateSimilarity: number;

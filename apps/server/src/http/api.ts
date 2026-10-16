@@ -37,6 +37,17 @@ const sourceLinks = z
   )
   .optional();
 
+/** Maps domain errors to HTTP statuses for everything under /api. */
+export function apiErrorHandler(err: unknown, _req: Request, res: Response, next: NextFunction) {
+  if (res.headersSent) return next(err);
+  if (err instanceof z.ZodError) return void res.status(400).json({ error: "invalid request", issues: err.issues });
+  if (err instanceof ValidationError) return void res.status(400).json({ error: err.message });
+  if (err instanceof ForbiddenError) return void res.status(403).json({ error: err.message });
+  if (err instanceof NotFoundError) return void res.status(404).json({ error: err.message });
+  if (err instanceof ConflictError) return void res.status(409).json({ error: err.message, current: err.current });
+  next(err);
+}
+
 /**
  * JSON API for the web UI and for reviewers. Approval is deliberately not an
  * MCP tool: agents propose, people approve here.
@@ -66,7 +77,18 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
       }
     };
 
-  router.get("/me", handle("me", async (ctx) => ({ ...ctx.actor, admin: isAdmin(ctx) })));
+  router.get(
+    "/me",
+    handle("me", async (ctx) => ({
+      id: ctx.actor.id,
+      email: ctx.actor.email,
+      kind: ctx.actor.kind,
+      admin: isAdmin(ctx),
+      local_account: ctx.actor.subject.startsWith("local:"),
+      must_change_password: !!ctx.actor.mustChangePassword,
+      auth_mode: settings.authMode,
+    })),
+  );
 
   // ---- Reading -------------------------------------------------------------
 
@@ -318,15 +340,6 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
 
   router.use((_req: Request, res: Response) => {
     res.status(404).json({ error: "not found" });
-  });
-
-  router.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
-    if (err instanceof z.ZodError) return void res.status(400).json({ error: "invalid request", issues: err.issues });
-    if (err instanceof ValidationError) return void res.status(400).json({ error: err.message });
-    if (err instanceof ForbiddenError) return void res.status(403).json({ error: err.message });
-    if (err instanceof NotFoundError) return void res.status(404).json({ error: err.message });
-    if (err instanceof ConflictError) return void res.status(409).json({ error: err.message, current: err.current });
-    next(err);
   });
 
   return router;

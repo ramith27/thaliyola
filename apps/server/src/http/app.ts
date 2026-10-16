@@ -9,7 +9,9 @@ import type { Embedder } from "../core/embeddings.js";
 import type { Actor } from "../core/context.js";
 import type { Db } from "../db/pool.js";
 import { buildMcpServer } from "../mcp/server.js";
-import { apiRouter } from "./api.js";
+import { isAdmin } from "../core/permissions.js";
+import { apiErrorHandler, apiRouter } from "./api.js";
+import { accountRouter, publicAuthRouter, requirePasswordChanged } from "./auth.js";
 
 const DEFAULT_WEB_DIST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../web/dist");
 
@@ -36,6 +38,8 @@ export interface AppOptions {
 export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DIST, embedder, onWrite }: AppOptions) {
   const app = express();
   app.disable("x-powered-by");
+  // Honour X-Forwarded-* from a proxy or tunnel on the same machine (secure cookies, client IP for login throttling).
+  app.set("trust proxy", "loopback");
   app.use((_req, res, next) => {
     res.set(SECURITY_HEADERS);
     next();
@@ -49,9 +53,17 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
   });
 
   // Stateless streamable HTTP: a fresh server + transport per request, bound to the caller.
-  app.use("/api", requireAuth(db, authenticate), apiRouter({ db, settings, embedder, onWrite }));
+  app.use("/auth", publicAuthRouter(db, settings));
+  app.use(
+    "/api",
+    requireAuth(db, authenticate),
+    requirePasswordChanged,
+    accountRouter(db, settings, (actor) => isAdmin({ db, actor, settings })),
+    apiRouter({ db, settings, embedder, onWrite }),
+    apiErrorHandler,
+  );
 
-  app.post("/mcp", requireAuth(db, authenticate), async (req, res) => {
+  app.post("/mcp", requireAuth(db, authenticate), requirePasswordChanged, async (req, res) => {
     const server = buildMcpServer({
       db,
       settings,
@@ -80,7 +92,7 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
   // Web UI: static assets plus SPA fallback. Auth happens on the API calls it makes.
   if (existsSync(webDist)) {
     app.use(express.static(webDist, { index: false, maxAge: "1h" }));
-    app.get(/^\/(?!api\/|mcp$|healthz$).*/, (_req, res) => {
+    app.get(/^\/(?!api\/|auth\/|mcp$|healthz$).*/, (_req, res) => {
       res.set("Cache-Control", "no-cache").sendFile(path.join(webDist, "index.html"));
     });
   }
