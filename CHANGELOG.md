@@ -5,7 +5,7 @@
 First release.
 
 - **Knowledge model.** Team, project and library scopes; project components (backend, frontend, …); curated articles in 14 templated types, including API contracts, design tokens, UI component specs, UX patterns and screen specs; episodic findings; typed links (`uses`, `provided_by`, `consumed_by`, `depends_on`, `same_root_cause`, …).
-- **MCP server.** 25 tools over streamable HTTP, plus `investigate`, `start-coding`, `capture` and `review-stale` prompts. Every agent write is a reviewed proposal.
+- **MCP server.** 23 tools over streamable HTTP, plus `investigate`, `start-coding`, `capture` and `review-stale` prompts. Every agent write is a reviewed proposal.
 - **Review.** Optimistic concurrency, rule-based redaction of secrets and personal data, duplicate detection, impact notices to consumers of changed contracts and shared designs, and promotion and duplicate suggestions.
 - **Search.** Hybrid full-text and semantic search with a local embedding model (bge-small, no LLM, no API key), reciprocal rank fusion, HNSW index, and freshness-aware ranking.
 - **Sharing.** Publish project items to the library; design assets (screenshots, token files) on local disk or S3-compatible storage; Figma and other source links.
