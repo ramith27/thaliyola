@@ -1,0 +1,43 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: cairn
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cairn}
+      POSTGRES_DB: cairn
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cairn"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://cairn:${POSTGRES_PASSWORD:-cairn}@db:5432/cairn
+    depends_on:
+      db:
+        condition: service_healthy
+    # Published on localhost only; outside traffic arrives through the tunnel.
+    ports:
+      - "127.0.0.1:8080:8080"
+    restart: unless-stopped
+
+  # Cloudflare Tunnel to the Access-protected hostname. Enable with: docker compose --profile tunnel up -d
+  cloudflared:
+    image: cloudflare/cloudflared:2025.10.0
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN in .env}
+    depends_on:
+      - server
+    profiles: ["tunnel"]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
