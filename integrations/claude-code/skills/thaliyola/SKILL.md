@@ -14,6 +14,10 @@ Thaliyola holds what the team already knows: systems, metrics, runbooks, project
 3. If an entry explains the problem, prove it with the smallest check, apply the known fix, then `verify_entry(still_valid: true)`.
 4. If not, investigate normally and keep partial matches' ids for `related_ids`.
 
+## No project for this code yet?
+
+If `list_projects` and `get_project_context` (with `repo` set to the git remote) find nothing, call `create_project` with the project's name, a short name and its repositories (with their git remote URLs). An admin's session creates it immediately; otherwise it becomes a request an admin approves. Don't file project knowledge in `team` while you wait.
+
 ## Before changing code
 
 1. `get_project_context` (the project and component come from the `X-Thaliyola-Project` / `X-Thaliyola-Component` headers, or pass them).

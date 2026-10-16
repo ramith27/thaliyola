@@ -25,6 +25,7 @@ import {
 } from "../core/writes.js";
 import { resolveRepo } from "../core/scopes.js";
 import { completeTask, getTasks, TASK_KINDS } from "../core/tasks.js";
+import { createOrRequestProject } from "../core/project-requests.js";
 import { getProjectContext } from "../core/projects.js";
 import { listProjects } from "../core/scopes.js";
 import { searchKnowledge } from "../core/search.js";
@@ -38,6 +39,7 @@ How to use it:
 - Before investigating an alert, bug or question, call search_knowledge first. Phrase the query the way the symptom first appeared.
 - Before changing code in a project, call get_project_context (pass the project, and the component if you know it: backend, frontend, ...; or pass the repo's git remote URL as repo and Thaliyola finds both). Read open impact notices first.
 - Project knowledge belongs in that project's scope (project argument), not in "team": each project has its own members and access. Use "team" only for org-wide systems, metrics and runbooks. If you find something filed in the wrong place, propose move_entry.
+- No project for the code you're in? Call create_project (with its repositories and git URLs). An admin's session creates it immediately; otherwise it's a request an admin approves, and you write your notes up once it exists.
 - Thaliyola has no model of its own; you are its judgment. get_tasks returns curation work (misfiled entries, missing repositories, duplicates, empty outlines, stale entries, unanswered searches). Do it when the user asks you to tidy or curate, or in a scheduled run, and report each with complete_task.
 - Open only the relevant hits with get_article / get_finding; search results are compact summaries.
 - Items marked possibly_stale were not verified recently: confirm before relying on them.
@@ -192,6 +194,34 @@ export function buildMcpServer(ctx: RequestContext): McpServer {
       annotations: { readOnlyHint: true },
     },
     (args) => run("list_projects", null, async () => ({ projects: await listProjects(ctx, args.include_archived) })),
+  );
+
+  server.registerTool(
+    "create_project",
+    {
+      title: "Create (or request) a project",
+      description:
+        "When the code you're working on has no project in Thaliyola yet (list_projects / get_project_context with repo find nothing), create one instead of filing its knowledge in 'team'. " +
+        "Admins' sessions create it right away and own it; anyone else's files a request that an admin approves. " +
+        "Include its repositories with their git remote URLs (git remote get-url origin) so sessions in them find the project.",
+      inputSchema: {
+        slug: z.string().describe("Short name used in links and by agents, lowercase with hyphens, e.g. 'quilleaf'"),
+        name: z.string().describe("Display name, e.g. 'Quilleaf'"),
+        description: z.string().optional().describe("What it is, in one line"),
+        repos: z
+          .array(
+            z.object({
+              slug: z.string().describe("e.g. 'android', 'web', 'site'"),
+              kind: z.enum(["backend", "frontend", "mobile", "data", "infra", "other"]),
+              repo_url: z.string().optional().describe("git remote URL"),
+              description: z.string().optional(),
+            }),
+          )
+          .optional(),
+        reason: z.string().optional().describe("Why it's needed (shown to the admin if it has to be approved)"),
+      },
+    },
+    (args) => run("create_project", null, () => createOrRequestProject(ctx, args)),
   );
 
   server.registerTool(

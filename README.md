@@ -183,6 +183,7 @@ Also: `GET/POST /api/revisions/:id/comments`, `GET /api/revisions/:id/reviewers`
 - **Projects manage themselves:** each project has its own settings page (General, Members and access, Repositories) that its owners manage, not only admins: name and description, visibility, people and teams with roles, and its repositories.
 - **Teams:** groups of people (Teams page). Admins create teams; admins and each team's **leads** assign its members (member or lead) and can start a **project for the team** from its page: the team gets a role on it (reader, writer or owner) and the chosen members own it. Add a team to any number of projects, and everyone in it gets that role there. A person's role in a project is the highest of their own and their teams' roles.
 - **Repositories:** a project can have any number of repositories (components), each with its URL; one repository belongs to one project. A Claude session finds its project from the git remote: the `X-Thaliyola-Repo` header, or the `repo` argument of `get_project_context` (`GET /api/repos/resolve?url=` for scripts).
+- **Projects from agents:** a Claude session working in code that has no project calls `create_project` with the repositories and their git URLs. For an admin it's created straight away; for anyone else it becomes a request under Review → New projects, and the requester owns the project once approved.
 - **Moving:** owners can move a folder from one scope into a project, or make the folder a new project in one step (Move or make a project… beside a folder): items keep their ids, history and links; the folder prefix can be dropped, the folder can go into a folder of the destination, and chosen sub-folders become the project's repositories while staying folders (`POST /api/move`, with `dry_run` for a preview). A single article or finding moves with **Move…** on its page: to another project or space, into a folder there, and onto one of the project's repositories (findings have no folders, so a repository is how they're grouped). The project page lists everything grouped by repository.
 - **Reading:** every signed-in user can read team-visible scopes. A project can be made **members-only** (scope settings, or `PATCH /api/scopes/:slug`). Then only its members and admins can read it, and for everyone else its articles, findings, files, review items and links don't appear anywhere: search, browse, project lists, "used by" links, needs-attention and suggestions all leave them out, and direct requests return "not found". Library owners can still review what such a project proposes to publish to the library.
 - **Proposing:** in a team-visible scope, anyone can propose until the scope lists writers or owners; after that, only they can. In members-only projects, only writers and owners can.
@@ -271,7 +272,7 @@ claude mcp add --transport http thaliyola http://localhost:8080/mcp \
 ### Acceptance
 
 [`docs/acceptance.md`](docs/acceptance.md) describes the full acceptance run and its latest results:
-- a sweep of all 26 MCP tools (`pnpm --filter @thaliyola/server acceptance`);
+- a sweep of all 27 MCP tools (`pnpm --filter @thaliyola/server acceptance`);
 - real Claude Code sessions acting as designer, backend developer, frontend developer, on-call engineer, admin and outsider.
 
 ### Behind a reverse proxy

@@ -8,6 +8,7 @@ const OP_TEXT: Record<string, string> = { create: "new", update: "edit", promote
 
 export function ReviewQueuePage({ route }: { route: Route }) {
   if (route.query.get("tab") === "suggestions") return <SuggestionsPage />;
+  if (route.query.get("tab") === "projects") return <ProjectRequestsPage />;
   return <Queue route={route} />;
 }
 
@@ -89,6 +90,9 @@ function Queue({ route }: { route: Route }) {
         </a>
         <a className="chip" href={href("/review", { tab: "suggestions" })}>
           Suggestions
+        </a>
+        <a className="chip" href={href("/review", { tab: "projects" })}>
+          New projects
         </a>
       </div>
       <ErrorBox error={error ?? actionError} />
@@ -702,5 +706,101 @@ function AgentTasks() {
         </details>
       )}
     </section>
+  );
+}
+
+interface ProjectRequest {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  repos: { slug: string; kind: string; repo_url?: string; description?: string }[];
+  reason: string;
+  state: string;
+  decision_note: string | null;
+  created_at: string;
+  requested_by?: string;
+}
+
+/** Projects that people or their agents asked for. Admins approve (creating it) or decline with a reason. */
+function ProjectRequestsPage() {
+  const { data, error, reload } = useApi<{ requests: ProjectRequest[] }>("/project-requests");
+  const [actionError, setActionError] = useState<Error | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  async function act(label: string, fn: () => Promise<unknown>) {
+    setActionError(null);
+    setDone(null);
+    try {
+      await fn();
+      setDone(label);
+      reload();
+    } catch (e) {
+      setActionError(e as Error);
+    }
+  }
+  return (
+    <div className="page">
+      <h1>Review</h1>
+      <div className="filters">
+        <a className="chip" href={href("/review")}>
+          pending
+        </a>
+        <a className="chip" href={href("/review", { tab: "suggestions" })}>
+          Suggestions
+        </a>
+        <a className="chip active" href={href("/review", { tab: "projects" })}>
+          New projects
+        </a>
+      </div>
+      <p className="muted">
+        When a Claude session works in code that has no project here, it asks for one (the create_project tool) instead of filing its notes in the shared space. Admins'
+        sessions create projects directly; these came from everyone else.
+      </p>
+      <ErrorBox error={error ?? actionError} />
+      {done && <Notice kind="ok">{done}</Notice>}
+      {!data ? (
+        !error && <Loading />
+      ) : !data.requests.length ? (
+        <p className="muted">No project requests waiting.</p>
+      ) : (
+        <ul className="hits">
+          {data.requests.map((r) => (
+            <li key={r.id} className="hit">
+              <div className="hit-head">
+                {r.name} <span className="muted small">· {r.slug}</span>
+              </div>
+              {r.description && <p className="small">{r.description}</p>}
+              {r.repos.length > 0 && (
+                <p className="small muted">
+                  Repositories: {r.repos.map((x) => `${x.slug} (${x.kind}${x.repo_url ? `, ${x.repo_url}` : ""})`).join(" · ")}
+                </p>
+              )}
+              {r.reason && <p className="small">“{r.reason}”</p>}
+              <p className="small muted">
+                {r.requested_by ? `Asked by ${r.requested_by} · ` : ""}
+                {formatDate(r.created_at)}
+                {r.state !== "pending" ? ` · ${r.state}${r.decision_note ? `: ${r.decision_note}` : ""}` : ""}
+              </p>
+              {r.state === "pending" && r.requested_by !== undefined && (
+                <div className="actions">
+                  <button className="btn btn-primary btn-small" onClick={() => act(`Created ${r.name}`, () => api(`/project-requests/${r.id}/approve`, { method: "POST", body: {} }))}>
+                    Create project
+                  </button>
+                  <button
+                    className="btn btn-small"
+                    onClick={() => {
+                      const note = prompt(`Why decline ${r.name}? The requester sees this.`);
+                      if (note) void act(`Declined ${r.name}`, () => api(`/project-requests/${r.id}/decline`, { method: "POST", body: { note } }));
+                    }}
+                  >
+                    Decline
+                  </button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

@@ -16,6 +16,7 @@ import { importDocs } from "../core/importer.js";
 import { dismissGap, knowledgeGaps, successMetrics } from "../core/metrics.js";
 import { onboarding } from "../core/onboarding.js";
 import { taskSummary } from "../core/tasks.js";
+import { approveProjectRequest, createOrRequestProject, declineProjectRequest, listProjectRequests } from "../core/project-requests.js";
 import { deleteItem, deleteProject, emptyItem, emptyProject, listTrash, restoreItem, restoreProject } from "../core/trash.js";
 import { listPurges, purgeItem } from "../core/purge.js";
 import { insights, knowledgeGraph } from "../core/insights.js";
@@ -258,6 +259,39 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
   router.post(
     "/trash/projects/:slug/purge",
     handle("empty_project", (ctx, req) => emptyProject(ctx, String(req.params.slug), z.object({ confirm: z.string().max(200) }).parse(req.body).confirm)),
+  );
+  router.get(
+    "/project-requests",
+    handle("list_project_requests", async (ctx, req) => ({
+      requests: await listProjectRequests(ctx, z.enum(["pending", "approved", "declined"]).optional().parse(req.query.state)),
+    })),
+  );
+  router.post(
+    "/project-requests",
+    handle("request_project", (ctx, req) =>
+      createOrRequestProject(
+        ctx,
+        z
+          .object({
+            slug: z.string(),
+            name: z.string().max(200),
+            description: z.string().max(2000).optional(),
+            repos: z.array(z.object({ slug: z.string(), kind: z.enum(["backend", "frontend", "mobile", "data", "infra", "other"]), repo_url: repoUrl.optional(), description: z.string().max(500).optional() })).max(30).optional(),
+            reason: z.string().max(1000).optional(),
+          })
+          .parse(req.body),
+      ),
+    ),
+  );
+  router.post(
+    "/project-requests/:id/approve",
+    handle("approve_project_request", (ctx, req) =>
+      approveProjectRequest(ctx, uuid.parse(req.params.id), z.object({ slug: z.string().optional(), name: z.string().max(200).optional() }).parse(req.body ?? {})),
+    ),
+  );
+  router.post(
+    "/project-requests/:id/decline",
+    handle("decline_project_request", (ctx, req) => declineProjectRequest(ctx, uuid.parse(req.params.id), z.object({ note: z.string().max(1000) }).parse(req.body).note)),
   );
   router.get("/onboarding", handle("onboarding", (ctx) => onboarding(ctx)));
   router.get("/favourites", handle("list_favourites", async (ctx) => ({ favourites: await listFavourites(ctx) })));

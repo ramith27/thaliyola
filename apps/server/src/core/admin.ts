@@ -15,7 +15,7 @@ export interface NewProject {
   slug: string;
   name: string;
   description?: string;
-  components?: { slug: string; kind: ComponentKind; repo_url?: string }[];
+  components?: { slug: string; kind: ComponentKind; repo_url?: string; description?: string }[];
   starter?: boolean;
 }
 
@@ -43,7 +43,7 @@ export async function createProject(ctx: RequestContext, input: NewProject, acce
     if (seen.has(c.slug)) throw new ValidationError(`two repositories are called '${c.slug}'`);
     seen.add(c.slug);
     await assertRepoFree(ctx, c.repo_url);
-    const cid = await createComponent(ctx.db, id, c.slug, c.kind, c.repo_url || undefined);
+    const cid = await createComponent(ctx.db, id, c.slug, c.kind, c.repo_url || undefined, c.description?.trim() ?? "");
     components[c.kind] ??= cid;
   }
   if (access.team) await ctx.db.query("INSERT INTO scope_team_roles (scope_id, team_id, role) VALUES ($1, $2, $3)", [id, access.team.id, access.team.role]);
