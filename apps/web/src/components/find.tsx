@@ -394,6 +394,7 @@ export function CommandPalette({ scopes, onClose }: { scopes: ScopeInfo[]; onClo
       { id: "graph", group: "Go to", label: "Knowledge graph", text: "knowledge graph", icon: "graph", run: go(href("/graph")) },
       { id: "connect", group: "Go to", label: "Connect your tools", text: "connect claude mcp token", icon: "plug", run: go(href("/connect")) },
       { id: "account", group: "Go to", label: "Account and tokens", text: "account tokens password notifications", icon: "user", run: go(href("/account")) },
+      { id: "new-project", group: "Create", label: "New project", text: "new project create repository repo", icon: "folder", run: go(href("/new/project")) },
       { id: "new-article", group: "Create", label: "New article", text: "new article create write", icon: "plus", run: go(href("/new/article")) },
       { id: "new-finding", group: "Create", label: "New finding", text: "new finding incident rca known issue", icon: "bolt", run: go(href("/new/finding")) },
       { id: "import", group: "Create", label: "Import documents", text: "import markdown html notion confluence google docs zip", icon: "inbox", run: go(href("/import")) },

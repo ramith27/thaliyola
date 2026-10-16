@@ -72,11 +72,26 @@ export function Layout({ me, scopes, route, children }: { me: Me; scopes: ScopeI
           ))}
         </div>
         <div className="nav-group">
-          <div className="nav-title">Projects</div>
+          <div className="nav-title nav-title-action">
+            <span>Projects</span>
+            {me.admin && (
+              <a className="nav-add" href={href("/new/project")} title="New project" aria-label="New project">
+                <I name="plus" size={14} />
+              </a>
+            )}
+          </div>
           {projects.map((s) => (
             <ScopeLink key={s.slug} scope={s} active={activeScope === s.slug} />
           ))}
-          {!projects.length && <div className="muted small nav-empty">No projects yet</div>}
+          {!projects.length &&
+            (me.admin ? (
+              <a className="nav-link nav-link-sm" href={href("/new/project")}>
+                <I name="plus" size={16} />
+                <span>Create a project</span>
+              </a>
+            ) : (
+              <div className="muted small nav-empty">No projects yet</div>
+            ))}
         </div>
         {recentOnly.length > 0 && (
           <div className="nav-group">

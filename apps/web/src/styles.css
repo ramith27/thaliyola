@@ -653,3 +653,6 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .team-project-form h3 { margin-top: 0; }
 .new-project-fields { border-left: 3px solid var(--accent); padding: 0.2rem 0 0.2rem 0.9rem; margin: 0.6rem 0; }
 .new-project-fields label { display: flex; flex-direction: column; gap: 0.3rem; font-weight: 550; font-size: 0.9rem; margin: 0.4rem 0; }
+.nav-title-action { display: flex; align-items: center; justify-content: space-between; padding-right: 0.4rem; }
+.nav-add { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; color: var(--muted); }
+.nav-add:hover { background: var(--surface-2); color: var(--accent); text-decoration: none; }
