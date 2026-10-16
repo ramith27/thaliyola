@@ -104,10 +104,10 @@ export function App() {
       page = <ProjectPage slug={id!} route={route} me={boot.me} scopes={boot.scopes} />;
       break;
     case "article":
-      page = <ArticlePage id={id!} route={route} me={boot.me} />;
+      page = <ArticlePage id={id!} route={route} me={boot.me} scopes={boot.scopes} />;
       break;
     case "finding":
-      page = <FindingPage id={id!} route={route} me={boot.me} />;
+      page = <FindingPage id={id!} route={route} me={boot.me} scopes={boot.scopes} />;
       break;
     case "new":
       page =

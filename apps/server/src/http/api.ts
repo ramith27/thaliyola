@@ -21,7 +21,7 @@ import { listSuggestions } from "../core/suggestions.js";
 import { browseKb, getArticle, getFinding } from "../core/items.js";
 import { ackNotice, listImpactNotices } from "../core/notices.js";
 import { isAdmin, readableScopes } from "../core/permissions.js";
-import { getProjectContext } from "../core/projects.js";
+import { getProjectContext, projectPages } from "../core/projects.js";
 import { approveRevision, getRevision, listReviewQueue, rejectRevision } from "../core/review.js";
 import { searchKnowledge } from "../core/search.js";
 import { addSourceLinkTo, LINK_KINDS, linkEntries, promoteFinding, shareToLibrary, verifyEntry } from "../core/writes.js";
@@ -285,6 +285,7 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
       return { type, sections: ARTICLE_TEMPLATES[type], body_md: templateFor(type, { hints: req.query.hints === "true" }) };
     }),
   );
+  router.get("/projects/:slug/pages", handle("project_pages", (ctx, req) => projectPages(ctx, String(req.params.slug))));
   router.get(
     "/projects/:slug/context",
     handle("project_context", (ctx, req) => getProjectContext(ctx, String(req.params.slug), z.string().optional().parse(req.query.component))),
@@ -661,6 +662,8 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
             ids: z.array(uuid).max(500).optional(),
             strip_folder: z.boolean().optional(),
             repo_folders: z.array(z.string().max(200)).max(50).optional(),
+            into_folder: z.string().max(500).optional(),
+            component: z.string().max(100).optional(),
             dry_run: z.boolean().optional(),
             new_project: z.boolean().optional(),
           })

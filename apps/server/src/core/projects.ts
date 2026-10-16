@@ -1,7 +1,7 @@
 import type { RequestContext } from "./context.js";
 import { ValidationError } from "./context.js";
 import { readableScopes } from "./permissions.js";
-import { getComponent, listComponents, resolveProject } from "./scopes.js";
+import { getComponent, getReadableScope, listComponents, resolveProject } from "./scopes.js";
 
 const OVERVIEW_MAX_CHARS = 6000;
 const VISIBLE = ["published", "possibly_stale"];
@@ -111,5 +111,36 @@ export async function getProjectContext(ctx: RequestContext, projectSlug?: strin
     recent_records: records.rows,
     uses: uses.rows,
     open_known_issues: knownIssues.rows,
+  };
+}
+
+/** Every page in a project, grouped by the repository it's about (pages about no repository last). */
+export async function projectPages(ctx: RequestContext, slug: string) {
+  const scope = await getReadableScope(ctx, slug);
+  const components = await ctx.db.query<{ id: string; slug: string; kind: string; repo_url: string | null; description: string }>(
+    "SELECT id, slug, kind, repo_url, description FROM components WHERE scope_id = $1 ORDER BY slug",
+    [scope.id],
+  );
+  const articles = await ctx.db.query<{ id: string; title: string; type: string; status: string; path: string; component_ids: string[] }>(
+    `SELECT id, title, type, status, path, component_ids FROM articles
+      WHERE scope_id = $1 AND status IN ('published', 'possibly_stale', 'draft') ORDER BY path, title`,
+    [scope.id],
+  );
+  const findings = await ctx.db.query<{ id: string; title: string; type: string; status: string; component_ids: string[] }>(
+    "SELECT id, title, type, status, component_ids FROM findings WHERE scope_id = $1 AND status IN ('published', 'possibly_stale', 'draft') ORDER BY updated_at DESC",
+    [scope.id],
+  );
+  const page = (a: (typeof articles.rows)[number]) => ({ kind: "article" as const, id: a.id, title: a.title, type: a.type, status: a.status, path: a.path });
+  const finding = (f: (typeof findings.rows)[number]) => ({ kind: "finding" as const, id: f.id, title: f.title, type: f.type, status: f.status, path: "" });
+  return {
+    project: scope.slug,
+    repositories: components.rows.map((c) => ({
+      slug: c.slug,
+      kind: c.kind,
+      repo_url: c.repo_url,
+      description: c.description,
+      pages: [...articles.rows.filter((a) => a.component_ids.includes(c.id)).map(page), ...findings.rows.filter((f) => f.component_ids.includes(c.id)).map(finding)],
+    })),
+    other: [...articles.rows.filter((a) => !a.component_ids.length).map(page), ...findings.rows.filter((f) => !f.component_ids.length).map(finding)],
   };
 }

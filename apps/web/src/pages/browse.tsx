@@ -296,7 +296,61 @@ export function ProjectPage({ slug, route, me, scopes = [] }: { slug: string; ro
         <h2>Open known issues</h2>
         <LinkList items={data.open_known_issues} kind="finding" empty="None." />
       </section>
+      {!component && <PagesByRepository slug={slug} canManage={!!info?.can_manage || me.admin} />}
     </div>
+  );
+}
+
+type RepoPage = { kind: "article" | "finding"; id: string; title: string; type: string; status: string; path: string };
+
+interface ProjectPagesT {
+  repositories: { slug: string; kind: string; repo_url: string | null; description: string; pages: RepoPage[] }[];
+  other: RepoPage[];
+}
+
+/** Every page in the project, grouped by the repository it's about, so nothing hides in a flat list. */
+function PagesByRepository({ slug, canManage }: { slug: string; canManage: boolean }) {
+  const { data } = useApi<ProjectPagesT>(`/projects/${encodeURIComponent(slug)}/pages`);
+  if (!data) return null;
+  const groups = [
+    ...data.repositories.map((r) => ({ key: r.slug, title: r.slug, sub: [r.kind, r.description].filter(Boolean).join(" · "), link: href(`/project/${slug}`, { component: r.slug }), pages: r.pages })),
+    ...(data.other.length ? [{ key: "_other", title: "Whole project", sub: "Not about one repository", link: null as string | null, pages: data.other }] : []),
+  ];
+  return (
+    <section className="repo-pages">
+      <div className="section-head">
+        <h2>Everything by repository</h2>
+        {canManage && (
+          <a className="btn btn-small" href={href(`/scope/${slug}/settings`, { tab: "repos" })}>
+            Manage repositories
+          </a>
+        )}
+      </div>
+      {!groups.length && <p className="muted">No pages yet.</p>}
+      <div className="cards repo-cards">
+        {groups.map((g) => (
+          <div key={g.key} className="card">
+            <div className="card-head">
+              <div>
+                <h3>{g.link ? <a href={g.link}>{g.title}</a> : g.title}</h3>
+                {g.sub && <p className="muted small">{g.sub}</p>}
+              </div>
+              <span className="muted small">{g.pages.length}</span>
+            </div>
+            <ul className="plain repo-page-list">
+              {g.pages.map((p) => (
+                <li key={p.id}>
+                  <a href={href(`/${p.kind}/${p.id}`)}>{p.title}</a>
+                  {p.kind === "finding" ? <span className="muted small"> · {p.type.replace(/_/g, " ")}</span> : p.path && <span className="muted small"> · {p.path.split("/").join(" / ")}</span>}
+                  {p.status !== "published" && <StatusBadge status={p.status} />}
+                </li>
+              ))}
+              {!g.pages.length && <li className="muted small">No pages yet.</li>}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

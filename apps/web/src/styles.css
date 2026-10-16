@@ -656,3 +656,9 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .nav-title-action { display: flex; align-items: center; justify-content: space-between; padding-right: 0.4rem; }
 .nav-add { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; color: var(--muted); }
 .nav-add:hover { background: var(--surface-2); color: var(--accent); text-decoration: none; }
+.repo-pages { margin-top: 1.5rem; }
+.repo-cards { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.repo-cards .card { padding: 0.9rem 1.1rem; }
+.repo-page-list li { padding: 0.25rem 0; font-size: 0.92rem; }
+.move-item-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; }
+.move-item-fields label, .into-folder { display: flex; flex-direction: column; gap: 0.3rem; font-weight: 550; font-size: 0.9rem; margin: 0.4rem 0; }

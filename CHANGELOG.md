@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Move a single article or finding (Move… on its page) to a project, into a folder there and onto a repository; re-file items inside a project (`into_folder`, `component` on `POST /api/move`)
+- Fix: sub-folders chosen as repositories during a move keep their folder (they were flattened to the top level); the project page lists everything grouped by repository (`GET /api/projects/:slug/pages`)
+
 - Team leads: assign team members and their role (member or lead) and create projects for the team, with the team's role and the owners chosen at creation (`POST /api/teams/:slug/projects`)
 - Make a folder its own project from the Move dialog (creates the project, then moves the folder)
 

@@ -7,6 +7,7 @@ import { devAuthenticator } from "../src/auth/index.js";
 import { adminAddComponent, adminCreateProject, adminSetMember, adminUpdateScope, removeComponent, updateComponent } from "../src/core/admin.js";
 import { getArticle } from "../src/core/items.js";
 import { moveItems } from "../src/core/move.js";
+import { projectPages } from "../src/core/projects.js";
 import { readableScopes } from "../src/core/permissions.js";
 import { resolveRepo } from "../src/core/scopes.js";
 import { createTeam, createTeamProject, getTeam, listAccess, setTeamMember, setTeamRole } from "../src/core/teams.js";
@@ -164,6 +165,7 @@ describe("moving items into a project", () => {
 
     const dry = await moveItems(a, { from: "team", to: "billing", folder: "Projects/Billing", dry_run: true });
     expect(dry.articles.map((x) => x.to_path).sort()).toEqual(["", "Data", "invoice-api", "invoice-api/Domains"]);
+    // Choosing a repository folder keeps the folder and adds the repository tag.
     expect(dry.subfolders).toEqual(["Data", "invoice-api"]);
 
     const done = await moveItems(a, { from: "team", to: "billing", folder: "Projects/Billing", repo_folders: ["invoice-api"], ids: [f.finding_id] });
@@ -171,14 +173,39 @@ describe("moving items into a project", () => {
     expect(done.new_components).toEqual(["invoice-api"]);
     const moved = await getArticle(a, three.article_id);
     expect(moved.scope.slug).toBe("billing");
-    expect(moved.path).toBe("Domains");
+    expect(moved.path).toBe("invoice-api/Domains");
     expect(moved.components).toEqual(["invoice-api"]);
     expect((await getArticle(a, one.article_id)).path).toBe("");
-    expect((await getArticle(a, two.article_id)).path).toBe("");
+    expect((await getArticle(a, two.article_id)).path).toBe("invoice-api");
+    const pages = await projectPages(a, "billing");
+    expect(pages.repositories.find((r) => r.slug === "invoice-api")!.pages.map((x) => x.title).sort()).toEqual(["Invoice domains", "Invoice service"]);
+    expect(pages.other.map((x) => x.title)).toEqual(expect.arrayContaining(["Billing overview", "Billing data"]));
     // Search chunks and the open proposal moved too.
     expect((await db.query("SELECT DISTINCT s.slug FROM chunks c JOIN scopes s ON s.id = c.scope_id WHERE c.parent_id = $1", [three.article_id])).rows).toEqual([{ slug: "billing" }]);
     expect((await db.query("SELECT s.slug FROM revisions r JOIN scopes s ON s.id = r.scope_id WHERE r.id = $1", [f.revision_id])).rows[0].slug).toBe("billing");
     // Only people who can approve in both scopes may move.
     await expect(moveItems(await person("will@example.com"), { from: "billing", to: "team", folder: "Domains" })).rejects.toThrow(/owners and admins/);
+  });
+
+  it("moves single items into a project folder or repository, and re-files them inside a project", async () => {
+    const a = await admin();
+    const art = await createArticle(a, { scope: "team", type: "runbook", title: "Invoice retry runbook", path: "Projects/Billing/Ops", body_md: "## Trigger\n\nRetries." });
+    const f = await proposeFinding(a, { scope: "team", type: "rca", title: "Invoice PDF blank", symptoms: "Blank PDFs", root_cause: "Font missing", force_new: true });
+    if (f.status !== "pending_review") throw new Error("expected proposal");
+
+    // One article into a folder of the project, tagged with a repository; the finding into the repository.
+    await moveItems(a, { from: "team", to: "billing", ids: [art.article_id], into_folder: "invoice-api/Runbooks", component: "invoice-api" });
+    await moveItems(a, { from: "team", to: "billing", ids: [f.finding_id], component: "invoice-api" });
+    const moved = await getArticle(a, art.article_id);
+    expect([moved.scope.slug, moved.path, moved.components]).toEqual(["billing", "invoice-api/Runbooks", ["invoice-api"]]);
+    const pages = await projectPages(a, "billing");
+    expect(pages.repositories.find((r) => r.slug === "invoice-api")!.pages.map((x) => x.title)).toContain("Invoice retry runbook");
+    expect((await db.query("SELECT c.slug FROM findings f JOIN components c ON c.id = ANY(f.component_ids) WHERE f.id = $1", [f.finding_id])).rows).toEqual([{ slug: "invoice-api" }]);
+
+    // Inside the project: a new folder, tags kept unless a repository is given.
+    await moveItems(a, { from: "billing", to: "billing", ids: [art.article_id], into_folder: "Runbooks" });
+    const refiled = await getArticle(a, art.article_id);
+    expect([refiled.path, refiled.components]).toEqual(["Runbooks", ["invoice-api"]]);
+    await expect(moveItems(a, { from: "billing", to: "billing", ids: [art.article_id], component: "nope" })).rejects.toThrow(/no repository 'nope'/);
   });
 });

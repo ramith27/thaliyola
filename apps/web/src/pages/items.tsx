@@ -14,6 +14,7 @@ import {
   WriteOutcome,
 } from "../components/ui";
 import { AddLinkForm, PurgeZone, ShareToLibrary } from "../components/actions";
+import { MoveItem } from "../components/move";
 import { Attachments } from "../components/assets";
 import { useApi } from "../hooks";
 import { RelationsPanel } from "./graph";
@@ -35,6 +36,11 @@ function Meta({ item }: { item: Article | Finding }) {
       </span>
     </div>
   );
+}
+
+/** Moving needs approval rights where the item is now: admins and the scope's owners. */
+function canMoveFrom(me: Me | undefined, scopes: ScopeInfo[], slug: string) {
+  return !!me?.admin || scopes.find((s) => s.slug === slug)?.my_role === "owner";
 }
 
 function StaleWarning({ status }: { status: string }) {
@@ -122,7 +128,8 @@ async function verify(id: string) {
 
 // ---- Articles ----------------------------------------------------------------
 
-export function ArticlePage({ id, route, me }: { id: string; route: Route; me?: Me }) {
+export function ArticlePage({ id, route, me, scopes = [] }: { id: string; route: Route; me?: Me; scopes?: ScopeInfo[] }) {
+  const [moving, setMoving] = useState(false);
   const editing = route.path[2] === "edit";
   const section = route.query.get("section");
   const { data, error, reload } = useApi<Article>(`/articles/${id}`);
@@ -163,7 +170,23 @@ export function ArticlePage({ id, route, me }: { id: string; route: Route; me?: 
           <WatchButton id={id} />
           <FavouriteButton id={id} />
           <ShareButton title={data.title} />
+          {canMoveFrom(me, scopes, data.scope.slug) && !moving && (
+            <button className="btn" onClick={() => setMoving(true)}>
+              Move…
+            </button>
+          )}
         </div>
+        {moving && (
+          <MoveItem
+            id={id}
+            kind="article"
+            from={data.scope.slug}
+            path={data.path}
+            scopes={scopes}
+            onCancel={() => setMoving(false)}
+            onDone={() => window.location.reload()}
+          />
+        )}
         <SectionedMarkdown body={data.body_md} articleId={id} />
         <RelationsPanel id={id} />
         {me?.admin && <PurgeZone id={id} title={data.title} kind="article" />}
@@ -302,7 +325,8 @@ function ArticleEditor({ article, onSaved }: { article: Article; onSaved: () => 
 
 // ---- Findings ----------------------------------------------------------------
 
-export function FindingPage({ id, route, me }: { id: string; route: Route; me?: Me }) {
+export function FindingPage({ id, route, me, scopes = [] }: { id: string; route: Route; me?: Me; scopes?: ScopeInfo[] }) {
+  const [moving, setMoving] = useState(false);
   const editing = route.path[2] === "edit";
   const { data, error, reload } = useApi<Finding>(`/findings/${id}`);
   useEffect(() => {
@@ -333,7 +357,23 @@ export function FindingPage({ id, route, me }: { id: string; route: Route; me?: 
           <WatchButton id={id} />
           <FavouriteButton id={id} />
           <ShareButton title={data.title} />
+          {canMoveFrom(me, scopes, data.scope.slug) && !moving && (
+            <button className="btn" onClick={() => setMoving(true)}>
+              Move…
+            </button>
+          )}
         </div>
+        {moving && (
+          <MoveItem
+            id={id}
+            kind="finding"
+            from={data.scope.slug}
+            
+            scopes={scopes}
+            onCancel={() => setMoving(false)}
+            onDone={() => window.location.reload()}
+          />
+        )}
         <h2>Symptoms</h2>
         <Markdown text={data.symptoms} />
         <h2>Root cause</h2>
