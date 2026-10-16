@@ -1,7 +1,7 @@
 import type { Queryable } from "../db/pool.js";
 import { splitSections } from "./chunking.js";
 import { NotFoundError, type RequestContext } from "./context.js";
-import { assertCanRead, readableScopes } from "./permissions.js";
+import { assertCanRead, canApprove, readableScopes } from "./permissions.js";
 import { getReadableScope } from "./scopes.js";
 
 export interface RelatedItem {
@@ -86,6 +86,8 @@ export async function getArticle(ctx: RequestContext, id: string, section?: stri
   const a = rows[0];
   if (!a) throw new NotFoundError(`article ${id}`);
   if (!opts.skipReadCheck) await assertCanRead(ctx, a.scope_id, `article ${id}`);
+  // In the trash: only people who could restore it still see it.
+  if (a.status === "deleted" && !(await canApprove(ctx, a.scope_id))) throw new NotFoundError(`article ${id}`);
 
   const sections = splitSections(a.body_md);
   let body: string = a.body_md;
@@ -128,6 +130,7 @@ export async function getFinding(ctx: RequestContext, id: string, opts: { skipRe
   const f = rows[0];
   if (!f) throw new NotFoundError(`finding ${id}`);
   if (!opts.skipReadCheck) await assertCanRead(ctx, f.scope_id, `finding ${id}`);
+  if (f.status === "deleted" && !(await canApprove(ctx, f.scope_id))) throw new NotFoundError(`finding ${id}`);
   const history = await ctx.db.query(
     `SELECT r.op, r.state, r.reason, r.created_at, r.decided_at, coalesce(u.email, u.subject) AS author
        FROM revisions r JOIN users u ON u.id = r.author_id
@@ -164,7 +167,7 @@ export async function browseKb(ctx: RequestContext, scopeSlug: string, pathPrefi
   const prefix = (pathPrefix ?? "").replace(/^\/+|\/+$/g, "");
   const { rows } = await ctx.db.query<{ id: string; title: string; type: string; status: string; path: string }>(
     `SELECT id, title, type, status, path FROM articles
-      WHERE scope_id = $1 AND status NOT IN ('rejected')
+      WHERE scope_id = $1 AND status NOT IN ('rejected', 'deleted')
         AND ($2 = '' OR path = $2 OR path LIKE $2 || '/%')
       ORDER BY path, title`,
     [scope.id, prefix],

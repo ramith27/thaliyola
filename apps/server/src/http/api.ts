@@ -16,6 +16,7 @@ import { importDocs } from "../core/importer.js";
 import { dismissGap, knowledgeGaps, successMetrics } from "../core/metrics.js";
 import { onboarding } from "../core/onboarding.js";
 import { taskSummary } from "../core/tasks.js";
+import { deleteItem, deleteProject, emptyItem, emptyProject, listTrash, restoreItem, restoreProject } from "../core/trash.js";
 import { listPurges, purgeItem } from "../core/purge.js";
 import { insights, knowledgeGraph } from "../core/insights.js";
 import { listSuggestions } from "../core/suggestions.js";
@@ -245,6 +246,19 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
   );
   router.get("/purges", handle("list_purges", async (ctx) => ({ purges: await listPurges(ctx) })));
   router.get("/tasks", handle("task_summary", (ctx, req) => taskSummary(ctx, { project: z.string().optional().parse(req.query.project) })));
+  router.post("/items/:id/delete", handle("delete_item", (ctx, req) => deleteItem(ctx, uuid.parse(req.params.id))));
+  router.get("/trash", handle("list_trash", (ctx) => listTrash(ctx)));
+  router.post("/trash/items/:id/restore", handle("restore_item", (ctx, req) => restoreItem(ctx, uuid.parse(req.params.id))));
+  router.post("/trash/items/:id/purge", handle("empty_item", (ctx, req) => emptyItem(ctx, uuid.parse(req.params.id))));
+  router.post(
+    "/projects/:slug/delete",
+    handle("delete_project", (ctx, req) => deleteProject(ctx, String(req.params.slug), z.object({ confirm: z.string().max(200) }).parse(req.body).confirm)),
+  );
+  router.post("/trash/projects/:slug/restore", handle("restore_project", (ctx, req) => restoreProject(ctx, String(req.params.slug))));
+  router.post(
+    "/trash/projects/:slug/purge",
+    handle("empty_project", (ctx, req) => emptyProject(ctx, String(req.params.slug), z.object({ confirm: z.string().max(200) }).parse(req.body).confirm)),
+  );
   router.get("/onboarding", handle("onboarding", (ctx) => onboarding(ctx)));
   router.get("/favourites", handle("list_favourites", async (ctx) => ({ favourites: await listFavourites(ctx) })));
   router.put("/favourites/:id", handle("add_favourite", (ctx, req) => setFavourite(ctx, uuid.parse(req.params.id), true)));

@@ -15,6 +15,7 @@ import {
 } from "../components/ui";
 import { AddLinkForm, PurgeZone, ShareToLibrary } from "../components/actions";
 import { MoveItem } from "../components/move";
+import { DeleteItemButton, TrashedNotice } from "./trash";
 import { Attachments } from "../components/assets";
 import { useApi } from "../hooks";
 import { RelationsPanel } from "./graph";
@@ -175,7 +176,11 @@ export function ArticlePage({ id, route, me, scopes = [] }: { id: string; route:
               Move…
             </button>
           )}
+          {canMoveFrom(me, scopes, data.scope.slug) && data.status !== "deleted" && (
+            <DeleteItemButton id={id} kind="article" title={data.title} scopeLink={href(data.scope.kind === "project" ? `/project/${data.scope.slug}` : `/scope/${data.scope.slug}`)} />
+          )}
         </div>
+        {data.status === "deleted" && <TrashedNotice id={id} onRestored={reload} />}
         {moving && (
           <MoveItem
             id={id}
@@ -362,7 +367,11 @@ export function FindingPage({ id, route, me, scopes = [] }: { id: string; route:
               Move…
             </button>
           )}
+          {canMoveFrom(me, scopes, data.scope.slug) && data.status !== "deleted" && (
+            <DeleteItemButton id={id} kind="finding" title={data.title} scopeLink={href(data.scope.kind === "project" ? `/project/${data.scope.slug}` : `/scope/${data.scope.slug}`)} />
+          )}
         </div>
+        {data.status === "deleted" && <TrashedNotice id={id} onRestored={reload} />}
         {moving && (
           <MoveItem
             id={id}

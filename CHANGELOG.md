@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Delete articles, findings and whole projects to a trash: hidden everywhere, open proposals closed, restorable by owners and admins, and permanently removable by admins (`POST /api/items/:id/delete`, `POST /api/projects/:slug/delete`, `/api/trash`)
+
 - Curation by connected agents: `get_tasks` / `complete_task` hand judgment work to the client's model (misfiled entries, missing repositories, duplicates, recurring problems, empty outlines, stale entries, missing overviews, unlinked entries, unanswered searches), a `curate` prompt runs the loop, `get_project_context` reports open tasks, and Review → Suggestions shows the queue (`GET /api/tasks`)
 - `move_entry` MCP tool: agents propose moving an entry to a project, folder and/or repository; reviewers see and approve move proposals like any other
 

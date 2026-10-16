@@ -27,8 +27,8 @@ export async function insights(ctx: RequestContext) {
   const growth = await db.query(
     `WITH weeks AS (SELECT generate_series(date_trunc('week', now()) - interval '11 weeks', date_trunc('week', now()), interval '1 week') AS week)
      SELECT to_char(w.week, 'YYYY-MM-DD') AS week,
-            (SELECT count(*) FROM articles a WHERE date_trunc('week', a.created_at) = w.week AND a.status NOT IN ('rejected') AND ($1::uuid[] IS NULL OR a.scope_id = ANY($1)))::int AS articles,
-            (SELECT count(*) FROM findings f WHERE date_trunc('week', f.created_at) = w.week AND f.status NOT IN ('rejected') AND ($1::uuid[] IS NULL OR f.scope_id = ANY($1)))::int AS findings
+            (SELECT count(*) FROM articles a WHERE date_trunc('week', a.created_at) = w.week AND a.status NOT IN ('rejected', 'deleted') AND ($1::uuid[] IS NULL OR a.scope_id = ANY($1)))::int AS articles,
+            (SELECT count(*) FROM findings f WHERE date_trunc('week', f.created_at) = w.week AND f.status NOT IN ('rejected', 'deleted') AND ($1::uuid[] IS NULL OR f.scope_id = ANY($1)))::int AS findings
        FROM weeks w ORDER BY w.week`,
     [readable],
   );

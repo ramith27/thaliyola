@@ -32,6 +32,8 @@ export async function getScopeBySlug(db: Queryable, slug: string): Promise<Scope
 /** A scope the caller may read (members-only projects look missing to non-members). */
 export async function getReadableScope(ctx: RequestContext, slug: string): Promise<Scope> {
   const scope = await getScopeBySlug(ctx.db, slug);
+  // A project in the trash is gone for everyday use; the trash restores it by slug.
+  if (scope.status === "deleted") throw new NotFoundError(`scope '${slug}' (it's in the trash)`);
   await assertCanRead(ctx, scope.id, `scope '${slug}'`);
   return scope;
 }

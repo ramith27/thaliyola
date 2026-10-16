@@ -81,6 +81,7 @@ function requireText(name: string, value: string | undefined) {
 }
 
 function assertEditable(item: ItemRow) {
+  if (item.status === "deleted") throw new ValidationError(`${item.kind} is in the trash; restore it first`);
   if (item.status === "rejected" || item.status === "superseded") {
     throw new ValidationError(`${item.kind} is ${item.status}; propose a new one instead`);
   }

@@ -6,6 +6,7 @@ import { ConnectPage } from "./pages/connect";
 import { Dashboard } from "./pages/dashboard";
 import { EntityPage } from "./pages/entity";
 import { GraphPage } from "./pages/graph";
+import { TrashPage } from "./pages/trash";
 import { TeamPage, TeamsPage } from "./pages/teams";
 import { MetricsPage } from "./pages/metrics";
 import { InviteAcceptPage } from "./pages/invite";
@@ -126,6 +127,9 @@ export function App() {
       break;
     case "entity":
       page = <EntityPage kind={id!} name={route.path[2] ?? ""} />;
+      break;
+    case "trash":
+      page = <TrashPage />;
       break;
     case "teams":
       page = id ? <TeamPage slug={id} scopes={boot.scopes} me={boot.me} /> : <TeamsPage me={boot.me} />;

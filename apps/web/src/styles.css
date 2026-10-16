@@ -665,3 +665,6 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .agent-tasks { margin: 0 0 1.4rem; padding: 1rem 1.2rem; }
 .task-kinds { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.35rem 1rem; margin: 0.6rem 0; }
 .metric-count-inline { display: inline-block; min-width: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.trash-list li { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.7rem 0.9rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); margin-bottom: 0.5rem; }
+.btn-danger-outline { color: var(--danger, #dc2626); }
+.btn-danger-outline:hover { border-color: var(--danger, #dc2626); }

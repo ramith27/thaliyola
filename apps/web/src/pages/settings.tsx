@@ -156,6 +156,7 @@ function General({ scope }: { scope: ScopeInfo }) {
           Import documents
         </a>
       </div>
+      {project && <DeleteProject scope={scope} />}
     </section>
   );
 }
@@ -450,5 +451,59 @@ function RepoFields({ value, onChange, slugPlaceholder = "e.g. api" }: { value: 
         <input value={value.description} onChange={(e) => onChange({ ...value, description: e.target.value })} placeholder="e.g. Public REST API and webhooks" maxLength={500} />
       </label>
     </div>
+  );
+}
+
+/** Moves the project and everything in it to the trash (restorable). */
+function DeleteProject({ scope }: { scope: ScopeInfo }) {
+  const [open, setOpen] = useState(false);
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  if (!open)
+    return (
+      <div className="purge-zone">
+        <button className="link-btn small danger" onClick={() => setOpen(true)}>
+          Delete this project…
+        </button>
+      </div>
+    );
+  return (
+    <section className="purge-zone open">
+      <h3>Delete {scope.name}</h3>
+      <p className="small">
+        The project and all its articles and findings go to the trash. Nobody can see them there, and search and agents ignore them. Its owners and admins can
+        restore everything from the trash; only an admin can delete it for good.
+      </p>
+      <label className="small">
+        Type <strong>{scope.name}</strong> to confirm
+        <input value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+      </label>
+      <ErrorBox error={error} />
+      <div className="actions">
+        <button
+          className="btn btn-danger"
+          disabled={busy || (confirm.trim() !== scope.name.trim() && confirm.trim() !== scope.slug)}
+          onClick={async () => {
+            setBusy(true);
+            setError(null);
+            try {
+              await api(`/projects/${scope.slug}/delete`, { method: "POST", body: { confirm } });
+              window.location.hash = "#/trash";
+              window.location.reload();
+            } catch (e) {
+              setError(e as Error);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {busy ? "Deleting…" : "Move project to the trash"}
+        </button>
+        <button className="btn" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
+    </section>
   );
 }
