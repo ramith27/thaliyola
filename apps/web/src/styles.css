@@ -668,3 +668,16 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .trash-list li { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.7rem 0.9rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); margin-bottom: 0.5rem; }
 .btn-danger-outline { color: var(--danger, #dc2626); }
 .btn-danger-outline:hover { border-color: var(--danger, #dc2626); }
+
+/* Option cards inside forms: the generic form-label styles must not stack them or stretch the radio. */
+.editor .choices { margin: 0.35rem 0 1rem; }
+.editor .choice { flex-direction: row; align-items: flex-start; gap: 0.7rem; margin: 0; font-weight: 400; font-size: 0.95rem; max-width: none; }
+.editor .choice input[type="radio"], .editor .choice input[type="checkbox"] { width: auto; flex: none; margin: 0.2rem 0 0; accent-color: var(--accent); }
+.editor .choice > span { gap: 0.15rem; }
+.editor .choice strong { font-weight: 600; }
+/* Settings tabs stay on one line and scroll sideways on narrow screens; the top bar never pushes the avatar off screen. */
+.settings-tabs { overflow-x: auto; scrollbar-width: none; }
+.settings-tabs a { white-space: nowrap; flex: none; }
+.search-form { min-width: 0; }
+.topbar-right { flex: none; }
+.search-form > svg { flex: none; }
