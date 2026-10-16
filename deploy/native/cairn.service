@@ -1,0 +1,24 @@
+[Unit]
+Description=Cairn team knowledge base (MCP server + web UI)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cairn
+Group=cairn
+WorkingDirectory=/opt/cairn
+EnvironmentFile=/etc/cairn/cairn.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node /opt/cairn/dist/index.js
+Restart=on-failure
+RestartSec=3
+
+# Hardening (kept to options that also work in unprivileged containers)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

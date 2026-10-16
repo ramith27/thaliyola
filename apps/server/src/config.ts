@@ -3,6 +3,8 @@ import { z } from "zod";
 const Env = z
   .object({
     PORT: z.coerce.number().default(8080),
+    // Interface to bind; 0.0.0.0 inside containers, 127.0.0.1 behind a local tunnel
+    HOST: z.string().default("0.0.0.0"),
     DATABASE_URL: z.string().default("postgres://cairn:cairn@localhost:5432/cairn"),
     AUTH_MODE: z.enum(["dev", "cloudflare"]).default("dev"),
     // dev mode: comma-separated "token=email" pairs

@@ -113,7 +113,22 @@ docker compose up -d --build
 docker compose exec server node dist/scripts/seed.js   # optional demo data
 ```
 
-**Without Docker**
+**Native install (systemd, no Docker)**
+
+On Debian or Ubuntu, `deploy/native/install.sh` sets up everything:
+- installs Node 22 and Postgres 16 with pgvector;
+- creates a `cairn` service user and database;
+- builds the server and UI, deploys them to `/opt/cairn`, and runs them as the `cairn` systemd service on `127.0.0.1:8080`.
+
+```sh
+sudo ADMIN_EMAIL=you@example.com deploy/native/install.sh
+```
+
+- Config lives in `/etc/cairn/cairn.env`. On first install it holds a generated dev token, which is printed at the end.
+- Re-run the script to upgrade. It keeps the config and the database.
+- Logs: `journalctl -u cairn -f`.
+
+**Without Docker, for development**
 
 ```sh
 pnpm install
@@ -132,6 +147,14 @@ claude mcp add --transport http cairn http://localhost:8080/mcp \
   --header "X-Cairn-Project: order-service"
 ```
 
+### Smoke test
+
+After a deploy with the demo data loaded, run end-to-end checks against the live server. It plays a backend agent changing a contract, a reviewer approving it, and a frontend agent picking up the change:
+
+```sh
+CAIRN_URL=http://localhost:8080 AGENT_TOKEN=<user token> ADMIN_TOKEN=<admin token> pnpm --filter @cairn/server smoke
+```
+
 ### Tests
 
 Tests run against a real Postgres database (`TEST_DATABASE_URL`, default `postgres://cairn:cairn@localhost:5432/cairn_test`). The schema is dropped and recreated on each run.
@@ -147,7 +170,7 @@ Cairn is meant to sit behind [Cloudflare Access](https://developers.cloudflare.c
 1. Create a Cloudflare Tunnel and put its token in `.env` as `CLOUDFLARE_TUNNEL_TOKEN`. Route a hostname (e.g. `cairn.example.com`) to `http://server:8080`.
 2. Create a self-hosted Access application for that hostname, with a policy for your team. Copy its AUD tag.
 3. Set `AUTH_MODE=cloudflare`, `CF_ACCESS_TEAM_DOMAIN=https://<team>.cloudflareaccess.com` and `CF_ACCESS_AUD=<aud tag>`.
-4. Start everything with `docker compose --profile tunnel up -d`. The server port is bound to localhost only.
+4. Start everything with `docker compose --profile tunnel up -d`. The server port is bound to localhost only. For a native install, [install `cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-remote-tunnel/) as a service instead and point the tunnel at `http://localhost:8080`. Then set the Access variables in `/etc/cairn/cairn.env` and run `systemctl restart cairn`.
 5. Add `https://cairn.example.com/mcp` to your MCP server portal. Users connect Claude to the portal URL.
 
 The server verifies the `Cf-Access-Jwt-Assertion` header on every request against your team's signing keys, so requests that bypass Access are rejected. Users are identified by their Access email; Access service tokens map to service identities for scheduled jobs.
