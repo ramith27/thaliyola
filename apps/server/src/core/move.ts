@@ -33,18 +33,21 @@ export interface MoveInput {
   /** First-level sub-folders (after stripping) that are really repositories: each becomes a component and tags its items. */
   repo_folders?: string[];
   dry_run?: boolean;
+  /** Preview only: the destination is a project that will be created first (`to` doesn't exist yet). */
+  new_project?: boolean;
 }
 
 export async function moveItems(ctx: RequestContext, input: MoveInput) {
   const from = await getScopeBySlug(ctx.db, input.from);
-  const to = await getScopeBySlug(ctx.db, input.to);
-  if (from.id === to.id) throw new ValidationError("pick a different destination");
   await assertCanApprove(ctx, from.id);
-  await assertCanApprove(ctx, to.id);
+  if (input.new_project && !input.dry_run) throw new ValidationError("create the project first, then move");
+  const to = input.new_project ? { id: "", kind: "project", slug: input.to } : await getScopeBySlug(ctx.db, input.to);
+  if (from.id === to.id) throw new ValidationError("pick a different destination");
+  if (!input.new_project) await assertCanApprove(ctx, to.id);
   const repoFolders = new Set(input.repo_folders ?? []);
   if (repoFolders.size) {
     if (to.kind !== "project") throw new ValidationError("only projects have repositories");
-    await assertCanManage(ctx, to);
+    if (!input.new_project) await assertCanManage(ctx, to);
   }
   const folder = input.folder?.trim().replace(/^\/+|\/+$/g, "") ?? "";
   if (!folder && !input.ids?.length) throw new ValidationError("give a folder or the items to move");

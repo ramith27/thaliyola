@@ -11,15 +11,30 @@ const SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
 export type ComponentKind = "backend" | "frontend" | "mobile" | "data" | "infra" | "other";
 
-export async function adminCreateProject(
-  ctx: RequestContext,
-  input: { slug: string; name: string; description?: string; components?: { slug: string; kind: ComponentKind; repo_url?: string }[]; starter?: boolean },
-) {
+export interface NewProject {
+  slug: string;
+  name: string;
+  description?: string;
+  components?: { slug: string; kind: ComponentKind; repo_url?: string }[];
+  starter?: boolean;
+}
+
+export async function adminCreateProject(ctx: RequestContext, input: NewProject) {
   assertAdmin(ctx);
+  return createProject(ctx, input);
+}
+
+/**
+ * Creates a project (callers check who may). Access is granted before the
+ * starter pack is written, so whoever creates it can publish the outlines:
+ * `team` gets a role on it, and `owners` (emails) become its owners.
+ */
+export async function createProject(ctx: RequestContext, input: NewProject, access: { owners?: string[]; team?: { id: string; role: "reader" | "writer" | "owner" } } = {}) {
   if (!SLUG.test(input.slug)) throw new ValidationError("slug must be lowercase letters, digits and hyphens");
+  if (!input.name.trim()) throw new ValidationError("name is required");
   for (const c of input.components ?? []) if (!SLUG.test(c.slug)) throw new ValidationError(`component slug '${c.slug}' must be lowercase letters, digits and hyphens`);
   const existing = await ctx.db.query("SELECT 1 FROM scopes WHERE slug = $1", [input.slug]);
-  if (existing.rowCount) throw new ValidationError(`scope '${input.slug}' already exists`);
+  if (existing.rowCount) throw new ValidationError(`'${input.slug}' is already taken; choose another short name`);
   const id = await createScope(ctx.db, "project", input.slug, input.name.trim(), input.description?.trim() ?? "");
   // Every repository is kept; the starter pack links its contract to the first backend and clients.
   const components: Record<string, string> = {};
@@ -31,8 +46,22 @@ export async function adminCreateProject(
     const cid = await createComponent(ctx.db, id, c.slug, c.kind, c.repo_url || undefined);
     components[c.kind] ??= cid;
   }
+  if (access.team) await ctx.db.query("INSERT INTO scope_team_roles (scope_id, team_id, role) VALUES ($1, $2, $3)", [id, access.team.id, access.team.role]);
+  for (const email of new Set((access.owners ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean))) {
+    const user = await userForEmail(ctx.db, email);
+    await ctx.db.query("INSERT INTO scope_members (scope_id, user_id, role) VALUES ($1, $2, 'owner') ON CONFLICT (scope_id, user_id) DO UPDATE SET role = 'owner'", [id, user]);
+  }
   const starter = input.starter ? await starterPack(ctx, input.slug, input.name.trim(), components) : [];
   return { id, slug: input.slug, components: seen.size, starter };
+}
+
+/** A user by email; people who haven't signed in yet get a placeholder their first sign-in claims. */
+export async function userForEmail(db: Queryable, email: string): Promise<string> {
+  const normalized = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+$/.test(normalized)) throw new ValidationError(`invalid email ${email}`);
+  const found = await db.query<{ id: string }>("SELECT id FROM users WHERE lower(email) = $1 ORDER BY created_at LIMIT 1", [normalized]);
+  if (found.rows[0]) return found.rows[0].id;
+  return (await db.query<{ id: string }>("INSERT INTO users (subject, email) VALUES ($1, $2) RETURNING id", [`pending:${normalized}`, normalized])).rows[0]!.id;
 }
 
 /** Section text for a starter article: what to write there, as an italic prompt people replace. */

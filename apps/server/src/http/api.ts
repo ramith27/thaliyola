@@ -4,7 +4,7 @@ import type { Settings } from "../config.js";
 import { adminAddComponent, adminCreateProject, adminSetMember, adminUpdateScope, listMembers, removeComponent, updateComponent } from "../core/admin.js";
 import { moveItems } from "../core/move.js";
 import { resolveRepo } from "../core/scopes.js";
-import { createTeam, deleteTeam, getTeam, listAccess, listTeams, setTeamMember, setTeamRole, updateTeam } from "../core/teams.js";
+import { createTeam, createTeamProject, deleteTeam, getTeam, listAccess, listTeams, setTeamMember, setTeamRole, updateTeam } from "../core/teams.js";
 import { ASSET_MIME_TYPES, deleteAsset, getAsset, uploadAsset } from "../core/assets.js";
 import { audit } from "../core/audit.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError, type Actor, type RequestContext } from "../core/context.js";
@@ -621,9 +621,32 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
   router.put(
     "/teams/:slug/members",
     handle("set_team_member", (ctx, req) => {
-      const body = z.object({ email: z.string().max(320), member: z.boolean() }).parse(req.body);
-      return setTeamMember(ctx, String(req.params.slug), body.email, body.member);
+      const body = z.object({ email: z.string().max(320), member: z.boolean(), role: z.enum(["member", "lead"]).optional() }).parse(req.body);
+      return setTeamMember(ctx, String(req.params.slug), body.email, body.member, body.role);
     }),
+  );
+  router.post(
+    "/teams/:slug/projects",
+    handle("create_team_project", (ctx, req) =>
+      createTeamProject(
+        ctx,
+        String(req.params.slug),
+        z
+          .object({
+            slug: z.string(),
+            name: z.string().min(1).max(200),
+            description: z.string().max(2000).optional(),
+            components: z
+              .array(z.object({ slug: z.string(), kind: z.enum(["backend", "frontend", "mobile", "data", "infra", "other"]), repo_url: repoUrl.optional() }))
+              .max(30)
+              .optional(),
+            starter: z.boolean().optional(),
+            team_role: z.enum(["reader", "writer", "owner"]).optional(),
+            owners: z.array(z.string().max(320)).max(50).optional(),
+          })
+          .parse(req.body),
+      ),
+    ),
   );
   router.post(
     "/move",
@@ -639,6 +662,7 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
             strip_folder: z.boolean().optional(),
             repo_folders: z.array(z.string().max(200)).max(50).optional(),
             dry_run: z.boolean().optional(),
+            new_project: z.boolean().optional(),
           })
           .parse(req.body),
       ),

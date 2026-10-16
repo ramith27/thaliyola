@@ -110,12 +110,12 @@ export function ScopePage({ slug, scopes, me }: { slug: string; scopes: ScopeInf
         )}
       </div>
       <ErrorBox error={error} />
-      {data ? <TreeTable folder={data.tree} path="" canMove={!!scope && (me.admin || scope.my_role === "owner")} from={slug} scopes={scopes} /> : !error && <Loading />}
+      {data ? <TreeTable folder={data.tree} path="" canMove={!!scope && (me.admin || scope.my_role === "owner")} from={slug} scopes={scopes} me={me} /> : !error && <Loading />}
     </div>
   );
 }
 
-function TreeTable({ folder, path, canMove, from, scopes }: { folder: Folder; path: string; canMove: boolean; from: string; scopes: ScopeInfo[] }) {
+function TreeTable({ folder, path, canMove, from, scopes, me }: { folder: Folder; path: string; canMove: boolean; from: string; scopes: ScopeInfo[]; me: Me }) {
   const [moving, setMoving] = useState(false);
   return (
     <>
@@ -125,13 +125,13 @@ function TreeTable({ folder, path, canMove, from, scopes }: { folder: Folder; pa
             <div className="folder-head">
               <h2>{path.split("/").join(" / ")}</h2>
               {canMove && !moving && (
-                <button className="btn btn-small" onClick={() => setMoving(true)} title="Move this folder into a project">
-                  Move…
+                <button className="btn btn-small" onClick={() => setMoving(true)} title="Move this folder into a project, or make it a project">
+                  Move or make a project…
                 </button>
               )}
             </div>
           )}
-          {moving && <MoveFolder from={from} folder={path} scopes={scopes} onCancel={() => setMoving(false)} onDone={() => window.location.reload()} />}
+          {moving && <MoveFolder from={from} folder={path} scopes={scopes} me={me} onCancel={() => setMoving(false)} onDone={() => window.location.reload()} />}
           <ul className="list">
             {folder.articles.map((a) => (
               <li key={a.id}>
@@ -143,7 +143,7 @@ function TreeTable({ folder, path, canMove, from, scopes }: { folder: Folder; pa
         </section>
       )}
       {Object.entries(folder.folders).map(([name, sub]) => (
-        <TreeTable key={name} folder={sub} path={path ? `${path}/${name}` : name} canMove={canMove} from={from} scopes={scopes} />
+        <TreeTable key={name} folder={sub} path={path ? `${path}/${name}` : name} canMove={canMove} from={from} scopes={scopes} me={me} />
       ))}
     </>
   );

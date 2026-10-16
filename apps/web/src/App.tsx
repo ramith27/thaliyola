@@ -128,7 +128,7 @@ export function App() {
       page = <EntityPage kind={id!} name={route.path[2] ?? ""} />;
       break;
     case "teams":
-      page = id ? <TeamPage slug={id} scopes={boot.scopes} /> : <TeamsPage me={boot.me} />;
+      page = id ? <TeamPage slug={id} scopes={boot.scopes} me={boot.me} /> : <TeamsPage me={boot.me} />;
       break;
     case "metrics":
       page = <MetricsPage me={boot.me} route={route} />;

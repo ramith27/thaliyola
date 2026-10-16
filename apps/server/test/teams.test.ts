@@ -9,7 +9,7 @@ import { getArticle } from "../src/core/items.js";
 import { moveItems } from "../src/core/move.js";
 import { readableScopes } from "../src/core/permissions.js";
 import { resolveRepo } from "../src/core/scopes.js";
-import { createTeam, listAccess, setTeamMember, setTeamRole } from "../src/core/teams.js";
+import { createTeam, createTeamProject, getTeam, listAccess, setTeamMember, setTeamRole } from "../src/core/teams.js";
 import { createArticle, proposeFinding } from "../src/core/writes.js";
 import type { Db } from "../src/db/pool.js";
 import { createApp } from "../src/http/app.js";
@@ -65,8 +65,39 @@ describe("teams", () => {
     expect((await db.query("SELECT slug FROM scopes WHERE id = ANY($1)", [after])).rows.map((r) => r.slug)).not.toContain("billing");
   });
 
-  it("only admins manage teams", async () => {
+  it("only admins create teams", async () => {
     await expect(createTeam(await person("pat@example.com"), { slug: "x", name: "X" })).rejects.toThrow(/admin only/);
+  });
+
+  it("lets team leads manage members and create projects that belong to the team", async () => {
+    const a = await admin();
+    await createTeam(a, { slug: "growth", name: "Growth" });
+    await setTeamMember(a, "growth", "lena@example.com", true, "lead");
+    const lena = await person("lena@example.com");
+    // A lead assigns members; a plain member can't.
+    await setTeamMember(lena, "growth", "mo@example.com", true);
+    await expect(setTeamMember(await person("mo@example.com"), "growth", "x@example.com", true)).rejects.toThrow(/leads and admins/);
+    const team = await getTeam(lena, "growth");
+    expect(team.can_manage).toBe(true);
+    expect(team.members.map((m: { email: string; role: string }) => [m.email, m.role])).toEqual([
+      ["lena@example.com", "lead"],
+      ["mo@example.com", "member"],
+    ]);
+
+    // The lead creates a project for the team: the team gets its role, the lead owns it, the starter pack is written.
+    const p = await createTeamProject(lena, "growth", { slug: "referrals", name: "Referrals", team_role: "writer", owners: ["mo@example.com"], starter: true });
+    expect(p.starter).toHaveLength(3);
+    const access = await listAccess(await person("lena@example.com"), "referrals"); // fresh request: readable scopes are cached per request
+    expect(access.can_manage).toBe(true);
+    expect(access.teams).toEqual([expect.objectContaining({ slug: "growth", role: "writer" })]);
+    expect(access.people.map((x: { email: string; role: string }) => [x.email, x.role]).sort()).toEqual([
+      ["lena@example.com", "owner"],
+      ["mo@example.com", "owner"],
+    ]);
+    expect((await getTeam(await person("lena@example.com"), "growth")).projects).toEqual([expect.objectContaining({ slug: "referrals", role: "writer" })]);
+    // Members (not leads) can't create projects for the team.
+    await expect(createTeamProject(await person("mo@example.com"), "growth", { slug: "nope", name: "Nope" })).rejects.toThrow(/leads and admins/);
+    await expect(createTeamProject(lena, "growth", { slug: "referrals", name: "Again" })).rejects.toThrow(/already taken/);
   });
 });
 

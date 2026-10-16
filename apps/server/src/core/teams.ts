@@ -1,19 +1,32 @@
 import { withTx } from "../db/pool.js";
-import { assertOwnerRemains } from "./admin.js";
+import { assertOwnerRemains, createProject, userForEmail, type NewProject } from "./admin.js";
 import { audit } from "./audit.js";
-import { NotFoundError, ValidationError, type RequestContext } from "./context.js";
+import { ForbiddenError, NotFoundError, ValidationError, type RequestContext } from "./context.js";
 import { assertAdmin, assertCanManage, canManage, isAdmin, readableScopes, roleIn } from "./permissions.js";
 import { getReadableScope, getScopeBySlug } from "./scopes.js";
 
 /**
  * Teams are groups of people. A team can be given a role (reader, writer,
  * owner) on any number of projects, and its members get that role on each.
- * Admins create teams and manage their members; a project's owners decide
- * which teams (and which people) have access to it.
+ * Admins create teams; admins and the team's leads manage its members and
+ * can create projects for it. A project's owners decide which teams (and
+ * which people) have access to it.
  */
 
 const SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/;
 type Role = "reader" | "writer" | "owner";
+
+/** Admins, and leads of this team. */
+async function canManageTeam(ctx: RequestContext, teamId: string) {
+  if (isAdmin(ctx)) return true;
+  if (ctx.actor.kind !== "human") return false;
+  const { rowCount } = await ctx.db.query("SELECT 1 FROM team_members WHERE team_id = $1 AND user_id = $2 AND role = 'lead'", [teamId, ctx.actor.id]);
+  return !!rowCount;
+}
+
+async function assertCanManageTeam(ctx: RequestContext, teamId: string) {
+  if (!(await canManageTeam(ctx, teamId))) throw new ForbiddenError("only this team's leads and admins can do that");
+}
 
 async function teamBySlug(ctx: RequestContext, slug: string) {
   const { rows } = await ctx.db.query<{ id: string; slug: string; name: string; description: string }>("SELECT id, slug, name, description FROM teams WHERE slug = $1", [slug]);
@@ -27,11 +40,13 @@ export async function listTeams(ctx: RequestContext) {
     `SELECT t.slug, t.name, t.description,
             (SELECT count(*) FROM team_members m WHERE m.team_id = t.id)::int AS members,
             EXISTS (SELECT 1 FROM team_members m WHERE m.team_id = t.id AND m.user_id = $2) AS mine,
+            (SELECT m.role FROM team_members m WHERE m.team_id = t.id AND m.user_id = $2) AS my_role,
+            ($3 OR EXISTS (SELECT 1 FROM team_members m WHERE m.team_id = t.id AND m.user_id = $2 AND m.role = 'lead')) AS can_manage,
             coalesce((SELECT json_agg(json_build_object('slug', s.slug, 'name', s.name, 'role', r.role) ORDER BY s.name)
                         FROM scope_team_roles r JOIN scopes s ON s.id = r.scope_id
                        WHERE r.team_id = t.id AND ($1::uuid[] IS NULL OR s.id = ANY($1))), '[]') AS projects
        FROM teams t ORDER BY t.name`,
-    [readable, ctx.actor.id],
+    [readable, ctx.actor.id, isAdmin(ctx)],
   );
   return rows;
 }
@@ -40,8 +55,9 @@ export async function getTeam(ctx: RequestContext, slug: string) {
   const team = await teamBySlug(ctx, slug);
   const readable = await readableScopes(ctx);
   const members = await ctx.db.query(
-    `SELECT u.id, coalesce(u.email, u.subject) AS email, u.display_name AS name, m.added_at
-       FROM team_members m JOIN users u ON u.id = m.user_id WHERE m.team_id = $1 ORDER BY lower(coalesce(u.display_name, u.email))`,
+    `SELECT u.id, coalesce(u.email, u.subject) AS email, u.display_name AS name, m.role, m.added_at, u.subject LIKE 'pending:%' AS pending
+       FROM team_members m JOIN users u ON u.id = m.user_id WHERE m.team_id = $1
+      ORDER BY m.role = 'lead' DESC, lower(coalesce(u.display_name, u.email))`,
     [team.id],
   );
   const projects = await ctx.db.query(
@@ -49,7 +65,8 @@ export async function getTeam(ctx: RequestContext, slug: string) {
       WHERE r.team_id = $1 AND ($2::uuid[] IS NULL OR s.id = ANY($2)) ORDER BY s.name`,
     [team.id, readable],
   );
-  return { ...team, id: undefined, members: members.rows, projects: projects.rows, can_manage: isAdmin(ctx) };
+  const manage = await canManageTeam(ctx, team.id);
+  return { ...team, id: undefined, members: members.rows, projects: projects.rows, can_manage: manage, can_edit_team: isAdmin(ctx) };
 }
 
 export async function createTeam(ctx: RequestContext, input: { slug: string; name: string; description?: string }) {
@@ -83,23 +100,43 @@ export async function deleteTeam(ctx: RequestContext, slug: string) {
   return { slug, deleted: true };
 }
 
-async function userByEmail(ctx: RequestContext, email: string) {
-  const normalized = email.trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+$/.test(normalized)) throw new ValidationError("invalid email");
-  // People who haven't signed in yet get a placeholder that their first sign-in claims.
-  return (
-    (await ctx.db.query<{ id: string }>("SELECT id FROM users WHERE lower(email) = $1 ORDER BY created_at LIMIT 1", [normalized])).rows[0] ??
-    (await ctx.db.query<{ id: string }>("INSERT INTO users (subject, email) VALUES ($1, $2) RETURNING id", [`pending:${normalized}`, normalized])).rows[0]!
-  );
+/** Adds or removes a member, or changes their role in the team (member or lead). Leads and admins. */
+export async function setTeamMember(ctx: RequestContext, slug: string, email: string, member: boolean, role: "member" | "lead" = "member") {
+  const team = await teamBySlug(ctx, slug);
+  await assertCanManageTeam(ctx, team.id);
+  const user = await userForEmail(ctx.db, email);
+  if (member) {
+    await ctx.db.query(
+      "INSERT INTO team_members (team_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT (team_id, user_id) DO UPDATE SET role = EXCLUDED.role",
+      [team.id, user, role],
+    );
+  } else {
+    await ctx.db.query("DELETE FROM team_members WHERE team_id = $1 AND user_id = $2", [team.id, user]);
+  }
+  await audit(ctx.db, ctx.actor.id, "set_team_member", null);
+  return { team: slug, email: email.trim().toLowerCase(), member, role: member ? role : null };
 }
 
-export async function setTeamMember(ctx: RequestContext, slug: string, email: string, member: boolean) {
-  assertAdmin(ctx);
+/**
+ * Creates a project that belongs to this team: the team gets `team_role` on
+ * it and the chosen people own it. Team leads and admins. A lead who creates
+ * it is always one of its owners, so they can manage it.
+ */
+export async function createTeamProject(
+  ctx: RequestContext,
+  slug: string,
+  input: NewProject & { team_role?: "reader" | "writer" | "owner"; owners?: string[] },
+) {
   const team = await teamBySlug(ctx, slug);
-  const user = await userByEmail(ctx, email);
-  if (member) await ctx.db.query("INSERT INTO team_members (team_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", [team.id, user.id]);
-  else await ctx.db.query("DELETE FROM team_members WHERE team_id = $1 AND user_id = $2", [team.id, user.id]);
-  return { team: slug, email: email.trim().toLowerCase(), member };
+  await assertCanManageTeam(ctx, team.id);
+  const owners = [...(input.owners ?? [])];
+  if (!isAdmin(ctx) || !owners.length) {
+    if (!ctx.actor.email) throw new ValidationError("pick at least one owner");
+    owners.push(ctx.actor.email);
+  }
+  const res = await createProject(ctx, input, { owners, team: { id: team.id, role: input.team_role ?? "writer" } });
+  await audit(ctx.db, ctx.actor.id, "create_team_project", res.id);
+  return { ...res, team: slug };
 }
 
 /** Gives a team a role on a project (or removes it with null). Project owners and admins. */

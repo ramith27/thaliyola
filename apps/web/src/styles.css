@@ -649,3 +649,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 @media (max-width: 760px) { .move-row { grid-template-columns: 1fr; } }
 .repo-row { display: grid; grid-template-columns: 2fr 1fr 130px auto; gap: 0.5rem; align-items: center; }
 @media (max-width: 760px) { .repo-row { grid-template-columns: 1fr 1fr; } }
+.team-project-form { padding: 1rem 1.2rem; margin: 0 0 1rem; }
+.team-project-form h3 { margin-top: 0; }
+.new-project-fields { border-left: 3px solid var(--accent); padding: 0.2rem 0 0.2rem 0.9rem; margin: 0.6rem 0; }
+.new-project-fields label { display: flex; flex-direction: column; gap: 0.3rem; font-weight: 550; font-size: 0.9rem; margin: 0.4rem 0; }

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Team leads: assign team members and their role (member or lead) and create projects for the team, with the team's role and the owners chosen at creation (`POST /api/teams/:slug/projects`)
+- Make a folder its own project from the Move dialog (creates the project, then moves the folder)
+
 - Projects manage their own access: a settings page with General, Members and access, and Repositories, open to the project's owners (not just admins); owners can't leave a project without an owner (`/api/scopes/:slug/access`)
 - Teams: groups of people that get a role on many projects at once (`/api/teams`, `PUT /api/scopes/:slug/teams`); effective roles combine direct and team roles everywhere (reading, proposing, approving, notifications, digests)
 - Any number of repositories per project, editable and removable, one project per repository; sessions find their project from the git remote (`X-Cairn-Repo` header, `repo` argument of `get_project_context`, `/api/repos/resolve`)
