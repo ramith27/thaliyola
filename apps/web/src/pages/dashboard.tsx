@@ -41,7 +41,7 @@ export function Dashboard({ scopes, me }: { scopes: ScopeInfo[]; me: Me }) {
           <h1>{greeting(me.email)}</h1>
           <p className="lead">What your team knows, how it's growing, and what needs a look.</p>
         </div>
-        <div className="actions">
+        <div className="actions hide-on-phone">
           {me.admin && (
             <a className="btn" href={href("/new/project")}>
               <I name="folder" size={16} /> New project

@@ -14,6 +14,7 @@ import {
   WriteOutcome,
 } from "../components/ui";
 import { AddLinkForm, PurgeZone, ShareToLibrary } from "../components/actions";
+import { MoreActions } from "../components/more";
 import { MoveItem } from "../components/move";
 import { DeleteItemButton, TrashedNotice } from "./trash";
 import { Attachments } from "../components/assets";
@@ -163,22 +164,24 @@ export function ArticlePage({ id, route, me, scopes = [] }: { id: string; route:
           <a className="btn" href={href(`/article/${id}/edit`)}>
             Edit
           </a>
-          <a className="btn" href={href(`/history/${id}`)}>
-            <I name="history" size={16} /> History
-          </a>
-          <VerifyButton id={id} status={data.status} onDone={reload} />
-          <ShareToLibrary id={id} scopeKind={data.scope.kind} status={data.status} publishedAs={publishedAs(data)} />
           <WatchButton id={id} />
           <FavouriteButton id={id} />
           <ShareButton title={data.title} />
-          {canMoveFrom(me, scopes, data.scope.slug) && !moving && (
-            <button className="btn" onClick={() => setMoving(true)}>
-              Move…
-            </button>
-          )}
-          {canMoveFrom(me, scopes, data.scope.slug) && data.status !== "deleted" && (
-            <DeleteItemButton id={id} kind="article" title={data.title} scopeLink={href(data.scope.kind === "project" ? `/project/${data.scope.slug}` : `/scope/${data.scope.slug}`)} />
-          )}
+          <MoreActions>
+            <a className="btn" href={href(`/history/${id}`)}>
+              <I name="history" size={16} /> History
+            </a>
+            <VerifyButton id={id} status={data.status} onDone={reload} />
+            <ShareToLibrary id={id} scopeKind={data.scope.kind} status={data.status} publishedAs={publishedAs(data)} />
+            {canMoveFrom(me, scopes, data.scope.slug) && !moving && (
+              <button className="btn" onClick={() => setMoving(true)}>
+                Move…
+              </button>
+            )}
+            {canMoveFrom(me, scopes, data.scope.slug) && data.status !== "deleted" && (
+              <DeleteItemButton id={id} kind="article" title={data.title} scopeLink={href(data.scope.kind === "project" ? `/project/${data.scope.slug}` : `/scope/${data.scope.slug}`)} />
+            )}
+          </MoreActions>
         </div>
         {data.status === "deleted" && <TrashedNotice id={id} onRestored={reload} />}
         {moving && (
@@ -354,22 +357,24 @@ export function FindingPage({ id, route, me, scopes = [] }: { id: string; route:
           <a className="btn" href={href(`/finding/${id}/edit`)}>
             Edit
           </a>
-          <a className="btn" href={href(`/history/${id}`)}>
-            <I name="history" size={16} /> History
-          </a>
-          <VerifyButton id={id} status={data.status} onDone={reload} />
-          <ShareToLibrary id={id} scopeKind={data.scope.kind} status={data.status} publishedAs={publishedAs(data)} />
           <WatchButton id={id} />
           <FavouriteButton id={id} />
           <ShareButton title={data.title} />
-          {canMoveFrom(me, scopes, data.scope.slug) && !moving && (
-            <button className="btn" onClick={() => setMoving(true)}>
-              Move…
-            </button>
-          )}
-          {canMoveFrom(me, scopes, data.scope.slug) && data.status !== "deleted" && (
-            <DeleteItemButton id={id} kind="finding" title={data.title} scopeLink={href(data.scope.kind === "project" ? `/project/${data.scope.slug}` : `/scope/${data.scope.slug}`)} />
-          )}
+          <MoreActions>
+            <a className="btn" href={href(`/history/${id}`)}>
+              <I name="history" size={16} /> History
+            </a>
+            <VerifyButton id={id} status={data.status} onDone={reload} />
+            <ShareToLibrary id={id} scopeKind={data.scope.kind} status={data.status} publishedAs={publishedAs(data)} />
+            {canMoveFrom(me, scopes, data.scope.slug) && !moving && (
+              <button className="btn" onClick={() => setMoving(true)}>
+                Move…
+              </button>
+            )}
+            {canMoveFrom(me, scopes, data.scope.slug) && data.status !== "deleted" && (
+              <DeleteItemButton id={id} kind="finding" title={data.title} scopeLink={href(data.scope.kind === "project" ? `/project/${data.scope.slug}` : `/scope/${data.scope.slug}`)} />
+            )}
+          </MoreActions>
         </div>
         {data.status === "deleted" && <TrashedNotice id={id} onRestored={reload} />}
         {moving && (

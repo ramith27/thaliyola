@@ -1,6 +1,7 @@
 import type { Folder, Me, Notice as NoticeT, ScopeInfo, SearchHit } from "../api";
 import { WatchButton } from "../components/notifications";
 import { AnswerCard, FavouriteButton } from "../components/find";
+import { MoreActions } from "../components/more";
 import { MoveFolder } from "../components/move";
 import { api } from "../api";
 import { ErrorBox, formatDate, itemHref, Loading, Notice, ScopeBadge, Snippet, StatusBadge, TypeBadge } from "../components/ui";
@@ -221,23 +222,25 @@ export function ProjectPage({ slug, route, me, scopes = [] }: { slug: string; ro
       )}
 
       <div className="actions">
-        <a className="btn" href={href(`/scope/${slug}`)}>
-          All articles
-        </a>
-        <a className="btn" href={href("/new/article", { scope: slug })}>
-          New article
-        </a>
-        <a className="btn" href={href("/new/finding", { scope: slug })}>
-          New finding
-        </a>
-        <a className="btn" href={href("/graph", { scope: slug })}>
-          Graph
-        </a>
         <WatchButton id={data.project.id} />
         <FavouriteButton id={data.project.id} />
         <a className="btn" href={href(`/scope/${slug}/settings`)}>
           {info?.can_manage || me.admin ? "Settings" : "Members"}
         </a>
+        <MoreActions>
+          <a className="btn" href={href(`/scope/${slug}`)}>
+            All articles
+          </a>
+          <a className="btn" href={href("/new/article", { scope: slug })}>
+            New article
+          </a>
+          <a className="btn" href={href("/new/finding", { scope: slug })}>
+            New finding
+          </a>
+          <a className="btn" href={href("/graph", { scope: slug })}>
+            Graph
+          </a>
+        </MoreActions>
       </div>
 
       {data.contracts && (

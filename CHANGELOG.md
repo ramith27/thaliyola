@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Mobile: bottom tab bar with a create sheet, full-screen search with Cancel, a More sheet for secondary actions on articles, findings and projects, tap-to-select and pinch-to-zoom in the graph, wrapping stat tiles, a one-row editor toolbar, 16px inputs (no iOS zoom), safe-area spacing, and an installable web app (manifest, icons, theme colour); fixed pages that scrolled sideways on phones (article, history)
+
 - **Renamed from Cairn to Thaliyola.** Breaking: API tokens are now `thaliyola_pat_…` (and `thaliyola_oat_`/`thaliyola_ort_` for OAuth), headers are `X-Thaliyola-Project`, `X-Thaliyola-Component` and `X-Thaliyola-Repo`, the MCP server name is `thaliyola`, the session cookie is `thaliyola_session`, packages are `@thaliyola/*`, and the native install uses `thaliyola-admin`, `/etc/thaliyola`, `/opt/thaliyola`, `/var/lib/thaliyola` and the `thaliyola` service. Existing tokens and client configs must be recreated.
 
 - Delete articles, findings and whole projects to a trash: hidden everywhere, open proposals closed, restorable by owners and admins, and permanently removable by admins (`POST /api/items/:id/delete`, `POST /api/projects/:slug/delete`, `/api/trash`)

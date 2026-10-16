@@ -80,7 +80,7 @@ export function GraphPage({ route, scopes }: { route: Route; scopes: ScopeInfo[]
       <div className="page-head">
         <div>
           <h1>Knowledge graph</h1>
-          <p className="lead">How projects, contracts, designs, shared library items and findings connect. Hover to trace links; click to open.</p>
+          <p className="lead">How projects, contracts, designs, shared library items and findings connect. Hover or tap a node to trace its links; click it (or tap it again) to open.</p>
         </div>
       </div>
       <div className="toolbar">
@@ -187,6 +187,9 @@ export function GraphCanvas({
   const [hover, setHover] = useState<string | null>(null);
   const [view, setView] = useState({ x: 0, y: 0, k: 1 });
   const drag = useRef<{ mode: "pan" | "node"; id?: string; sx: number; sy: number; vx: number; vy: number; moved: boolean } | null>(null);
+  // Touch: active pointers for pinch-to-zoom.
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ dist: number; k: number } | null>(null);
 
   const { nodes, edges, sim } = useMemo(() => {
     const degree = new Map<string, number>();
@@ -287,17 +290,36 @@ export function GraphCanvas({
           setView({ k, x: cx - size.w / 2 - w.x * k, y: cy - size.h / 2 - w.y * k });
         }}
         onPointerDown={(e) => {
+          if ((e.target as Element).closest("a, button")) return; // the tooltip's Open link and the zoom buttons
           const target = (e.target as Element).closest("[data-node]");
           const { cx, cy } = local(e);
+          pointers.current.set(e.pointerId, { x: cx, y: cy });
+          if (pointers.current.size === 2) {
+            // Second finger: pinch to zoom instead of dragging.
+            const [a, b] = [...pointers.current.values()];
+            pinch.current = { dist: Math.hypot(a!.x - b!.x, a!.y - b!.y) || 1, k: view.k };
+            drag.current = null;
+            return;
+          }
           (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
           drag.current = target
             ? { mode: "node", id: target.getAttribute("data-node")!, sx: cx, sy: cy, vx: view.x, vy: view.y, moved: false }
             : { mode: "pan", sx: cx, sy: cy, vx: view.x, vy: view.y, moved: false };
         }}
         onPointerMove={(e) => {
+          const { cx, cy } = local(e);
+          if (pointers.current.has(e.pointerId)) pointers.current.set(e.pointerId, { x: cx, y: cy });
+          if (pinch.current && pointers.current.size === 2) {
+            const [a, b] = [...pointers.current.values()];
+            const k = Math.min(3, Math.max(0.3, (pinch.current.k * Math.hypot(a!.x - b!.x, a!.y - b!.y)) / pinch.current.dist));
+            const mx = (a!.x + b!.x) / 2;
+            const my = (a!.y + b!.y) / 2;
+            const w = toWorld(mx, my);
+            setView({ k, x: mx - size.w / 2 - w.x * k, y: my - size.h / 2 - w.y * k });
+            return;
+          }
           const d = drag.current;
           if (!d) return;
-          const { cx, cy } = local(e);
           if (Math.abs(cx - d.sx) + Math.abs(cy - d.sy) > 3) d.moved = true;
           if (d.mode === "pan") setView((v) => ({ ...v, x: d.vx + cx - d.sx, y: d.vy + cy - d.sy }));
           else {
@@ -308,14 +330,28 @@ export function GraphCanvas({
             sim.alphaTarget(0.2).restart();
           }
         }}
-        onPointerUp={() => {
+        onPointerUp={(e) => {
+          pointers.current.delete(e.pointerId);
+          if (pinch.current) {
+            if (pointers.current.size < 2) pinch.current = null;
+            drag.current = null;
+            return;
+          }
           const d = drag.current;
           drag.current = null;
           sim.alphaTarget(0);
+          const touch = e.pointerType !== "mouse";
           if (d?.mode === "node" && !d.moved) {
             const n = nodes.find((x) => x.id === d.id);
-            if (n) window.location.hash = itemHref(n).slice(1);
-          }
+            // On touch there's no hover: the first tap selects and traces links, the second opens.
+            if (n && touch && hover !== n.id) setHover(n.id);
+            else if (n) window.location.hash = itemHref(n).slice(1);
+          } else if (d?.mode === "pan" && !d.moved && touch) setHover(null);
+        }}
+        onPointerCancel={(e) => {
+          pointers.current.delete(e.pointerId);
+          pinch.current = null;
+          drag.current = null;
         }}
       >
         <svg width={size.w} height={size.h} role="img" aria-label="Knowledge graph">
@@ -347,8 +383,8 @@ export function GraphCanvas({
                   data-node={n.id}
                   transform={`translate(${n.x ?? 0},${n.y ?? 0})`}
                   className={`node ${dim ? "dim" : ""} ${n.status === "possibly_stale" ? "node-stale" : ""}`}
-                  onPointerEnter={() => setHover(n.id)}
-                  onPointerLeave={() => setHover(null)}
+                  onPointerEnter={(e) => e.pointerType === "mouse" && setHover(n.id)}
+                  onPointerLeave={(e) => e.pointerType === "mouse" && setHover(null)}
                 >
                   <circle r={r + 8} fill="transparent" />
                   {(match || isFocus) && <circle r={r + 5} className={isFocus ? "focus-ring" : "match-ring"} />}
@@ -373,6 +409,9 @@ export function GraphCanvas({
               {hovered.degree} link{hovered.degree === 1 ? "" : "s"}
               {hovered.status === "possibly_stale" ? " · not verified recently" : ""}
             </div>
+            <a className="btn btn-small graph-open" href={itemHref(hovered)}>
+              Open
+            </a>
           </div>
         )}
         <div className="graph-zoom">

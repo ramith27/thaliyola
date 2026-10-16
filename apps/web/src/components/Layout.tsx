@@ -126,6 +126,14 @@ export function Layout({ me, scopes, route, children }: { me: Me; scopes: ScopeI
         <main className="content">{children}</main>
       </div>
       {palette && <CommandPalette scopes={scopes} onClose={() => setPalette(false)} />}
+      <MobileTabs
+        section={section}
+        pendingCount={pendingCount}
+        admin={me.admin}
+        onSearch={() => setPalette(true)}
+        onMenu={() => setMenuOpen((o) => !o)}
+        scope={activeScope}
+      />
     </div>
   );
 }
@@ -265,5 +273,85 @@ function FolderView({ folder }: { folder: Folder }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Phone navigation: a bottom tab bar within thumb reach, with a sheet for creating things. */
+function MobileTabs({
+  section,
+  pendingCount,
+  admin,
+  onSearch,
+  onMenu,
+  scope,
+}: {
+  section: string | undefined;
+  pendingCount: number;
+  admin: boolean;
+  onSearch: () => void;
+  onMenu: () => void;
+  scope?: string;
+}) {
+  const [sheet, setSheet] = useState(false);
+  useEffect(() => {
+    const close = () => setSheet(false);
+    window.addEventListener("hashchange", close);
+    return () => window.removeEventListener("hashchange", close);
+  }, []);
+  const create: { to: string; icon: IconName; label: string; hint: string; show?: boolean }[] = [
+    { to: href("/new/article", { scope }), icon: "doc", label: "New article", hint: "A system, runbook, decision, design or contract" },
+    { to: href("/new/finding", { scope }), icon: "bolt", label: "New finding", hint: "Something that happened: incident, root cause, known issue" },
+    { to: href("/new/paste"), icon: "inbox", label: "Paste to draft", hint: "Turn a Slack thread, email or notes into a draft" },
+    { to: href("/import"), icon: "library", label: "Import documents", hint: "Markdown, HTML, Notion or Confluence exports" },
+    { to: href("/new/project"), icon: "folder", label: "New project", hint: "With its repositories and a starter pack", show: admin },
+  ];
+  return (
+    <>
+      <nav className="mobile-tabs" aria-label="Main">
+        <a className={section === undefined ? "active" : ""} href={href("/")}>
+          <I name="home" size={22} />
+          <span>Home</span>
+        </a>
+        <button onClick={onSearch}>
+          <I name="search" size={22} />
+          <span>Search</span>
+        </button>
+        <button className="mobile-tabs-new" onClick={() => setSheet(true)} aria-label="Create">
+          <I name="plus" size={24} />
+        </button>
+        <a className={section === "review" ? "active" : ""} href={href("/review")}>
+          <span className="tab-icon">
+            <I name="review" size={22} />
+            {pendingCount > 0 && <span className="tab-badge">{pendingCount > 99 ? "99+" : pendingCount}</span>}
+          </span>
+          <span>Review</span>
+        </a>
+        <button onClick={onMenu}>
+          <I name="menu" size={22} />
+          <span>Menu</span>
+        </button>
+      </nav>
+      {sheet && (
+        <div className="sheet-scrim" onClick={() => setSheet(false)}>
+          <div className="sheet" role="dialog" aria-label="Create" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-handle" />
+            <h3>Create</h3>
+            {create
+              .filter((c) => c.show !== false)
+              .map((c) => (
+                <a key={c.label} className="sheet-item" href={c.to}>
+                  <span className="tile-icon">
+                    <I name={c.icon} size={18} />
+                  </span>
+                  <span>
+                    <strong>{c.label}</strong>
+                    <span className="muted small">{c.hint}</span>
+                  </span>
+                </a>
+              ))}
+          </div>
+        </div>
+      )}
+    </>
   );
 }

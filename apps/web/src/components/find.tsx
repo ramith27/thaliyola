@@ -487,6 +487,9 @@ export function CommandPalette({ scopes, onClose }: { scopes: ScopeInfo[]; onClo
             }}
           />
           <kbd>Esc</kbd>
+          <button type="button" className="palette-cancel" onClick={onClose}>
+            Cancel
+          </button>
         </div>
         <div className="palette-list" ref={listRef}>
           {commands.map((c, i) => {

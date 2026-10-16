@@ -462,7 +462,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
   .content { padding: 1.1rem 1rem 3rem; }
   kbd { display: none; }
   .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .grid-2, .grid-3, .page.with-side, .two-col, .editor .row { grid-template-columns: 1fr; }
+  .grid-2, .grid-3, .page.with-side, .two-col, .editor .row { grid-template-columns: minmax(0, 1fr); }
   .facts { grid-template-columns: 1fr; }
   .facts dt { margin-top: 0.4rem; }
   .graph-hint { display: none; }
@@ -512,7 +512,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .version-list li { padding: 0.55rem 0.7rem; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 0.4rem; background: var(--surface); cursor: pointer; }
 .version-list li.active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }
 .version-list li .v { font-weight: 650; }
-@media (max-width: 760px) { .versions { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .versions { grid-template-columns: minmax(0, 1fr); } }
 
 /* Finding things: instant search, command palette, answer card */
 .search-form { position: relative; }
@@ -681,3 +681,90 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .search-form { min-width: 0; }
 .topbar-right { flex: none; }
 .search-form > svg { flex: none; }
+
+/* ---- Phones ------------------------------------------------------------------ */
+.mobile-tabs, .more-toggle, .graph-open, .palette-cancel { display: none; }
+.more-actions, .more-items { display: contents; }
+html { -webkit-tap-highlight-color: transparent; }
+
+@media (max-width: 860px) {
+  /* Thumb-reach navigation; content clears it and the home indicator. */
+  .mobile-tabs {
+    display: grid; grid-template-columns: repeat(5, 1fr); align-items: center;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    padding: 0.3rem 0.25rem calc(0.3rem + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(10px);
+    border-top: 1px solid var(--border);
+  }
+  .mobile-tabs > a, .mobile-tabs > button {
+    display: flex; flex-direction: column; align-items: center; gap: 0.15rem; padding: 0.3rem 0; min-height: 48px; justify-content: center;
+    background: none; border: 0; font: inherit; font-size: 0.68rem; font-weight: 550; color: var(--muted); text-decoration: none; cursor: pointer;
+  }
+  .mobile-tabs > a.active { color: var(--accent); }
+  .mobile-tabs .mobile-tabs-new { width: 48px; height: 48px; min-height: 0; margin: 0 auto; border-radius: 16px; background: var(--accent); color: #fff; box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 35%, transparent); }
+  .tab-icon { position: relative; display: inline-flex; }
+  .tab-badge { position: absolute; top: -6px; right: -12px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--danger, #dc2626); color: #fff; font-size: 0.65rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+  .content { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+  .sidebar { padding-bottom: env(safe-area-inset-bottom); }
+  .hide-on-phone { display: none !important; }
+
+  /* Create sheet */
+  .sheet-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(15, 23, 42, 0.4); display: flex; align-items: flex-end; }
+  .sheet { width: 100%; background: var(--surface); border-radius: 18px 18px 0 0; padding: 0.5rem 1rem calc(1rem + env(safe-area-inset-bottom)); box-shadow: 0 -10px 30px rgba(15, 23, 42, 0.25); animation: sheet-up 0.18s ease-out; }
+  .sheet h3 { margin: 0.4rem 0 0.6rem; }
+  .sheet-handle { width: 40px; height: 4px; border-radius: 2px; background: var(--border-strong); margin: 0.2rem auto 0.4rem; }
+  .sheet-item { display: flex; gap: 0.8rem; align-items: center; padding: 0.7rem 0.4rem; border-radius: 10px; color: var(--text); }
+  .sheet-item:hover, .sheet-item:active { background: var(--surface-2); text-decoration: none; }
+  .sheet-item > span:last-child { display: flex; flex-direction: column; gap: 0.1rem; }
+
+  /* "More" folds secondary actions into a menu */
+  .more-actions { display: inline-block; position: relative; }
+  .more-toggle { display: inline-flex; }
+  .more-items { display: none; }
+  /* Opens as a sheet above the tab bar, so it's never cut off at the screen edge. */
+  .more-actions.open .more-items {
+    display: flex; flex-direction: column; align-items: stretch; gap: 0.15rem;
+    position: fixed; left: 0.6rem; right: 0.6rem; bottom: calc(4.4rem + env(safe-area-inset-bottom)); z-index: 45; max-height: 60vh; overflow-y: auto;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 -8px 30px rgba(15, 23, 42, 0.25); padding: 0.45rem;
+    animation: sheet-up 0.16s ease-out;
+  }
+  .more-items .btn { min-height: 46px; font-size: 0.98rem; }
+  .more-items .btn { justify-content: flex-start; border-color: transparent; width: 100%; box-shadow: none; }
+  .more-items form, .more-items .mini-form { padding: 0.4rem; }
+
+  /* Command palette becomes a full-screen search */
+  .palette-scrim { padding: 0; align-items: stretch; }
+  .palette { max-width: none; max-height: none; height: 100%; border-radius: 0; border: 0; padding-top: env(safe-area-inset-top); }
+  .palette-foot { display: none; }
+  .palette-cancel { display: inline-flex; background: none; border: 0; color: var(--accent); font: inherit; font-weight: 600; padding: 0.4rem 0.2rem; cursor: pointer; }
+  .palette-row { min-height: 46px; }
+
+  /* Forms: 16px text stops iOS zooming on focus; comfortable touch targets */
+  input, select, textarea { font-size: 16px; }
+  .btn { min-height: 40px; }
+  .btn-small { min-height: 34px; }
+  .actions { gap: 0.45rem; }
+  .md-toolbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .md-toolbar > button { min-width: 38px; height: 36px; flex: none; }
+  .md-modes { flex: none; }
+  .md-editor textarea { min-height: 45vh; }
+
+  /* Tiles: notes wrap instead of being cut off */
+  .tile { padding: 0.85rem 0.9rem; }
+  .tile-foot { flex-wrap: wrap; gap: 0.3rem; }
+  .tile-foot .muted, .tile-label { white-space: normal; overflow: visible; text-overflow: clip; }
+  .tile-value { font-size: 1.7rem; }
+
+  /* Graph: tooltip spans the canvas and offers Open; first tap selects */
+  .graph-tooltip { left: 0.6rem; right: 3.6rem; top: 0.6rem; bottom: auto; max-width: none; pointer-events: auto; }
+  .graph-open { display: inline-flex; margin-top: 0.4rem; }
+  .graph-legend { flex-wrap: wrap; gap: 0.3rem 0.8rem; }
+
+  /* Tables keep their shape and scroll sideways */
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table th { white-space: nowrap; }
+  .notif-menu { bottom: calc(4.5rem + env(safe-area-inset-bottom)); max-height: none; }
+}
+@keyframes sheet-up { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (pointer: coarse) and (min-width: 861px) { .graph-open { display: inline-flex; margin-top: 0.4rem; } .graph-tooltip { pointer-events: auto; } }
+pre.diff { overflow-x: auto; max-width: 100%; }
