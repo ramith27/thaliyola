@@ -5,6 +5,7 @@ import { audit } from "./audit.js";
 import { ForbiddenError, NotFoundError, ValidationError, type RequestContext } from "./context.js";
 import { assertCanRead, canApprove } from "./permissions.js";
 import { redact } from "./redaction.js";
+import { S3AssetStore } from "./s3.js";
 import { findItemFor } from "./writes.js";
 
 /**
@@ -43,8 +44,10 @@ export class LocalAssetStore implements AssetStore {
 
 const stores = new Map<string, AssetStore>();
 function storeFor(ctx: RequestContext): AssetStore {
-  let store = stores.get(ctx.settings.assetDir);
-  if (!store) stores.set(ctx.settings.assetDir, (store = new LocalAssetStore(ctx.settings.assetDir)));
+  const s3 = ctx.settings.s3;
+  const cacheKey = s3 ? `s3:${s3.endpoint}/${s3.bucket}/${s3.prefix ?? ""}` : `local:${ctx.settings.assetDir}`;
+  let store = stores.get(cacheKey);
+  if (!store) stores.set(cacheKey, (store = s3 ? new S3AssetStore(s3) : new LocalAssetStore(ctx.settings.assetDir)));
   return store;
 }
 

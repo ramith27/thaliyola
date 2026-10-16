@@ -75,6 +75,7 @@ Example jobs:
 | Weekly freshness pass | "Run the Cairn `review-stale` prompt for scope team; verify what still holds, propose corrections, retire what's gone." |
 | Slack → findings | "Read yesterday's resolved threads in #incidents (Slack MCP). For each confirmed root cause not already in Cairn (`search_knowledge`), `propose_finding` with the thread as a source link." |
 | Sentry → known issues | "List unresolved Sentry issues older than 7 days (Sentry MCP). Link each to existing Cairn findings (`add_source_link`) or propose a known_issue." |
+| Trello cards for repeat problems | "Call `list_suggestions`. For each recurring root cause, create a Trello card (Trello MCP) in the Engineering board's 'Permanent fixes' list with the finding link, unless one exists; add the card URL to the finding with `add_source_link` (system trello)." |
 | Recurring root causes | "Call `list_suggestions`. For each promotion suggestion, draft the article section with `promote_finding`; for each likely duplicate pair, `link_entries` same_root_cause or propose a merge." |
 
 Everything these jobs write lands in the review queue like any other proposal.

@@ -26,6 +26,15 @@ const Env = z
     WEB_DIST: z.string().optional(),
     // Where uploaded screenshots, token files and specs are stored
     ASSET_DIR: z.string().default("./data/assets"),
+    // Asset storage: local disk (ASSET_DIR) or any S3-compatible service
+    ASSET_STORE: z.enum(["local", "s3"]).default("local"),
+    S3_ENDPOINT: z.string().url().optional(),
+    S3_REGION: z.string().default("us-east-1"),
+    S3_BUCKET: z.string().optional(),
+    S3_ACCESS_KEY_ID: z.string().optional(),
+    S3_SECRET_ACCESS_KEY: z.string().optional(),
+    S3_PREFIX: z.string().optional(),
+    S3_PATH_STYLE: z.enum(["true", "false"]).default("true"),
     ASSET_MAX_BYTES: z.coerce.number().int().positive().default(5 * 1024 * 1024),
     // Semantic search: local = bge-small in-process; hash = offline test embedder; off = keyword search only
     EMBEDDINGS: z.enum(["local", "hash", "off"]).default("local"),
@@ -44,6 +53,9 @@ const Env = z
     if (env.AUTH_MODE === "dev" && !env.DEV_TOKENS.trim()) {
       ctx.addIssue({ code: "custom", message: "AUTH_MODE=dev requires DEV_TOKENS (token=email pairs)" });
     }
+    if (env.ASSET_STORE === "s3" && (!env.S3_ENDPOINT || !env.S3_BUCKET || !env.S3_ACCESS_KEY_ID || !env.S3_SECRET_ACCESS_KEY)) {
+      ctx.addIssue({ code: "custom", message: "ASSET_STORE=s3 requires S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY" });
+    }
     if (env.AUTH_MODE === "cloudflare" && (!env.CF_ACCESS_TEAM_DOMAIN || !env.CF_ACCESS_AUD)) {
       ctx.addIssue({ code: "custom", message: "AUTH_MODE=cloudflare requires CF_ACCESS_TEAM_DOMAIN and CF_ACCESS_AUD" });
     }
@@ -60,6 +72,18 @@ export function settingsFrom(config: Config): Settings {
     sessionTtlHours: config.SESSION_TTL_HOURS,
     cookieSecure: config.COOKIE_SECURE,
     assetDir: config.ASSET_DIR,
+    s3:
+      config.ASSET_STORE === "s3"
+        ? {
+            endpoint: config.S3_ENDPOINT!,
+            region: config.S3_REGION,
+            bucket: config.S3_BUCKET!,
+            accessKeyId: config.S3_ACCESS_KEY_ID!,
+            secretAccessKey: config.S3_SECRET_ACCESS_KEY!,
+            prefix: config.S3_PREFIX,
+            pathStyle: config.S3_PATH_STYLE === "true",
+          }
+        : undefined,
     searchMinSimilarity: config.SEARCH_MIN_SIMILARITY,
     duplicateSimilarity: config.DUPLICATE_SIMILARITY,
     assetMaxBytes: config.ASSET_MAX_BYTES,
@@ -74,6 +98,8 @@ export interface Settings {
   sessionTtlHours: number;
   cookieSecure: "auto" | "true" | "false";
   assetDir: string;
+  /** Set when ASSET_STORE=s3. */
+  s3?: import("./core/s3.js").S3Config;
   searchMinSimilarity: number;
   duplicateSimilarity: number;
   assetMaxBytes: number;

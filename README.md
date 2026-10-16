@@ -58,6 +58,23 @@ A project can declare that it **uses** an item from the library or from another 
 | `upload_asset` | Attach a screenshot (PNG/JPEG/WebP/GIF), token JSON, markdown or PDF. Text files are redacted; images can't be |
 | `share_to_library` | Propose publishing a project item to the library. On approval by a library owner, a copy (with its links and files) is created and the project is linked to it |
 
+### File storage
+
+Uploaded files are content-addressed and stored either on local disk (`ASSET_DIR`, the default) or in any S3-compatible service: AWS S3, Cloudflare R2, MinIO or Garage. Use S3 when several Cairn servers share files or the disk isn't durable:
+
+```sh
+ASSET_STORE=s3
+S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com   # or https://s3.<region>.amazonaws.com, http://minio:9000, …
+S3_REGION=auto                                         # R2: auto; AWS: the bucket's region
+S3_BUCKET=cairn-assets
+S3_ACCESS_KEY_ID=…
+S3_SECRET_ACCESS_KEY=…
+# S3_PREFIX=cairn/          optional key prefix
+# S3_PATH_STYLE=false       virtual-hosted URLs (bucket.endpoint); default true suits most self-hosted servers
+```
+
+Requests are signed with AWS Signature V4 using Node's built-in crypto (no AWS SDK). Signing was tested against a server that verifies signatures strictly. Files are always served through Cairn, which checks permissions, so the bucket stays private.
+
 ### Freshness
 
 Knowledge goes stale:
@@ -284,5 +301,6 @@ apps/server/
 - ~~**M4** Freshness jobs, OAuth for claude.ai connectors in local mode~~ (done)
 - ~~Workflow prompts, Claude Code plugin, backups, promotion and duplicate suggestions~~ (done)
 - ~~Members-only projects~~ (done)
-- Next: S3-compatible asset store, Trello cards for recurring root causes
+- ~~S3-compatible file storage~~ (done)
+- Next: Trello cards for recurring root causes (as a scheduled agent recipe)
 - **M5** Integrations with existing agent skills, Slack and Sentry
