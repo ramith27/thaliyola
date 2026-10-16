@@ -25,9 +25,9 @@ export interface RequestContext {
   onWrite?: () => void;
   /** Set by direct (self-approved) edits so reviewers aren't notified about a proposal that never waits. */
   quietProposals?: boolean;
-  /** Project slug from the X-Cairn-Project header; a tool's explicit `project` argument wins. */
+  /** Project slug from the X-Thaliyola-Project header; a tool's explicit `project` argument wins. */
   project?: string;
-  /** Component slug from the X-Cairn-Component header. */
+  /** Component slug from the X-Thaliyola-Component header. */
   component?: string;
 }
 

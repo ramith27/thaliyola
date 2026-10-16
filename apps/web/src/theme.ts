@@ -1,6 +1,6 @@
 /** Theme choice: follow the system, or force light/dark. Stored per browser. */
 export type Theme = "system" | "light" | "dark";
-const KEY = "cairn.theme";
+const KEY = "thaliyola.theme";
 
 export function getTheme(): Theme {
   try {

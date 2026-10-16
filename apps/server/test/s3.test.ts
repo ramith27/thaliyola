@@ -36,7 +36,7 @@ describe.runIf(!!process.env.S3_TEST_ENDPOINT)("S3 round trip", () => {
       bucket: process.env.S3_TEST_BUCKET!,
       accessKeyId: process.env.S3_TEST_KEY!,
       secretAccessKey: process.env.S3_TEST_SECRET!,
-      prefix: "cairn-test",
+      prefix: "thaliyola-test",
     });
     const key = `ab/${"ab".padEnd(64, "0")}`;
     const data = Buffer.from(`hello ${Date.now()}`);

@@ -50,7 +50,7 @@ describe("invitations", () => {
     await flushDeliveries();
     expect(inv.emailed).toBe(true);
     const mail = outbox.find((m) => m.to === "new.person@example.com")!;
-    expect(mail.subject).toMatch(/invited you to Cairn/);
+    expect(mail.subject).toMatch(/invited you to Thaliyola/);
     const token = /#\/invite\/([\w-]+)/.exec(mail.html)![1]!;
     expect(inv.link).toBe(`${base}/#/invite/${token}`);
 
@@ -62,7 +62,7 @@ describe("invitations", () => {
     const ok = await fetch(`${base}/auth/invite/${token}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: "a-long-enough-passphrase-9" }) });
     expect(ok.status).toBe(200);
     const cookie = ok.headers.get("set-cookie")!;
-    expect(cookie).toMatch(/cairn_session=/);
+    expect(cookie).toMatch(/thaliyola_session=/);
     const who = await fetch(`${base}/api/me`, { headers: { cookie: cookie.split(";")[0]!, origin: base } }).then((r) => r.json());
     expect(who.email).toBe("new.person@example.com");
     const role = await db.query("SELECT m.role FROM scope_members m JOIN users u ON u.id = m.user_id JOIN scopes s ON s.id = m.scope_id WHERE u.email = $1 AND s.slug = 'order-service'", ["new.person@example.com"]);

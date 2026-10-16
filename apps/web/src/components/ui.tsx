@@ -18,7 +18,7 @@ export function Markdown({ text }: { text: string }) {
         urlTransform={(url) => (/^asset:[0-9a-f-]{36}$/.test(url) ? url : defaultUrlTransform(url))}
         components={{
           a: ({ href: url, children }) =>
-            // Links inside Cairn (@ mentions, entity links) stay in the tab.
+            // Links inside Thaliyola (@ mentions, entity links) stay in the tab.
             url?.startsWith("#/") ? (
               <a href={url}>{children}</a>
             ) : (

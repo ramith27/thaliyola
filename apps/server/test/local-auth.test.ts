@@ -70,7 +70,7 @@ describe("local sign-in", () => {
     expect((await b.req("GET", "/api/me")).status).toBe(401);
     const login = await b.req("POST", "/auth/login", { email: "Admin@Example.com", password: "correct horse battery" });
     expect(login.status).toBe(200);
-    expect(login.setCookie).toMatch(/cairn_session=[\w-]{20,}; Path=\/; HttpOnly; SameSite=Lax; Max-Age=86400/);
+    expect(login.setCookie).toMatch(/thaliyola_session=[\w-]{20,}; Path=\/; HttpOnly; SameSite=Lax; Max-Age=86400/);
     const me = await b.req("GET", "/api/me");
     expect(me.body).toMatchObject({ email: "admin@example.com", admin: true, local_account: true, must_change_password: false, auth_mode: "local" });
     await b.req("POST", "/auth/logout");
@@ -102,11 +102,11 @@ describe("same-origin check behind a proxy", () => {
   it("accepts the configured public origin even when the proxy rewrites Host", async () => {
     const { sameOrigin } = await import("../src/auth/index.js");
     const req = (h: Record<string, string>) => ({ method: "POST", header: (n: string) => h[n.toLowerCase()] }) as never;
-    const behindProxy = { host: "10.20.10.118", origin: "https://cairn.example.com", "sec-fetch-site": "same-origin" };
+    const behindProxy = { host: "10.20.10.118", origin: "https://thaliyola.example.com", "sec-fetch-site": "same-origin" };
     expect(sameOrigin(req(behindProxy))).toBe(false);
-    expect(sameOrigin(req(behindProxy), "https://cairn.example.com")).toBe(true);
-    expect(sameOrigin(req({ ...behindProxy, origin: "https://evil.example" }), "https://cairn.example.com")).toBe(false);
-    expect(sameOrigin(req({ ...behindProxy, "sec-fetch-site": "cross-site" }), "https://cairn.example.com")).toBe(false);
+    expect(sameOrigin(req(behindProxy), "https://thaliyola.example.com")).toBe(true);
+    expect(sameOrigin(req({ ...behindProxy, origin: "https://evil.example" }), "https://thaliyola.example.com")).toBe(false);
+    expect(sameOrigin(req({ ...behindProxy, "sec-fetch-site": "cross-site" }), "https://thaliyola.example.com")).toBe(false);
   });
 });
 
@@ -164,9 +164,9 @@ describe("personal API tokens", () => {
     await b.req("POST", "/auth/login", { email: "new@example.com", password: "my own new password" });
     const created = await b.req("POST", "/api/account/tokens", { name: "Claude Code on laptop", expires_in_days: 30 });
     const token = created.body.token as string;
-    expect(token).toMatch(/^cairn_pat_[\w-]{40}$/);
+    expect(token).toMatch(/^thaliyola_pat_[\w-]{40}$/);
     const listed = (await b.req("GET", "/api/account/tokens")).body.tokens;
-    expect(listed[0]).toMatchObject({ name: "Claude Code on laptop", prefix: token.slice(0, 16) });
+    expect(listed[0]).toMatchObject({ name: "Claude Code on laptop", prefix: token.slice(0, "thaliyola_pat_".length + 6) });
     expect(JSON.stringify(listed)).not.toContain(token);
 
     const client = new Client({ name: "t", version: "0" });

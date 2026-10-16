@@ -1,8 +1,10 @@
-# Cairn
+# Thaliyola
+
+*Thaliyola* (തളിയോല) is Malayalam for the palm-leaf manuscripts Kerala used to write knowledge down and keep it for the next generation.
 
 A shared team knowledge base exposed as a remote [MCP](https://modelcontextprotocol.io) server. Every Claude client on a team reads and writes the same knowledge: systems, metrics, runbooks, project design docs, API contracts and UI/UX specs, plus the findings from past investigations.
 
-The server holds no LLM. Clients (Claude Code, claude.ai, scheduled agents) do the reasoning; Cairn stores, searches, validates and versions. Agent-written content goes through human review before it is published.
+The server holds no LLM. Clients (Claude Code, claude.ai, scheduled agents) do the reasoning; Thaliyola stores, searches, validates and versions. Agent-written content goes through human review before it is published.
 
 | Dashboard | Knowledge graph | Project view for a frontend session |
 |---|---|---|
@@ -25,7 +27,7 @@ A project can declare that it **uses** an item from the library or from another 
 **Design knowledge.**
 - **Item types:** design tokens, UI component specs, UX patterns and screen specs.
 - **Attachments:** screenshots and token files, which can also be embedded in markdown with `![alt](asset:<id>)`.
-- **Figma:** frames are linked as source links. Figma stays the visual source of truth; Cairn holds the reviewed intent and rules.
+- **Figma:** frames are linked as source links. Figma stays the visual source of truth; Thaliyola holds the reviewed intent and rules.
 - **Wiring:** a screen spec `uses` library UI components and `depends_on` the API contract it calls. A change to either reaches the teams that depend on it as an impact notice.
 
 **Articles and findings.** Articles are curated, long-lived documents written to a template per type. Findings are episodic: incidents, RCAs, known issues, data gotchas, query recipes.
@@ -64,20 +66,20 @@ A project can declare that it **uses** an item from the library or from another 
 
 ### File storage
 
-Uploaded files are content-addressed and stored either on local disk (`ASSET_DIR`, the default) or in any S3-compatible service: AWS S3, Cloudflare R2, MinIO or Garage. Use S3 when several Cairn servers share files or the disk isn't durable:
+Uploaded files are content-addressed and stored either on local disk (`ASSET_DIR`, the default) or in any S3-compatible service: AWS S3, Cloudflare R2, MinIO or Garage. Use S3 when several Thaliyola servers share files or the disk isn't durable:
 
 ```sh
 ASSET_STORE=s3
 S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com   # or https://s3.<region>.amazonaws.com, http://minio:9000, …
 S3_REGION=auto                                         # R2: auto; AWS: the bucket's region
-S3_BUCKET=cairn-assets
+S3_BUCKET=thaliyola-assets
 S3_ACCESS_KEY_ID=…
 S3_SECRET_ACCESS_KEY=…
-# S3_PREFIX=cairn/          optional key prefix
+# S3_PREFIX=thaliyola/          optional key prefix
 # S3_PATH_STYLE=false       virtual-hosted URLs (bucket.endpoint); default true suits most self-hosted servers
 ```
 
-Requests are signed with AWS Signature V4 using Node's built-in crypto (no AWS SDK). Signing was tested against a server that verifies signatures strictly. Files are always served through Cairn, which checks permissions, so the bucket stays private.
+Requests are signed with AWS Signature V4 using Node's built-in crypto (no AWS SDK). Signing was tested against a server that verifies signatures strictly. Files are always served through Thaliyola, which checks permissions, so the bucket stays private.
 
 ### Performance
 
@@ -120,7 +122,7 @@ The server also serves a web UI at `/` for people:
 
 - **Browse:** team, library and project scopes, each with a folder tree.
 - **Project view:** pick a component (backend, frontend, ...) to see the contracts it provides and consumes, upstream changes it still has to handle, the shared library items it uses, recent decisions and known issues.
-- **Search:** results are highlighted, and a hit jumps to the matching section. The search box shows the best matches as you type (the last word also matches as a prefix), and the results page opens with an **answer card**: the single best section or finding, quoted from the knowledge base (never generated), marked "Best answer" when both keywords and meaning match and "Closest match" otherwise. The home page has an "Ask Cairn" box for questions.
+- **Search:** results are highlighted, and a hit jumps to the matching section. The search box shows the best matches as you type (the last word also matches as a prefix), and the results page opens with an **answer card**: the single best section or finding, quoted from the knowledge base (never generated), marked "Best answer" when both keywords and meaning match and "Closest match" otherwise. The home page has an "Ask Thaliyola" box for questions.
 - **Command palette:** ⌘K / Ctrl+K searches knowledge and entities, asks, and jumps to pages, scopes, favourites and recent items, or switches theme. `/` focuses the search box.
 - **Favourites and recent:** star any article, finding or project to pin it to the sidebar (stored per person on the server); the last items you opened are listed under Recent (stored in your browser).
 - **Entity pages:** every system, table, metric or service tagged on an item has a page listing what mentions it and what it's often mentioned with (`/#/entity/metric/Conversion rate`; aliases resolve).
@@ -144,7 +146,7 @@ The server also serves a web UI at `/` for people:
 
 Behind Cloudflare Access, the browser is already signed in. In dev mode the UI asks for a dev token.
 
-For UI development, run the server on :8080 and `pnpm --filter @cairn/web dev`. Vite serves on :5173 and proxies `/api`.
+For UI development, run the server on :8080 and `pnpm --filter @thaliyola/web dev`. Vite serves on :5173 and proxies `/api`.
 
 ### Notifications
 
@@ -179,7 +181,7 @@ Also: `GET/POST /api/revisions/:id/comments`, `GET /api/revisions/:id/reviewers`
 
 - **Projects manage themselves:** each project has its own settings page (General, Members and access, Repositories) that its owners manage, not only admins: name and description, visibility, people and teams with roles, and its repositories.
 - **Teams:** groups of people (Teams page). Admins create teams; admins and each team's **leads** assign its members (member or lead) and can start a **project for the team** from its page: the team gets a role on it (reader, writer or owner) and the chosen members own it. Add a team to any number of projects, and everyone in it gets that role there. A person's role in a project is the highest of their own and their teams' roles.
-- **Repositories:** a project can have any number of repositories (components), each with its URL; one repository belongs to one project. A Claude session finds its project from the git remote: the `X-Cairn-Repo` header, or the `repo` argument of `get_project_context` (`GET /api/repos/resolve?url=` for scripts).
+- **Repositories:** a project can have any number of repositories (components), each with its URL; one repository belongs to one project. A Claude session finds its project from the git remote: the `X-Thaliyola-Repo` header, or the `repo` argument of `get_project_context` (`GET /api/repos/resolve?url=` for scripts).
 - **Moving:** owners can move a folder from one scope into a project, or make the folder a new project in one step (Move or make a project… beside a folder): items keep their ids, history and links; the folder prefix can be dropped, the folder can go into a folder of the destination, and chosen sub-folders become the project's repositories while staying folders (`POST /api/move`, with `dry_run` for a preview). A single article or finding moves with **Move…** on its page: to another project or space, into a folder there, and onto one of the project's repositories (findings have no folders, so a repository is how they're grouped). The project page lists everything grouped by repository.
 - **Reading:** every signed-in user can read team-visible scopes. A project can be made **members-only** (scope settings, or `PATCH /api/scopes/:slug`). Then only its members and admins can read it, and for everyone else its articles, findings, files, review items and links don't appear anywhere: search, browse, project lists, "used by" links, needs-attention and suggestions all leave them out, and direct requests return "not found". Library owners can still review what such a project proposes to publish to the library.
 - **Proposing:** in a team-visible scope, anyone can propose until the scope lists writers or owners; after that, only they can. In members-only projects, only writers and owners can.
@@ -200,16 +202,16 @@ People granted a role before they ever sign in receive it on their first login.
 Tools take an optional `project` (and `component`) argument. A client can set defaults with headers so agents in a repo don't have to pass them:
 
 ```
-X-Cairn-Project: order-service
-X-Cairn-Component: frontend
+X-Thaliyola-Project: order-service
+X-Thaliyola-Component: frontend
 ```
 
 ## Agent integrations
 
-[`integrations/`](integrations) has everything needed to make agents use Cairn by default:
-- **Prompts:** `investigate`, `start-coding`, `capture`, `draft-from-paste`, `curate` and `review-stale`, served by every Cairn server.
-- **Curation by the client's model:** Cairn has no LLM, so it hands judgment work to connected agents. `get_tasks` returns tasks with instructions: entries filed in the team space that belong to a project, project pages missing their repository, look-alike findings, recurring problems, empty outline sections, stale entries, projects without an overview, unlinked entries, and (for admins) searches that found nothing. The agent acts through normal tools (`move_entry` proposes moving an entry to a project, folder and/or repository) and reports with `complete_task`; handed-out tasks are reserved for an hour and finished ones stay hidden. `get_project_context` mentions open tasks so agents tidy as they go. Run it with the `curate` prompt (`/mcp__cairn__curate` in Claude Code), on demand or on a schedule (e.g. `claude -p "/mcp__cairn__curate"` from cron). Review → Suggestions shows the queue and what agents did. (MCP sampling isn't used: the endpoint is stateless and most clients don't support it.)
-- **Claude Code:** a plugin with the `cairn` skill, a per-repo `.mcp.json` template, and a CLAUDE.md snippet.
+[`integrations/`](integrations) has everything needed to make agents use Thaliyola by default:
+- **Prompts:** `investigate`, `start-coding`, `capture`, `draft-from-paste`, `curate` and `review-stale`, served by every Thaliyola server.
+- **Curation by the client's model:** Thaliyola has no LLM, so it hands judgment work to connected agents. `get_tasks` returns tasks with instructions: entries filed in the team space that belong to a project, project pages missing their repository, look-alike findings, recurring problems, empty outline sections, stale entries, projects without an overview, unlinked entries, and (for admins) searches that found nothing. The agent acts through normal tools (`move_entry` proposes moving an entry to a project, folder and/or repository) and reports with `complete_task`; handed-out tasks are reserved for an hour and finished ones stay hidden. `get_project_context` mentions open tasks so agents tidy as they go. Run it with the `curate` prompt (`/mcp__thaliyola__curate` in Claude Code), on demand or on a schedule (e.g. `claude -p "/mcp__thaliyola__curate"` from cron). Review → Suggestions shows the queue and what agents did. (MCP sampling isn't used: the endpoint is stateless and most clients don't support it.)
+- **Claude Code:** a plugin with the `thaliyola` skill, a per-repo `.mcp.json` template, and a CLAUDE.md snippet.
 - **claude.ai:** connector setup.
 - **Scheduled jobs:** recipes for agents that turn Slack threads and Sentry issues into proposals.
 
@@ -230,28 +232,28 @@ docker compose exec server node dist/scripts/seed.js   # optional demo data
 
 On Debian or Ubuntu, `deploy/native/install.sh` sets up everything:
 - installs Node 22 and Postgres 16 with pgvector;
-- creates a `cairn` service user and database;
-- builds the server and UI, deploys them to `/opt/cairn`, and runs them as the `cairn` systemd service on `127.0.0.1:8080`.
+- creates a `thaliyola` service user and database;
+- builds the server and UI, deploys them to `/opt/thaliyola`, and runs them as the `thaliyola` systemd service on `127.0.0.1:8080`.
 
 ```sh
 sudo ADMIN_EMAIL=you@example.com deploy/native/install.sh
 ```
 
 - New installs use local sign-in. With `ADMIN_EMAIL` set, the first admin account is created and its temporary password printed at the end.
-- Config lives in `/etc/cairn/cairn.env`.
+- Config lives in `/etc/thaliyola/thaliyola.env`.
 - Re-run the script to upgrade. It keeps the config and the database.
-- Logs: `journalctl -u cairn -f`.
-- Backups run daily at 03:15 (`cairn-backup.timer`). Each one is a database dump plus an archive of uploaded files, written to `/var/backups/cairn`, and the newest 14 are kept. Run one now with `sudo cairn-backup`.
-- Restore with `sudo cairn-restore /var/backups/cairn/cairn-….dump`. To check a backup without touching the live data, add `TARGET_DB=cairn_check` to restore it into a scratch database. Copy backups off the machine too.
+- Logs: `journalctl -u thaliyola -f`.
+- Backups run daily at 03:15 (`thaliyola-backup.timer`). Each one is a database dump plus an archive of uploaded files, written to `/var/backups/thaliyola`, and the newest 14 are kept. Run one now with `sudo thaliyola-backup`.
+- Restore with `sudo thaliyola-restore /var/backups/thaliyola/thaliyola-….dump`. To check a backup without touching the live data, add `TARGET_DB=thaliyola_check` to restore it into a scratch database. Copy backups off the machine too.
 
 **Without Docker, for development**
 
 ```sh
 pnpm install
-pnpm --filter @cairn/web build     # optional: the UI the server serves at /
-export DATABASE_URL=postgres://cairn:cairn@localhost:5432/cairn
+pnpm --filter @thaliyola/web build     # optional: the UI the server serves at /
+export DATABASE_URL=postgres://thaliyola:thaliyola@localhost:5432/thaliyola
 export AUTH_MODE=dev DEV_TOKENS=dev-token=you@example.com
-pnpm --filter @cairn/server seed   # migrates and loads demo data
+pnpm --filter @thaliyola/server seed   # migrates and loads demo data
 pnpm dev
 ```
 
@@ -260,36 +262,36 @@ pnpm dev
 Create an API token on your Account page, then:
 
 ```sh
-claude mcp add --transport http cairn http://localhost:8080/mcp \
-  --header "Authorization: Bearer cairn_pat_…" \
-  --header "X-Cairn-Project: order-service"
+claude mcp add --transport http thaliyola http://localhost:8080/mcp \
+  --header "Authorization: Bearer thaliyola_pat_…" \
+  --header "X-Thaliyola-Project: order-service"
 ```
 
 ### Acceptance
 
 [`docs/acceptance.md`](docs/acceptance.md) describes the full acceptance run and its latest results:
-- a sweep of all 26 MCP tools (`pnpm --filter @cairn/server acceptance`);
+- a sweep of all 26 MCP tools (`pnpm --filter @thaliyola/server acceptance`);
 - real Claude Code sessions acting as designer, backend developer, frontend developer, on-call engineer, admin and outsider.
 
 ### Behind a reverse proxy
 
-[`deploy/native/nginx-cairn.conf`](deploy/native/nginx-cairn.conf) puts Cairn on port 80 behind Cloudflare (Tunnel or proxied DNS) or another proxy that terminates TLS. It passes the visitor's scheme and real IP (`CF-Connecting-IP`) through. Set `PUBLIC_URL` to the public https address. Browser writes are accepted from that origin even if a proxy rewrites the `Host` header.
+[`deploy/native/nginx-thaliyola.conf`](deploy/native/nginx-thaliyola.conf) puts Thaliyola on port 80 behind Cloudflare (Tunnel or proxied DNS) or another proxy that terminates TLS. It passes the visitor's scheme and real IP (`CF-Connecting-IP`) through. Set `PUBLIC_URL` to the public https address. Browser writes are accepted from that origin even if a proxy rewrites the `Host` header.
 
-If an authentication gateway sits in front, let these paths through without the gateway's sign-in, because Cairn authenticates them itself (API tokens or OAuth) and MCP clients can't complete a browser sign-in: `/mcp`, `/.well-known/*`, `/authorize`, `/token`, `/register`, `/revoke`, `/oauth/*` and `/api/*`.
+If an authentication gateway sits in front, let these paths through without the gateway's sign-in, because Thaliyola authenticates them itself (API tokens or OAuth) and MCP clients can't complete a browser sign-in: `/mcp`, `/.well-known/*`, `/authorize`, `/token`, `/register`, `/revoke`, `/oauth/*` and `/api/*`.
 
 ### Smoke test
 
 After a deploy with the demo data loaded, run end-to-end checks against the live server. It plays a backend agent changing a contract, a reviewer approving it, and a frontend agent picking up the change:
 
 ```sh
-CAIRN_URL=http://localhost:8080 AGENT_TOKEN=<user token> ADMIN_TOKEN=<admin token> pnpm --filter @cairn/server smoke
+THALIYOLA_URL=http://localhost:8080 AGENT_TOKEN=<user token> ADMIN_TOKEN=<admin token> pnpm --filter @thaliyola/server smoke
 ```
 
 ### Tests
 
-`CAIRN_REAL_EMBEDDINGS=1 pnpm test` also runs the semantic tests against the real model.
+`THALIYOLA_REAL_EMBEDDINGS=1 pnpm test` also runs the semantic tests against the real model.
 
-Tests run against a real Postgres database (`TEST_DATABASE_URL`, default `postgres://cairn:cairn@localhost:5432/cairn_test`). The schema is dropped and recreated on each run.
+Tests run against a real Postgres database (`TEST_DATABASE_URL`, default `postgres://thaliyola:thaliyola@localhost:5432/thaliyola_test`). The schema is dropped and recreated on each run.
 
 ```sh
 pnpm test
@@ -301,7 +303,7 @@ Choose with `AUTH_MODE`:
 
 | Mode | For | How people and agents sign in |
 |---|---|---|
-| `local` (default) | Self-hosting without an identity provider | Built-in accounts with passwords (scrypt) and browser sessions. Admins manage users on the **Users** page or with `cairn-admin` |
+| `local` (default) | Self-hosting without an identity provider | Built-in accounts with passwords (scrypt) and browser sessions. Admins manage users on the **Users** page or with `thaliyola-admin` |
 | `cloudflare` | Teams on Cloudflare Zero Trust | Cloudflare Access (and the MCP server portal) in front; the server verifies the Access JWT |
 | `dev` | Local development only | Static bearer tokens from `DEV_TOKENS` |
 
@@ -316,36 +318,36 @@ Local mode details:
 - Session length: `SESSION_TTL_HOURS`. The cookie is `Secure` whenever the request came in over https (`COOKIE_SECURE`).
 
 ```sh
-sudo cairn-admin create-user --email you@example.com --admin      # first admin (prints a temporary password)
-sudo cairn-admin reset-password --email someone@example.com
-sudo cairn-admin create-token --service nightly-rca --name "RCA job"  # token for a bot account
-sudo cairn-admin export --out /tmp/cairn.zip [--scope team]          # everything as Markdown (members-only projects too)
+sudo thaliyola-admin create-user --email you@example.com --admin      # first admin (prints a temporary password)
+sudo thaliyola-admin reset-password --email someone@example.com
+sudo thaliyola-admin create-token --service nightly-rca --name "RCA job"  # token for a bot account
+sudo thaliyola-admin export --out /tmp/thaliyola.zip [--scope team]          # everything as Markdown (members-only projects too)
 ```
 
 ### OAuth for claude.ai and other OAuth clients (local mode)
 
-Set `PUBLIC_URL` (e.g. `https://cairn.example.com`) and Cairn also acts as an OAuth 2.1 authorization server for MCP clients that only support OAuth, such as claude.ai custom connectors:
+Set `PUBLIC_URL` (e.g. `https://thaliyola.example.com`) and Thaliyola also acts as an OAuth 2.1 authorization server for MCP clients that only support OAuth, such as claude.ai custom connectors:
 - **Discovery:** protected-resource and authorization-server metadata, so clients find the server from a single 401.
 - **Registration:** dynamic client registration.
-- **Authorization:** authorization code with PKCE (S256). The person signs in with their Cairn account and approves the app on a consent page that shows where they'll be sent.
+- **Authorization:** authorization code with PKCE (S256). The person signs in with their Thaliyola account and approves the app on a consent page that shows where they'll be sent.
 - **Tokens:** opaque access tokens (1 hour) and rotating refresh tokens (30 days). A reused refresh token or authorization code revokes everything issued from it, and tokens are bound to this server's `/mcp` resource.
 - **Revocation:** people see and revoke connected apps on their Account page.
 
-To add Cairn to claude.ai, use **Settings → Connectors → Add custom connector** with `https://cairn.example.com/mcp`. Cairn must be reachable from the internet over https, for example through a Cloudflare Tunnel or a reverse proxy.
+To add Thaliyola to claude.ai, use **Settings → Connectors → Add custom connector** with `https://thaliyola.example.com/mcp`. Thaliyola must be reachable from the internet over https, for example through a Cloudflare Tunnel or a reverse proxy.
 
-The flow is built on the MCP TypeScript SDK's OAuth server router. Cairn supplies storage, sign-in, consent and token issuance.
+The flow is built on the MCP TypeScript SDK's OAuth server router. Thaliyola supplies storage, sign-in, consent and token issuance.
 
-(`cairn-admin` is installed by the native installer. Elsewhere, run `node dist/scripts/admin.js …` with `DATABASE_URL` set.)
+(`thaliyola-admin` is installed by the native installer. Elsewhere, run `node dist/scripts/admin.js …` with `DATABASE_URL` set.)
 
 ## Deployment with Cloudflare Zero Trust
 
-Cairn is meant to sit behind [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/policies/access/) and be reached by clients through a [Cloudflare MCP server portal](https://developers.cloudflare.com/cloudflare-one/access-controls/ai-controls/mcp-portals/).
+Thaliyola is meant to sit behind [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/policies/access/) and be reached by clients through a [Cloudflare MCP server portal](https://developers.cloudflare.com/cloudflare-one/access-controls/ai-controls/mcp-portals/).
 
-1. Create a Cloudflare Tunnel and put its token in `.env` as `CLOUDFLARE_TUNNEL_TOKEN`. Route a hostname (e.g. `cairn.example.com`) to `http://server:8080`.
+1. Create a Cloudflare Tunnel and put its token in `.env` as `CLOUDFLARE_TUNNEL_TOKEN`. Route a hostname (e.g. `thaliyola.example.com`) to `http://server:8080`.
 2. Create a self-hosted Access application for that hostname, with a policy for your team. Copy its AUD tag.
 3. Set `AUTH_MODE=cloudflare`, `CF_ACCESS_TEAM_DOMAIN=https://<team>.cloudflareaccess.com` and `CF_ACCESS_AUD=<aud tag>`.
-4. Start everything with `docker compose --profile tunnel up -d`. The server port is bound to localhost only. For a native install, [install `cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-remote-tunnel/) as a service instead and point the tunnel at `http://localhost:8080`. Then set the Access variables in `/etc/cairn/cairn.env` and run `systemctl restart cairn`.
-5. Add `https://cairn.example.com/mcp` to your MCP server portal. Users connect Claude to the portal URL.
+4. Start everything with `docker compose --profile tunnel up -d`. The server port is bound to localhost only. For a native install, [install `cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-remote-tunnel/) as a service instead and point the tunnel at `http://localhost:8080`. Then set the Access variables in `/etc/thaliyola/thaliyola.env` and run `systemctl restart thaliyola`.
+5. Add `https://thaliyola.example.com/mcp` to your MCP server portal. Users connect Claude to the portal URL.
 
 The server verifies the `Cf-Access-Jwt-Assertion` header on every request against your team's signing keys, so requests that bypass Access are rejected. Users are identified by their Access email; Access service tokens map to service identities for scheduled jobs.
 

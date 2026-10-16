@@ -77,7 +77,7 @@ export async function exportMarkdown(ctx: RequestContext, opts: { scope?: string
     return out;
   }
 
-  const index: string[] = ["# Cairn export", "", `Exported ${new Date().toISOString()}.`, ""];
+  const index: string[] = ["# Thaliyola export", "", `Exported ${new Date().toISOString()}.`, ""];
   for (const a of articles.rows) {
     const file = unique(path.posix.join(a.scope, ...(a.path ? String(a.path).split("/").map(slug) : []), `${slug(a.title)}.md`));
     const meta = yaml({ title: a.title, id: a.id, type: a.type, status: a.status, scope: a.scope, path: a.path || null, tags: a.tags, owner: a.owner, version: a.version, updated_at: a.updated_at, last_verified_at: a.last_verified_at });

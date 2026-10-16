@@ -71,8 +71,8 @@ describe("hybrid search (hashing embedder)", () => {
   });
 });
 
-// Real model: CAIRN_REAL_EMBEDDINGS=1 pnpm test semantic  (downloads ~35 MB on first run)
-describe.runIf(process.env.CAIRN_REAL_EMBEDDINGS === "1")("hybrid search (bge-small)", () => {
+// Real model: THALIYOLA_REAL_EMBEDDINGS=1 pnpm test semantic  (downloads ~35 MB on first run)
+describe.runIf(process.env.THALIYOLA_REAL_EMBEDDINGS === "1")("hybrid search (bge-small)", () => {
   const embedder = new LocalEmbedder(undefined, process.env.EMBEDDING_CACHE_DIR);
 
   beforeAll(async () => {

@@ -46,8 +46,8 @@ jobs:
           echo "AGENT_TOKEN=$(docker compose exec -T server node dist/scripts/admin.js create-token --email agent@example.com --name ci 2>/dev/null)" >> "$GITHUB_ENV"
       - name: Smoke test against the container
         env:
-          CAIRN_URL: http://127.0.0.1:8080
-        run: pnpm --filter @cairn/server smoke 2>&1 | tee smoke.log; test "${PIPESTATUS[0]}" -eq 0
+          THALIYOLA_URL: http://127.0.0.1:8080
+        run: pnpm --filter @thaliyola/server smoke 2>&1 | tee smoke.log; test "${PIPESTATUS[0]}" -eq 0
       - name: Web UI is served
         run: curl -fsS http://127.0.0.1:8080/ | grep -q '<div id="root">'
       - name: Logs on failure

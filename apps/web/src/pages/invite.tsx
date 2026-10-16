@@ -42,7 +42,7 @@ export function InviteAcceptPage({ token, onDone }: { token: string; onDone: () 
     <div className="gate">
       <form onSubmit={submit}>
         <h1>
-          <img src="/favicon.svg" alt="" width={26} height={26} /> Cairn
+          <img src="/favicon.svg" alt="" width={26} height={26} /> Thaliyola
         </h1>
         {invalid ? (
           <>
@@ -71,7 +71,7 @@ export function InviteAcceptPage({ token, onDone }: { token: string; onDone: () 
             </label>
             <ErrorBox error={error} />
             <button className="btn btn-primary" type="submit" disabled={busy}>
-              {busy ? "Setting up…" : "Join Cairn"}
+              {busy ? "Setting up…" : "Join Thaliyola"}
             </button>
           </>
         )}

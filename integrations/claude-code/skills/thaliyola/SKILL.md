@@ -1,11 +1,11 @@
 ---
-name: cairn
-description: Use the team's Cairn knowledge base (MCP tools named search_knowledge, get_project_context, propose_finding, …). Use it before investigating an alert, bug, incident, data question or metric definition; before changing code in a project that has Cairn context; and after confirming a root cause, making a design decision or hitting a gotcha, to capture it for the team.
+name: thaliyola
+description: Use the team's Thaliyola knowledge base (MCP tools named search_knowledge, get_project_context, propose_finding, …). Use it before investigating an alert, bug, incident, data question or metric definition; before changing code in a project that has Thaliyola context; and after confirming a root cause, making a design decision or hitting a gotcha, to capture it for the team.
 ---
 
-# Working with Cairn
+# Working with Thaliyola
 
-Cairn holds what the team already knows: systems, metrics, runbooks, project designs, API contracts, UI/UX specs, and findings from past investigations. Agents read it first and write back what they learn. People review what agents write.
+Thaliyola holds what the team already knows: systems, metrics, runbooks, project designs, API contracts, UI/UX specs, and findings from past investigations. Agents read it first and write back what they learn. People review what agents write.
 
 ## Before investigating
 
@@ -16,7 +16,7 @@ Cairn holds what the team already knows: systems, metrics, runbooks, project des
 
 ## Before changing code
 
-1. `get_project_context` (the project and component come from the `X-Cairn-Project` / `X-Cairn-Component` headers, or pass them).
+1. `get_project_context` (the project and component come from the `X-Thaliyola-Project` / `X-Thaliyola-Component` headers, or pass them).
 2. Read **open impact notices** first: upstream contract or shared-design changes this code may not handle yet.
 3. Read the contracts the component provides/consumes, related decisions and design docs, and for UI work the library component specs and tokens (`get_asset` returns screenshots).
 4. Follow them. If the task needs a contract change, say so before making it.
@@ -31,13 +31,13 @@ Cairn holds what the team already knows: systems, metrics, runbooks, project des
 
 ## Curating (when asked to tidy, or in a scheduled run)
 
-Cairn has no model of its own; you supply the judgment. `get_tasks` returns work with instructions: entries filed in the team space that belong to a project, project pages missing their repository, look-alike findings, recurring problems, empty outline sections, stale entries, projects without an overview, unlinked entries, and (for admins) searches that found nothing.
+Thaliyola has no model of its own; you supply the judgment. `get_tasks` returns work with instructions: entries filed in the team space that belong to a project, project pages missing their repository, look-alike findings, recurring problems, empty outline sections, stale entries, projects without an overview, unlinked entries, and (for admins) searches that found nothing.
 
 1. Read what each task names before acting, and check facts against code, config or docs you can access.
-2. Act with Cairn tools: `move_entry` (to a project, folder and/or repository), `propose_article_edit`, `update_finding`, `link_entries`, `verify_entry`, `promote_finding`, `create_article`.
+2. Act with Thaliyola tools: `move_entry` (to a project, folder and/or repository), `propose_article_edit`, `update_finding`, `link_entries`, `verify_entry`, `promote_finding`, `create_article`.
 3. Finish each with `complete_task`: `done` (with the `revision_id`), `not_applicable`, or `skipped` with a reason when unsure.
 
-The `curate` prompt (`/mcp__cairn__curate`) runs this loop. When `get_project_context` reports `curation` tasks, mention them to the user; don't let them derail the user's request.
+The `curate` prompt (`/mcp__thaliyola__curate`) runs this loop. When `get_project_context` reports `curation` tasks, mention them to the user; don't let them derail the user's request.
 
 ## Rules
 

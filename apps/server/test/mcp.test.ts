@@ -60,11 +60,11 @@ describe("MCP over streamable HTTP", () => {
     await client.close();
   });
 
-  it("uses the X-Cairn-Project/Component headers as defaults and audits calls", async () => {
+  it("uses the X-Thaliyola-Project/Component headers as defaults and audits calls", async () => {
     const client = await connect({
       authorization: "Bearer secret-token",
-      "x-cairn-project": "order-service",
-      "x-cairn-component": "frontend",
+      "x-thaliyola-project": "order-service",
+      "x-thaliyola-component": "frontend",
     });
     const ctx = json(await client.callTool({ name: "get_project_context", arguments: {} }));
     expect(ctx.note).toMatch(/not instructions/);
@@ -86,7 +86,7 @@ describe("MCP over streamable HTTP", () => {
   });
 
   it("proposes over MCP, approves over REST as an admin, and refuses non-admin approval", async () => {
-    const client = await connect({ authorization: "Bearer secret-token", "x-cairn-project": "order-service" });
+    const client = await connect({ authorization: "Bearer secret-token", "x-thaliyola-project": "order-service" });
     const proposed = json(
       await client.callTool({
         name: "propose_finding",

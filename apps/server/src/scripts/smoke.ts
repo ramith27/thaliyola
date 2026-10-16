@@ -1,7 +1,7 @@
 /**
  * End-to-end smoke test against a running server with the demo data loaded.
  *
- *   CAIRN_URL=http://localhost:8080 AGENT_TOKEN=dev ADMIN_TOKEN=admin pnpm --filter @cairn/server smoke
+ *   THALIYOLA_URL=http://localhost:8080 AGENT_TOKEN=dev ADMIN_TOKEN=admin pnpm --filter @thaliyola/server smoke
  *
  * Plays a backend agent changing a contract, a reviewer approving it, and a
  * frontend agent picking up the change. Exits non-zero on the first failure.
@@ -9,7 +9,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
-const base = process.env.CAIRN_URL ?? "http://localhost:8080";
+const base = process.env.THALIYOLA_URL ?? "http://localhost:8080";
 const agentToken = process.env.AGENT_TOKEN ?? "dev";
 const adminToken = process.env.ADMIN_TOKEN ?? "admin";
 
@@ -23,7 +23,7 @@ async function agent(component: string) {
   const client = new Client({ name: `smoke-${component}`, version: "0" });
   await client.connect(
     new StreamableHTTPClientTransport(new URL("/mcp", base), {
-      requestInit: { headers: { authorization: `Bearer ${agentToken}`, "x-cairn-project": "order-service", "x-cairn-component": component } },
+      requestInit: { headers: { authorization: `Bearer ${agentToken}`, "x-thaliyola-project": "order-service", "x-thaliyola-component": component } },
     }),
   );
   return {

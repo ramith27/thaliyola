@@ -15,16 +15,16 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg16
         env:
-          POSTGRES_USER: cairn
-          POSTGRES_PASSWORD: cairn
-          POSTGRES_DB: cairn_test
+          POSTGRES_USER: thaliyola
+          POSTGRES_PASSWORD: thaliyola
+          POSTGRES_DB: thaliyola_test
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U cairn"
+          --health-cmd "pg_isready -U thaliyola"
           --health-interval 5s
           --health-retries 10
     env:
-      TEST_DATABASE_URL: postgres://cairn:cairn@localhost:5432/cairn_test
+      TEST_DATABASE_URL: postgres://thaliyola:thaliyola@localhost:5432/thaliyola_test
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -33,7 +33,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @cairn/server typecheck
-      - run: pnpm --filter @cairn/server build
-      - run: pnpm --filter @cairn/web build
+      - run: pnpm --filter @thaliyola/server typecheck
+      - run: pnpm --filter @thaliyola/server build
+      - run: pnpm --filter @thaliyola/web build
       - run: pnpm test

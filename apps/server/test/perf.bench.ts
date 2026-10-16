@@ -1,6 +1,6 @@
 /**
  * Scale check (not part of the normal test run):
- *   PERF_DATABASE_URL=postgres://cairn:cairn@localhost:5432/cairn_perf npx tsx test/perf.bench.ts [articles] [findings]
+ *   PERF_DATABASE_URL=postgres://thaliyola:thaliyola@localhost:5432/thaliyola_perf npx tsx test/perf.bench.ts [articles] [findings]
  * Generates synthetic knowledge, embeds it with the hashing embedder, then times search and duplicate checks.
  */
 import { migrate } from "../src/db/migrate.js";

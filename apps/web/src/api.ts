@@ -1,6 +1,6 @@
-/** Thin client for the Cairn REST API. */
+/** Thin client for the Thaliyola REST API. */
 
-const TOKEN_KEY = "cairn.devToken";
+const TOKEN_KEY = "thaliyola.devToken";
 
 export function getToken(): string | null {
   try {

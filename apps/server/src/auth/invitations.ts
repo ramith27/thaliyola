@@ -7,7 +7,7 @@ import { withTx } from "../db/pool.js";
 import { createLocalUser } from "./local.js";
 
 /**
- * Invitations for local sign-in: an admin enters an email, Cairn emails a
+ * Invitations for local sign-in: an admin enters an email, Thaliyola emails a
  * one-time link, and the invitee sets their own password (no temporary
  * password to pass around). Links are stored hashed and expire.
  */
@@ -43,8 +43,8 @@ export async function createInvitation(
   const inviter = (await db.query<{ name: string }>("SELECT coalesce(display_name, email) AS name FROM users WHERE id = $1", [inviterId])).rows[0]?.name ?? "A teammate";
   const link = `#/invite/${token}`;
   const emailed = sendEmail(settings, email, {
-    subject: `${inviter} invited you to Cairn`,
-    body: `${inviter} invited you to your team's knowledge base on Cairn${input.scope ? ` (${input.scope})` : ""}. Choose a password to finish setting up your account. The link works once and expires in ${INVITE_DAYS} days.`,
+    subject: `${inviter} invited you to Thaliyola`,
+    body: `${inviter} invited you to your team's knowledge base on Thaliyola${input.scope ? ` (${input.scope})` : ""}. Choose a password to finish setting up your account. The link works once and expires in ${INVITE_DAYS} days.`,
     link,
     openLabel: "Accept invitation",
     footer: "If you weren't expecting this, you can ignore it.",

@@ -89,10 +89,10 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
   );
 
   app.post("/mcp", requireAuth(db, authenticate, oauth?.resourceMetadataUrl, publicOrigin), rateLimit, uploadJson, requirePasswordChanged, async (req, res) => {
-    // The project comes from X-Cairn-Project, or from the repository the session runs in (X-Cairn-Repo: git remote URL).
-    let project = req.header("x-cairn-project") || undefined;
-    let component = req.header("x-cairn-component") || undefined;
-    const repo = req.header("x-cairn-repo");
+    // The project comes from X-Thaliyola-Project, or from the repository the session runs in (X-Thaliyola-Repo: git remote URL).
+    let project = req.header("x-thaliyola-project") || undefined;
+    let component = req.header("x-thaliyola-component") || undefined;
+    const repo = req.header("x-thaliyola-repo");
     if (repo && !project) {
       const found = await resolveRepo(db, repo).catch(() => null);
       if (found) {

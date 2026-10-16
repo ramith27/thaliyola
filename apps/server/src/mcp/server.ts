@@ -30,15 +30,15 @@ import { listProjects } from "../core/scopes.js";
 import { searchKnowledge } from "../core/search.js";
 import { registerPrompts } from "./prompts.js";
 
-export const SERVER_INSTRUCTIONS = `Cairn, the team knowledge base: shared, reviewed knowledge for the whole team.
+export const SERVER_INSTRUCTIONS = `Thaliyola, the team knowledge base: shared, reviewed knowledge for the whole team.
 
 Scopes: "team" (org-wide systems, metrics, runbooks), one scope per project, and "library" (reusable designs, patterns, UI components and contracts shared across projects).
 
 How to use it:
 - Before investigating an alert, bug or question, call search_knowledge first. Phrase the query the way the symptom first appeared.
-- Before changing code in a project, call get_project_context (pass the project, and the component if you know it: backend, frontend, ...; or pass the repo's git remote URL as repo and Cairn finds both). Read open impact notices first.
+- Before changing code in a project, call get_project_context (pass the project, and the component if you know it: backend, frontend, ...; or pass the repo's git remote URL as repo and Thaliyola finds both). Read open impact notices first.
 - Project knowledge belongs in that project's scope (project argument), not in "team": each project has its own members and access. Use "team" only for org-wide systems, metrics and runbooks. If you find something filed in the wrong place, propose move_entry.
-- Cairn has no model of its own; you are its judgment. get_tasks returns curation work (misfiled entries, missing repositories, duplicates, empty outlines, stale entries, unanswered searches). Do it when the user asks you to tidy or curate, or in a scheduled run, and report each with complete_task.
+- Thaliyola has no model of its own; you are its judgment. get_tasks returns curation work (misfiled entries, missing repositories, duplicates, empty outlines, stale entries, unanswered searches). Do it when the user asks you to tidy or curate, or in a scheduled run, and report each with complete_task.
 - Open only the relevant hits with get_article / get_finding; search results are compact summaries.
 - Items marked possibly_stale were not verified recently: confirm before relying on them.
 - When a search result solved your problem, call verify_entry so it stays fresh.
@@ -77,7 +77,7 @@ const sourceLinksArg = z
 const projectArg = z
   .string()
   .optional()
-  .describe("Project slug. Defaults to the client's X-Cairn-Project header.");
+  .describe("Project slug. Defaults to the client's X-Thaliyola-Project header.");
 
 function ok(value: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify({ note: UNTRUSTED_NOTE, ...(value as object) }, null, 2) }] };
@@ -90,7 +90,7 @@ function fail(message: string, extra?: unknown): CallToolResult {
 
 /** One MCP server per request (stateless transport), bound to the caller's context. */
 export function buildMcpServer(ctx: RequestContext): McpServer {
-  const server = new McpServer({ name: "cairn", version: "0.1.0" }, { instructions: SERVER_INSTRUCTIONS });
+  const server = new McpServer({ name: "thaliyola", version: "0.1.0" }, { instructions: SERVER_INSTRUCTIONS });
 
   /** Runs a tool body with uniform auditing and error mapping. */
   async function run(tool: string, targetId: string | null, body: () => Promise<unknown>): Promise<CallToolResult> {
@@ -204,7 +204,7 @@ export function buildMcpServer(ctx: RequestContext): McpServer {
         "what it uses from the library/team, and open known issues. With a component, also the contracts it provides and consumes.",
       inputSchema: {
         project: projectArg,
-        component: z.string().optional().describe("Component slug (e.g. 'backend', 'frontend'). Defaults to the X-Cairn-Component header."),
+        component: z.string().optional().describe("Component slug (e.g. 'backend', 'frontend'). Defaults to the X-Thaliyola-Component header."),
         repo: z
           .string()
           .optional()

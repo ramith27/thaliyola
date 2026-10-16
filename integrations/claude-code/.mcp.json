@@ -1,12 +1,12 @@
 {
   "mcpServers": {
-    "cairn": {
+    "thaliyola": {
       "type": "http",
-      "url": "${CAIRN_URL}/mcp",
+      "url": "${THALIYOLA_URL}/mcp",
       "headers": {
-        "Authorization": "Bearer ${CAIRN_TOKEN}",
-        "X-Cairn-Project": "${CAIRN_PROJECT:-}",
-        "X-Cairn-Component": "${CAIRN_COMPONENT:-}"
+        "Authorization": "Bearer ${THALIYOLA_TOKEN}",
+        "X-Thaliyola-Project": "${THALIYOLA_PROJECT:-}",
+        "X-Thaliyola-Component": "${THALIYOLA_COMPONENT:-}"
       }
     }
   }

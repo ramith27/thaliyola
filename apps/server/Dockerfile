@@ -9,9 +9,9 @@ RUN pnpm install --frozen-lockfile
 COPY apps/server apps/server
 COPY apps/web apps/web
 COPY deploy/prune-runtime.sh deploy/prune-runtime.sh
-RUN pnpm --filter @cairn/web build \
- && pnpm --filter @cairn/server build \
- && pnpm --filter @cairn/server deploy --prod /out \
+RUN pnpm --filter @thaliyola/web build \
+ && pnpm --filter @thaliyola/server build \
+ && pnpm --filter @thaliyola/server deploy --prod /out \
  && deploy/prune-runtime.sh /out/node_modules
 
 FROM node:22-slim

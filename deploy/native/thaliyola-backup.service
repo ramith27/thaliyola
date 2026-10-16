@@ -1,0 +1,7 @@
+[Unit]
+Description=Back up the Thaliyola database and uploaded files
+After=postgresql.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/thaliyola-backup

@@ -12,7 +12,7 @@ export interface Step {
 /**
  * The first-run checklist on the home page, worked out from what has
  * actually happened (nothing to tick by hand). Admins see setup steps;
- * everyone sees the steps that make Cairn useful to them.
+ * everyone sees the steps that make Thaliyola useful to them.
  */
 export async function onboarding(ctx: RequestContext): Promise<{ steps: Step[]; dismissed: boolean }> {
   const db = ctx.db;
@@ -50,13 +50,13 @@ export async function onboarding(ctx: RequestContext): Promise<{ steps: Step[]; 
       title: "Set up email",
       detail: "Reviewers get proposals by email with a one-click approve link. Set MAIL_TRANSPORT=smtp and SMTP_URL on the server.",
       done: ctx.settings.mailTransport !== "off",
-      link: "https://github.com/ramith27/cairn-mcp#notifications",
+      link: "https://github.com/ramith27/thaliyola#notifications",
     });
   }
   steps.push({
     key: "connect",
     title: "Connect Claude",
-    detail: "Add Cairn to Claude Code or claude.ai so your sessions search the team's knowledge first.",
+    detail: "Add Thaliyola to Claude Code or claude.ai so your sessions search the team's knowledge first.",
     done: connected,
     link: "#/connect",
   });

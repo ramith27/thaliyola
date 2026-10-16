@@ -1,7 +1,0 @@
-[Unit]
-Description=Back up the Cairn database and uploaded files
-After=postgresql.service
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/cairn-backup

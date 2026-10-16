@@ -6,7 +6,7 @@ import { listSuggestions } from "./suggestions.js";
 import { ARTICLE_TEMPLATES } from "./templates.js";
 
 /**
- * Curation work for connected agents. Cairn has no model of its own: it finds
+ * Curation work for connected agents. Thaliyola has no model of its own: it finds
  * what needs judgment (an item filed in the wrong place, a page without its
  * repository, look-alike findings, empty outlines, stale entries, searches
  * that found nothing) and hands it to the client's model with instructions
@@ -59,7 +59,7 @@ const INSTRUCTIONS: Record<TaskKind, string> = {
     "or create_article type runbook if none fits). " +
     DO_NOT,
   fill_outline:
-    "This article has sections that are still empty or placeholder text ('_To write: …_'). Fill them only with facts you can check: read the repository's code, config and docs, and other Cairn entries. " +
+    "This article has sections that are still empty or placeholder text ('_To write: …_'). Fill them only with facts you can check: read the repository's code, config and docs, and other Thaliyola entries. " +
     "Send one propose_article_edit per section (section + text). Leave sections you can't verify as they are and say so in the task note. " +
     DO_NOT,
   verify_stale:
@@ -67,7 +67,7 @@ const INSTRUCTIONS: Record<TaskKind, string> = {
     "Still true → verify_entry(still_valid true). Partly wrong → propose a correction (update_finding / propose_article_edit). No longer true → verify_entry(still_valid false, note why). " +
     DO_NOT,
   write_overview:
-    "This project has no overview. From its repositories (README, code, config) and its Cairn entries, write one: get_article_template('project_overview'), then create_article in the project. " +
+    "This project has no overview. From its repositories (README, code, config) and its Thaliyola entries, write one: get_article_template('project_overview'), then create_article in the project. " +
     "Facts only; mark anything uncertain. " +
     DO_NOT,
   link_related:

@@ -74,9 +74,9 @@ async function digestFor(db: Db, p: Person) {
   if (stale.rows.length) parts.push(`Yours to re-check (not verified recently):\n${stale.rows.map((s) => `• ${s.title}`).join("\n")}`);
   if (gaps.length) parts.push(`Searched for but not found this week:\n${gaps.map((g) => `• "${g.query}" (${g.n}×)`).join("\n")}`);
   if (!parts.length && !unread) return null;
-  if (unread) parts.push(`${unread} unread notification${unread > 1 ? "s" : ""} in Cairn.`);
+  if (unread) parts.push(`${unread} unread notification${unread > 1 ? "s" : ""} in Thaliyola.`);
   return {
-    subject: toReview.rows.length ? `Cairn weekly: ${toReview.rows.length} to review, ${changes.rows.length} updates` : `Cairn weekly: ${changes.rows.length} update${changes.rows.length === 1 ? "" : "s"}`,
+    subject: toReview.rows.length ? `Thaliyola weekly: ${toReview.rows.length} to review, ${changes.rows.length} updates` : `Thaliyola weekly: ${changes.rows.length} update${changes.rows.length === 1 ? "" : "s"}`,
     body: parts.join("\n\n"),
     link: toReview.rows.length ? "#/review" : "#/",
   };
@@ -98,7 +98,7 @@ export async function sendDigests(db: Db, settings: Settings, now = new Date()) 
     // Mark first, so a crash mid-run never sends anyone two digests.
     await db.query("UPDATE users SET prefs = prefs || jsonb_build_object('digest_sent_at', $2::text) WHERE id = $1", [p.id, now.toISOString()]);
     if (!d) continue;
-    sendEmail(settings, p.email, { subject: d.subject, body: d.body, link: d.link, openLabel: "Open Cairn", footer: "You get this weekly. Turn it off on your Cairn account page." });
+    sendEmail(settings, p.email, { subject: d.subject, body: d.body, link: d.link, openLabel: "Open Thaliyola", footer: "You get this weekly. Turn it off on your Thaliyola account page." });
     sent++;
   }
   return { sent, skipped: rows.length - sent };

@@ -82,7 +82,7 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
     embedder,
     onWrite,
     actor: res.locals.actor as Actor,
-    project: req.header("x-cairn-project") || undefined,
+    project: req.header("x-thaliyola-project") || undefined,
   });
 
   /** Wraps a route: builds the context, audits the call, returns JSON. */
@@ -227,7 +227,7 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
       res
         .set({
           "Content-Type": "application/zip",
-          "Content-Disposition": `attachment; filename="cairn-${scope ?? "export"}-${new Date().toISOString().slice(0, 10)}.zip"`,
+          "Content-Disposition": `attachment; filename="thaliyola-${scope ?? "export"}-${new Date().toISOString().slice(0, 10)}.zip"`,
           "Cache-Control": "no-store",
         })
         .send(Buffer.from(out.zip));

@@ -8,7 +8,7 @@ import type { RequestContext } from "../src/core/context.js";
 import { upsertUser } from "../src/core/users.js";
 import { seedDemo } from "../src/scripts/demo-data.js";
 
-export const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL ?? "postgres://cairn:cairn@localhost:5432/cairn_test";
+export const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL ?? "postgres://thaliyola:thaliyola@localhost:5432/thaliyola_test";
 
 /** Fresh schema + demo data. */
 export async function freshDb() {
@@ -24,13 +24,13 @@ export const TEST_SETTINGS: Settings = {
   duplicateThreshold: 0.6,
   authMode: "dev",
   mailTransport: "off",
-  mailFrom: "Cairn <cairn@test>",
+  mailFrom: "Thaliyola <thaliyola@test>",
   rateLimitPerMinute: 0,
   logRequests: false,
   publicUrl: undefined,
   sessionTtlHours: 24,
   cookieSecure: "false",
-  assetDir: mkdtempSync(path.join(tmpdir(), "cairn-assets-")),
+  assetDir: mkdtempSync(path.join(tmpdir(), "thaliyola-assets-")),
   assetMaxBytes: 1024 * 1024,
   importMaxBytes: 10 * 1024 * 1024,
   digestDay: 1,

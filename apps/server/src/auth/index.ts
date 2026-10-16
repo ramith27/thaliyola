@@ -80,12 +80,12 @@ export function sessionToken(req: Request): string | undefined {
 }
 
 /**
- * Personal API tokens (`Bearer cairn_pat_…`), accepted in every mode, and
- * OAuth access tokens (`Bearer cairn_oat_…`) issued by the local OAuth server.
+ * Personal API tokens (`Bearer thaliyola_pat_…`), accepted in every mode, and
+ * OAuth access tokens (`Bearer thaliyola_oat_…`) issued by the local OAuth server.
  */
 export function apiTokenAuthenticator(db: Db, oauthResource?: URL): Authenticator {
   return async (req) => {
-    const m = /^Bearer\s+(cairn_(?:pat|oat)_\S+)$/i.exec(req.header("authorization") ?? "");
+    const m = /^Bearer\s+(thaliyola_(?:pat|oat)_\S+)$/i.exec(req.header("authorization") ?? "");
     if (!m) return null;
     const token = m[1]!;
     const user = token.startsWith(OAUTH_ACCESS_PREFIX) ? await userForOAuthToken(db, token, oauthResource) : await userForApiToken(db, token);

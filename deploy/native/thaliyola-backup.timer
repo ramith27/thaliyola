@@ -1,5 +1,5 @@
 [Unit]
-Description=Daily Cairn backup
+Description=Daily Thaliyola backup
 
 [Timer]
 OnCalendar=*-*-* 03:15:00

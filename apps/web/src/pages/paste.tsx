@@ -13,7 +13,7 @@ export function PasteDraftPage() {
     <div className="page editor">
       <h1>Draft from pasted text</h1>
       <p className="lead">
-        Paste a Slack thread, an email, incident notes or a doc. Cairn pulls out a title and the labelled parts (“Root cause:”, “Fix:”), drops chat noise and
+        Paste a Slack thread, an email, incident notes or a doc. Thaliyola pulls out a title and the labelled parts (“Root cause:”, “Fix:”), drops chat noise and
         signatures, and opens a draft for you to check. Secrets and personal data are redacted when you save.
       </p>
       <div className="tabs" role="tablist">
@@ -49,7 +49,7 @@ export function PasteDraftPage() {
         </section>
       </div>
       <Notice>
-        Rules, not AI: it won't infer a root cause that isn't written down. For a smarter draft, run the <code>draft-from-paste</code> prompt in Claude with Cairn
+        Rules, not AI: it won't infer a root cause that isn't written down. For a smarter draft, run the <code>draft-from-paste</code> prompt in Claude with Thaliyola
         connected.
       </Notice>
       <div className="actions">

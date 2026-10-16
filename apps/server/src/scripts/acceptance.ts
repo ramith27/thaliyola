@@ -3,9 +3,9 @@
  * the way agents and reviewers use them, and checks the results. It creates
  * its own content (uniquely named), so it runs on any instance, even an empty one.
  *
- *   CAIRN_URL=https://cairn.example.com \
+ *   THALIYOLA_URL=https://thaliyola.example.com \
  *   ADMIN_TOKEN=… WRITER_TOKEN=… OUTSIDER_TOKEN=… \
- *   pnpm --filter @cairn/server acceptance
+ *   pnpm --filter @thaliyola/server acceptance
  *
  * ADMIN_TOKEN: an admin (creates projects, approves). WRITER_TOKEN: a normal user.
  * OUTSIDER_TOKEN: a normal user who is not added to the members-only project.
@@ -13,7 +13,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
-const base = process.env.CAIRN_URL ?? "http://localhost:8080";
+const base = process.env.THALIYOLA_URL ?? "http://localhost:8080";
 const tokens = { admin: process.env.ADMIN_TOKEN!, writer: process.env.WRITER_TOKEN!, outsider: process.env.OUTSIDER_TOKEN! };
 if (!tokens.admin || !tokens.writer || !tokens.outsider) {
   console.error("set ADMIN_TOKEN, WRITER_TOKEN and OUTSIDER_TOKEN");
@@ -79,8 +79,8 @@ try {
   await rest("admin", "PUT", `/api/scopes/${secret}/members`, { email: writerEmail, role: "writer" });
 
   const designer = await agent("writer");
-  const backend = await agent("writer", { "x-cairn-project": project, "x-cairn-component": "backend" });
-  const frontend = await agent("writer", { "x-cairn-project": project, "x-cairn-component": "frontend" });
+  const backend = await agent("writer", { "x-thaliyola-project": project, "x-thaliyola-component": "backend" });
+  const frontend = await agent("writer", { "x-thaliyola-project": project, "x-thaliyola-component": "frontend" });
   const outsider = await agent("outsider");
 
   // ---- Discovery and prompts

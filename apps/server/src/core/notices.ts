@@ -5,7 +5,7 @@ import { getComponent, resolveProject } from "./scopes.js";
 /** Open upstream changes for a project, or for one of its components (plus project-wide ones). */
 export async function listImpactNotices(ctx: RequestContext, opts: { project?: string; component?: string; include_acked?: boolean }) {
   const project = await resolveProject(ctx, opts.project);
-  if (!project) throw new ValidationError("no project given: pass `project` or set the X-Cairn-Project header");
+  if (!project) throw new ValidationError("no project given: pass `project` or set the X-Thaliyola-Project header");
   const componentSlug = opts.component ?? (opts.project === undefined || opts.project === ctx.project ? ctx.component : undefined);
   const component = componentSlug ? await getComponent(ctx.db, project.id, componentSlug) : undefined;
   const { rows } = await ctx.db.query(

@@ -19,13 +19,13 @@ import { login, SESSION_COOKIE, sessionHash, userForSession } from "./local.js";
  * PKCE and the token endpoint; this provider supplies storage, the sign-in
  * and consent pages, and token issuance:
  *
- * - access tokens: opaque `cairn_oat_…`, 1 hour
- * - refresh tokens: opaque `cairn_ort_…`, 30 days, rotated on every use; a
+ * - access tokens: opaque `thaliyola_oat_…`, 1 hour
+ * - refresh tokens: opaque `thaliyola_ort_…`, 30 days, rotated on every use; a
  *   reused refresh token or authorization code revokes its whole family
  */
 
-export const OAUTH_ACCESS_PREFIX = "cairn_oat_";
-const REFRESH_PREFIX = "cairn_ort_";
+export const OAUTH_ACCESS_PREFIX = "thaliyola_oat_";
+const REFRESH_PREFIX = "thaliyola_ort_";
 const ACCESS_TTL_S = 3600;
 const REFRESH_TTL_S = 30 * 24 * 3600;
 const REQUEST_TTL_S = 10 * 60;
@@ -52,7 +52,7 @@ class ClientsStore implements OAuthRegisteredClientsStore {
   }
 }
 
-export class CairnOAuthProvider implements OAuthServerProvider {
+export class ThaliyolaOAuthProvider implements OAuthServerProvider {
   readonly clientsStore: ClientsStore;
 
   constructor(
@@ -62,7 +62,7 @@ export class CairnOAuthProvider implements OAuthServerProvider {
     this.clientsStore = new ClientsStore(db);
   }
 
-  /** Parks the validated request and sends the browser to Cairn's sign-in/consent page. */
+  /** Parks the validated request and sends the browser to Thaliyola's sign-in/consent page. */
   async authorize(client: OAuthClientInformationFull, params: AuthorizationParams, res: Response) {
     const id = random();
     await this.db.query("DELETE FROM oauth_requests WHERE expires_at < now()");
@@ -224,7 +224,7 @@ function page(res: Response, title: string, body: string, formTarget?: string) {
       "Content-Security-Policy": `default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; form-action ${formAction}; frame-ancestors 'none'; base-uri 'none'`,
     })
     .send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(title)} · Cairn</title>
+<title>${escapeHtml(title)} · Thaliyola</title>
 <style>
 :root{color-scheme:light dark;--bg:#fbfbf9;--panel:#fff;--text:#1d211e;--muted:#646b66;--border:#e3e5e1;--accent:#3f6b4f;--warn:#fbf1dc;--danger:#a3282b}
 @media (prefers-color-scheme:dark){:root{--bg:#151816;--panel:#1c201d;--text:#e6e9e6;--muted:#9aa29c;--border:#2e3430;--accent:#8fc3a0;--warn:#3a2f17;--danger:#ef8a8c}}
@@ -258,8 +258,8 @@ function consentRouter(db: Db, settings: Settings) {
     const name = req.info.client_name ?? "An application";
     page(
       res,
-      "Sign in to Cairn",
-      `<p><strong>${escapeHtml(name)}</strong> wants to connect to Cairn. Sign in to continue.</p>
+      "Sign in to Thaliyola",
+      `<p><strong>${escapeHtml(name)}</strong> wants to connect to Thaliyola. Sign in to continue.</p>
        ${error ? `<p class="error">${escapeHtml(error)}</p>` : ""}
        <form method="post" action="/oauth/consent/login">
          <input type="hidden" name="request" value="${escapeHtml(requestId)}">
@@ -280,14 +280,14 @@ function consentRouter(db: Db, settings: Settings) {
       if (!token || !user) return loginForm(res, requestId, pending);
       const mustChange = await db.query("SELECT must_change_password FROM users WHERE subject = $1", [user.subject]);
       if (mustChange.rows[0]?.must_change_password) {
-        return page(res, "Change your password first", `<p>Sign in to Cairn in your browser and choose a new password, then connect again.</p>`);
+        return page(res, "Change your password first", `<p>Sign in to Thaliyola in your browser and choose a new password, then connect again.</p>`);
       }
       const name = pending.info.client_name ?? "An unnamed application";
       const redirectHost = new URL(pending.params.redirect_uri).host;
       page(
         res,
         "Allow access?",
-        `<p><strong>${escapeHtml(name)}</strong> wants to use Cairn as <strong>${escapeHtml(user.email)}</strong>.</p>
+        `<p><strong>${escapeHtml(name)}</strong> wants to use Thaliyola as <strong>${escapeHtml(user.email)}</strong>.</p>
          <p>It will be able to read the knowledge base and propose changes in your name. Proposals still need review.</p>
          <p class="box">After you approve, you'll be sent to <strong>${escapeHtml(redirectHost)}</strong>. Only continue if you started this connection.</p>
          <form method="post" action="/oauth/consent">
@@ -296,7 +296,7 @@ function consentRouter(db: Db, settings: Settings) {
            <div class="row"><button type="submit" name="decision" value="deny">Deny</button>
            <button class="primary" type="submit" name="decision" value="allow">Allow</button></div>
          </form>
-         <p class="muted">Signed in as ${escapeHtml(user.email)}. You can revoke access any time on your Cairn account page.</p>`,
+         <p class="muted">Signed in as ${escapeHtml(user.email)}. You can revoke access any time on your Thaliyola account page.</p>`,
         pending.params.redirect_uri,
       );
     } catch (err) {
@@ -360,7 +360,7 @@ function consentRouter(db: Db, settings: Settings) {
 /** Everything OAuth: discovery metadata, registration, authorize, token, revoke, and the consent pages. */
 export function oauthRouter(db: Db, settings: Settings, publicUrl: URL) {
   const resourceUrl = new URL("/mcp", publicUrl);
-  const provider = new CairnOAuthProvider(db, resourceUrl);
+  const provider = new ThaliyolaOAuthProvider(db, resourceUrl);
   const router = Router();
   router.use("/oauth", consentRouter(db, settings));
   router.use(
@@ -368,8 +368,8 @@ export function oauthRouter(db: Db, settings: Settings, publicUrl: URL) {
       provider,
       issuerUrl: publicUrl,
       resourceServerUrl: resourceUrl,
-      resourceName: "Cairn",
-      scopesSupported: ["cairn"],
+      resourceName: "Thaliyola",
+      scopesSupported: ["thaliyola"],
     }),
   );
   return { router, resourceUrl, resourceMetadataUrl: new URL("/.well-known/oauth-protected-resource/mcp", publicUrl) };

@@ -653,7 +653,7 @@ interface TaskSummary {
   sample: { id: string; kind: string; title: string; project: string | null }[];
 }
 
-/** Curation work Cairn hands to connected Claude sessions, and what they did with it. */
+/** Curation work Thaliyola hands to connected Claude sessions, and what they did with it. */
 function AgentTasks() {
   const { data } = useApi<TaskSummary>("/tasks");
   if (!data) return null;
@@ -663,8 +663,8 @@ function AgentTasks() {
         <div>
           <h3>Work for Claude</h3>
           <p>
-            Cairn finds what needs judgment; a connected Claude does it with its own model and proposes changes here for review. Run <code>/mcp__cairn__curate</code> in Claude
-            Code (or ask it to “curate the Cairn knowledge base”), or schedule it.
+            Thaliyola finds what needs judgment; a connected Claude does it with its own model and proposes changes here for review. Run <code>/mcp__thaliyola__curate</code> in Claude
+            Code (or ask it to “curate the Thaliyola knowledge base”), or schedule it.
           </p>
         </div>
         <span className="muted small">{data.done_this_week} done this week</span>

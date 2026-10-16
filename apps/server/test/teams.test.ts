@@ -141,9 +141,9 @@ describe("project owners manage their project", () => {
     expect(await resolveRepo(db, "github.com/acme/indexer-v2")).toBeNull();
   });
 
-  it("picks the project from the X-Cairn-Repo header over MCP", async () => {
+  it("picks the project from the X-Thaliyola-Repo header over MCP", async () => {
     const client = new Client({ name: "test", version: "0" });
-    await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`), { requestInit: { headers: { authorization: "Bearer dev", "x-cairn-repo": "git@github.com:acme/search-api.git" } } }));
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`), { requestInit: { headers: { authorization: "Bearer dev", "x-thaliyola-repo": "git@github.com:acme/search-api.git" } } }));
     const res = await client.callTool({ name: "get_project_context", arguments: {} });
     const body = JSON.parse((res.content as { text: string }[])[0]!.text);
     expect(body.project.slug).toBe("search");

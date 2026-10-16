@@ -76,7 +76,7 @@ export function App() {
     return (
       <div className="gate">
         <div>
-          <h1>Cairn</h1>
+          <h1>Thaliyola</h1>
           <p className="muted">Your Cloudflare Access session has expired.</p>
           <button className="btn btn-primary" onClick={() => window.location.reload()}>
             Sign in again
@@ -181,7 +181,7 @@ function TokenGate({ hadToken, onSubmit }: { hadToken: boolean; onSubmit: (token
           if (token.trim()) onSubmit(token.trim());
         }}
       >
-        <h1>Cairn</h1>
+        <h1>Thaliyola</h1>
         <p className="muted">{hadToken ? "That token was not accepted." : "Not signed in."} Enter a dev token (DEV_TOKENS on the server).</p>
         <input type="password" value={token} onChange={(e) => setValue(e.target.value)} placeholder="dev token" autoFocus />
         <button className="btn btn-primary" type="submit">

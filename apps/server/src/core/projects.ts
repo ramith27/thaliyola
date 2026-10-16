@@ -15,7 +15,7 @@ const VISIBLE = ["published", "possibly_stale"];
  */
 export async function getProjectContext(ctx: RequestContext, projectSlug?: string, componentSlug?: string) {
   const project = await resolveProject(ctx, projectSlug);
-  if (!project) throw new ValidationError("no project given: pass `project` or set the X-Cairn-Project header");
+  if (!project) throw new ValidationError("no project given: pass `project` or set the X-Thaliyola-Project header");
   const db = ctx.db;
   const component = componentSlug ?? (projectSlug === undefined || projectSlug === ctx.project ? ctx.component : undefined);
   const comp = component ? await getComponent(db, project.id, component) : undefined;

@@ -1,16 +1,16 @@
 [Unit]
-Description=Cairn team knowledge base (MCP server + web UI)
+Description=Thaliyola team knowledge base (MCP server + web UI)
 After=network-online.target postgresql.service
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=cairn
-Group=cairn
-WorkingDirectory=/opt/cairn
-EnvironmentFile=/etc/cairn/cairn.env
+User=thaliyola
+Group=thaliyola
+WorkingDirectory=/opt/thaliyola
+EnvironmentFile=/etc/thaliyola/thaliyola.env
 Environment=NODE_ENV=production
-ExecStart=/usr/bin/node /opt/cairn/dist/index.js
+ExecStart=/usr/bin/node /opt/thaliyola/dist/index.js
 Restart=on-failure
 RestartSec=3
 
@@ -19,7 +19,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=true
-ReadWritePaths=/var/lib/cairn
+ReadWritePaths=/var/lib/thaliyola
 
 [Install]
 WantedBy=multi-user.target

@@ -47,7 +47,7 @@ export const withoutHints = (md: string) => md.replace(/<!-- Hint: [\s\S]*?-->\n
 
 // ---- Local autosave ---------------------------------------------------------
 
-const DRAFT_PREFIX = "cairn.draft.";
+const DRAFT_PREFIX = "thaliyola.draft.";
 
 export function clearDraft(key: string) {
   try {

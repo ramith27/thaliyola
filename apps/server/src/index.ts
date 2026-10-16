@@ -48,7 +48,7 @@ const server = createApp({
   embedder,
   onWrite: indexer?.poke,
 }).listen(config.PORT, config.HOST, () => {
-  console.log(`cairn-server listening on ${config.HOST}:${config.PORT} (auth: ${config.AUTH_MODE}, embeddings: ${config.EMBEDDINGS})`);
+  console.log(`thaliyola-server listening on ${config.HOST}:${config.PORT} (auth: ${config.AUTH_MODE}, embeddings: ${config.EMBEDDINGS})`);
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

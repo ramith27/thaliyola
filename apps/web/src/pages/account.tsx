@@ -31,7 +31,7 @@ export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
     <div className="gate">
       <form onSubmit={submit}>
         <h1>
-          <img src="/favicon.svg" alt="" width={26} height={26} /> Cairn
+          <img src="/favicon.svg" alt="" width={26} height={26} /> Thaliyola
         </h1>
         <label>
           Email
@@ -161,7 +161,7 @@ function ApiTokens() {
           </p>
           <pre className="code-block">{created.token}</pre>
           <p className="small">Connect Claude Code:</p>
-          <pre className="code-block">{`claude mcp add --transport http cairn ${mcpUrl} \\\n  --header "Authorization: Bearer ${created.token}"`}</pre>
+          <pre className="code-block">{`claude mcp add --transport http thaliyola ${mcpUrl} \\\n  --header "Authorization: Bearer ${created.token}"`}</pre>
         </Notice>
       )}
       <form className="inline-form" onSubmit={create}>
@@ -230,7 +230,7 @@ function ConnectedApps() {
   return (
     <section>
       <h2>Connected apps</h2>
-      <p className="muted">Apps you allowed to use Cairn through OAuth, such as a claude.ai connector.</p>
+      <p className="muted">Apps you allowed to use Thaliyola through OAuth, such as a claude.ai connector.</p>
       <div className="table-wrap">
         <table className="table">
           <thead>

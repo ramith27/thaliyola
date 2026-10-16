@@ -16,8 +16,8 @@ let base: string;
 
 beforeAll(async () => {
   ({ db, ids } = await freshDb());
-  const web = mkdtempSync(path.join(tmpdir(), "cairn-web-"));
-  writeFileSync(path.join(web, "index.html"), "<!doctype html><title>Cairn</title>");
+  const web = mkdtempSync(path.join(tmpdir(), "thaliyola-web-"));
+  writeFileSync(path.join(web, "index.html"), "<!doctype html><title>Thaliyola</title>");
   server = createApp({ db, authenticate: devAuthenticator("user=alice@example.com,admin=admin@example.com"), settings: TEST_SETTINGS, webDist: web }).listen(0);
   await new Promise((r) => server.once("listening", r));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -159,7 +159,7 @@ describe("web UI hosting", () => {
   it("serves the SPA with security headers, without auth, for client routes", async () => {
     const res = await fetch(`${base}/review/123`);
     expect(res.status).toBe(200);
-    expect(await res.text()).toContain("<title>Cairn</title>");
+    expect(await res.text()).toContain("<title>Thaliyola</title>");
     expect(res.headers.get("content-security-policy")).toContain("script-src 'self'");
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");
   });

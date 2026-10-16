@@ -69,12 +69,12 @@ function emailHtml(settings: Settings, n: NotificationInput, opts: { footer?: st
   const open = abs(settings, n.link);
   return `<!doctype html><html><body style="margin:0;background:#f6f7f9;font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#0f172a">
 <div style="max-width:560px;margin:24px auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px">
-<div style="font-weight:650;font-size:15px;margin-bottom:16px">Cairn</div>
+<div style="font-weight:650;font-size:15px;margin-bottom:16px">Thaliyola</div>
 <div style="font-size:17px;font-weight:600;margin-bottom:8px">${escapeHtml(n.title)}</div>
 ${n.body ? `<div style="font-size:14px;color:#334155;line-height:1.55;white-space:pre-wrap;margin-bottom:16px">${escapeHtml(n.body)}</div>` : ""}
 <div>${n.action ? `<a href="${escapeHtml(n.action.url)}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;font-weight:600;margin-right:8px">${escapeHtml(n.action.label)}</a>` : ""}
-<a href="${escapeHtml(open)}" style="display:inline-block;border:1px solid #d6dae1;color:#0f172a;text-decoration:none;padding:9px 16px;border-radius:8px;font-weight:600">${escapeHtml(opts.openLabel ?? "Open in Cairn")}</a></div>
-<div style="font-size:12px;color:#64748b;margin-top:24px">${escapeHtml(opts.footer ?? "Change which emails you get on your Cairn account page.")}</div>
+<a href="${escapeHtml(open)}" style="display:inline-block;border:1px solid #d6dae1;color:#0f172a;text-decoration:none;padding:9px 16px;border-radius:8px;font-weight:600">${escapeHtml(opts.openLabel ?? "Open in Thaliyola")}</a></div>
+<div style="font-size:12px;color:#64748b;margin-top:24px">${escapeHtml(opts.footer ?? "Change which emails you get on your Thaliyola account page.")}</div>
 </div></body></html>`;
 }
 
@@ -133,7 +133,7 @@ export function sendEmail(settings: Settings, to: string, msg: { subject: string
 /** Posts a one-line message to the team Slack channel (incoming webhook), if configured. */
 export function slack(settings: Settings, text: string, link?: string) {
   if (!settings.slackWebhookUrl) return;
-  const payload = { text: link ? `${text}\n<${abs(settings, link)}|Open in Cairn>` : text };
+  const payload = { text: link ? `${text}\n<${abs(settings, link)}|Open in Thaliyola>` : text };
   if (settings.slackWebhookUrl === "test") {
     slackOutbox.push(payload);
     return;

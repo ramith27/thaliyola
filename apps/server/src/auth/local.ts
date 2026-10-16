@@ -9,8 +9,8 @@ import { checkPasswordStrength, generatePassword, hashPassword, verifyPassword }
  * personal API tokens for MCP clients (stored hashed, shown once).
  */
 
-export const SESSION_COOKIE = "cairn_session";
-export const API_TOKEN_PREFIX = "cairn_pat_";
+export const SESSION_COOKIE = "thaliyola_session";
+export const API_TOKEN_PREFIX = "thaliyola_pat_";
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 const randomToken = (bytes = 32) => randomBytes(bytes).toString("base64url");

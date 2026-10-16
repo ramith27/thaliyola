@@ -121,7 +121,7 @@ function page(res: Response, title: string, body: string) {
       "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
       "Referrer-Policy": "no-referrer",
     })
-    .send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)} · Cairn</title>
+    .send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)} · Thaliyola</title>
 <style>:root{color-scheme:light dark}body{margin:0;min-height:100vh;display:grid;place-items:center;font:15px/1.55 system-ui,sans-serif;background:#f6f7f9;color:#0f172a;padding:16px}
 @media (prefers-color-scheme:dark){body{background:#0b0f17;color:#e6eaf2}main{background:#121826!important;border-color:#232c3d!important}}
 main{width:min(460px,100%);background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:26px}h1{font-size:1.25rem;margin:0 0 10px}
@@ -143,7 +143,7 @@ export function actionsRouter(db: Db, settings: Settings) {
   router.get("/:token", async (req, res, next) => {
     try {
       const t = await peekActionToken(db, String(req.params.token));
-      if (!t) return page(res, "Link expired", `<p>This link has expired or was already used. Open the review queue in Cairn instead.</p><a class="btn" href="/#/review">Open review queue</a>`);
+      if (!t) return page(res, "Link expired", `<p>This link has expired or was already used. Open the review queue in Thaliyola instead.</p><a class="btn" href="/#/review">Open review queue</a>`);
       const { rows } = await db.query(
         `SELECT r.summary, r.state, s.name AS scope, coalesce(u.display_name, u.email) AS author FROM revisions r
            JOIN scopes s ON s.id = r.scope_id JOIN users u ON u.id = r.author_id WHERE r.id = $1`,
@@ -172,10 +172,10 @@ export function actionsRouter(db: Db, settings: Settings) {
       try {
         await approveRevision({ db, settings, actor }, t.revision_id);
         await audit(db, actor.id, "email_approve", t.revision_id);
-        page(res, "Approved", `<p>The change is published.</p><a class="btn" href="/#/review/${t.revision_id}">Open it in Cairn</a>`);
+        page(res, "Approved", `<p>The change is published.</p><a class="btn" href="/#/review/${t.revision_id}">Open it in Thaliyola</a>`);
       } catch (err) {
         if (err instanceof ForbiddenError || err instanceof ValidationError || err instanceof NotFoundError) {
-          return page(res, "Couldn't approve", `<p>${escapeHtml(err.message)}</p><a class="btn" href="/#/review/${t.revision_id}">Open it in Cairn</a>`);
+          return page(res, "Couldn't approve", `<p>${escapeHtml(err.message)}</p><a class="btn" href="/#/review/${t.revision_id}">Open it in Thaliyola</a>`);
         }
         throw err;
       }

@@ -128,7 +128,7 @@ export function draftArticle(text: string): ArticleDraft {
   return { kind: "article", type: guessArticleType(text), title, body_md: hasHeadings ? body : `## Context\n\n${body}` };
 }
 
-const PREFILL_KEY = "cairn.prefill";
+const PREFILL_KEY = "thaliyola.prefill";
 
 export function setPrefill(draft: FindingDraft | ArticleDraft) {
   try {

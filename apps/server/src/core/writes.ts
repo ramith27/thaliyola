@@ -60,7 +60,7 @@ export async function findItemFor(ctx: RequestContext, id: string): Promise<Item
 async function targetScope(ctx: RequestContext, scope?: string, project?: string): Promise<Scope> {
   if (scope) return getReadableScope(ctx, scope);
   const p = await resolveProject(ctx, project);
-  if (!p) throw new ValidationError("pass `scope` ('team', 'library' or a project slug) or set the X-Cairn-Project header");
+  if (!p) throw new ValidationError("pass `scope` ('team', 'library' or a project slug) or set the X-Thaliyola-Project header");
   return p;
 }
 

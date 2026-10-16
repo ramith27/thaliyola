@@ -9,7 +9,7 @@ import { findItem } from "./writes.js";
  * Permanently deletes an article or finding and everything that holds its
  * content: versions, proposals and their comments, search chunks, links,
  * attachments (and their stored files, unless another item shares them),
- * notifications, watches and favourites. Everything else in Cairn is kept
+ * notifications, watches and favourites. Everything else in Thaliyola is kept
  * as history, so this is for content that must not exist: a leaked secret,
  * personal data, something posted by mistake. Admins only, with a reason
  * that is kept (the content is not).

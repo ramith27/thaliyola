@@ -5,7 +5,7 @@ import { searchKnowledge, type SearchHit } from "./search.js";
 import { findItem } from "./writes.js";
 
 /**
- * Finding things: the "Ask Cairn" best answer, entity pages, and each
+ * Finding things: the "Ask Thaliyola" best answer, entity pages, and each
  * person's favourites.
  */
 

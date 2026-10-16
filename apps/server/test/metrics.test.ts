@@ -99,10 +99,10 @@ describe("weekly digest", () => {
     const r = await sendDigests(db, settings);
     await flushDeliveries();
     expect(r.sent).toBeGreaterThan(0);
-    const mail = outbox.find((m) => m.to === "admin@example.com" && m.subject.startsWith("Cairn weekly"))!;
-    expect(mail.subject).toMatch(/^Cairn weekly: \d+ to review/);
+    const mail = outbox.find((m) => m.to === "admin@example.com" && m.subject.startsWith("Thaliyola weekly"))!;
+    expect(mail.subject).toMatch(/^Thaliyola weekly: \d+ to review/);
     expect(mail.text).toContain("Runbook: roll back first");
-    expect(outbox.find((m) => m.to === "searcher@example.com" && m.subject.startsWith("Cairn weekly"))).toBeUndefined();
+    expect(outbox.find((m) => m.to === "searcher@example.com" && m.subject.startsWith("Thaliyola weekly"))).toBeUndefined();
     // Second run in the same week sends nothing.
     outbox.length = 0;
     expect((await sendDigests(db, settings)).sent).toBe(0);

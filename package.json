@@ -1,11 +1,11 @@
 {
-  "name": "cairn",
+  "name": "thaliyola",
   "private": true,
   "license": "MIT",
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
-    "dev": "pnpm --filter @cairn/server dev"
+    "dev": "pnpm --filter @thaliyola/server dev"
   }
 }

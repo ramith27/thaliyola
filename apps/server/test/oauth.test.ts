@@ -67,7 +67,7 @@ async function authorizeInBrowser(clientId: string, challenge: string, decision 
   const requestId = consentUrl.searchParams.get("request")!;
 
   const loginPage = await (await fetch(consentUrl)).text();
-  expect(loginPage).toContain("wants to connect to Cairn");
+  expect(loginPage).toContain("wants to connect to Thaliyola");
   expect(loginPage).toContain("Sign in");
 
   const login = await fetch(`${base}/oauth/consent/login`, {
@@ -137,7 +137,7 @@ describe("OAuth for MCP clients (local mode)", () => {
     // A failed PKCE check doesn't burn the code, but a successful exchange does.
     expect(issued.status).toBe(200);
     expect(issued.body).toMatchObject({ token_type: "bearer", expires_in: 3600 });
-    expect(issued.body.access_token).toMatch(/^cairn_oat_/);
+    expect(issued.body.access_token).toMatch(/^thaliyola_oat_/);
 
     const tools = await mcpList(issued.body.access_token);
     expect(tools.status).toBe(200);

@@ -45,7 +45,7 @@ export function Layout({ me, scopes, route, children }: { me: Me; scopes: ScopeI
       <aside className={`sidebar ${menuOpen ? "open" : ""}`}>
         <a className="brand" href={href("/")}>
           <img src="/favicon.svg" alt="" width={24} height={24} />
-          <span>Cairn</span>
+          <span>Thaliyola</span>
         </a>
         <nav className="nav">
           <NavLink to="/" icon="home" label="Home" active={section === undefined} />

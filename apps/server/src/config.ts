@@ -5,10 +5,10 @@ const Env = z
     PORT: z.coerce.number().default(8080),
     // Interface to bind; 0.0.0.0 inside containers, 127.0.0.1 behind a local tunnel
     HOST: z.string().default("0.0.0.0"),
-    DATABASE_URL: z.string().default("postgres://cairn:cairn@localhost:5432/cairn"),
+    DATABASE_URL: z.string().default("postgres://thaliyola:thaliyola@localhost:5432/thaliyola"),
     // local = built-in accounts; cloudflare = Cloudflare Access; dev = static tokens (local development only)
     AUTH_MODE: z.enum(["local", "cloudflare", "dev"]).default("local"),
-    // Public base URL (e.g. https://cairn.example.com). In local mode it enables the OAuth server for
+    // Public base URL (e.g. https://thaliyola.example.com). In local mode it enables the OAuth server for
     // MCP clients such as claude.ai connectors, which need a fixed issuer URL.
     PUBLIC_URL: z.string().url().optional(),
     // Requests per user per minute on /api and /mcp (0 disables)
@@ -62,7 +62,7 @@ const Env = z
     // Email: smtp (SMTP_URL, e.g. smtps://user:pass@mail.example.com:465), json (log only) or off
     MAIL_TRANSPORT: z.enum(["smtp", "json", "off"]).default("off"),
     SMTP_URL: z.string().optional(),
-    MAIL_FROM: z.string().default("Cairn <cairn@localhost>"),
+    MAIL_FROM: z.string().default("Thaliyola <thaliyola@localhost>"),
     // Team channel for review and change events (Slack incoming webhook URL)
     SLACK_WEBHOOK_URL: z.string().optional(),
     DUPLICATE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.6),

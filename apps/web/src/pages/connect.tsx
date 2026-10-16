@@ -62,19 +62,19 @@ export function ConnectPage() {
   const chosen = data.projects.find((p) => p.slug === project);
   const headers = [
     `--header "Authorization: Bearer ${tok}"`,
-    ...(project ? [`--header "X-Cairn-Project: ${project}"`] : []),
-    ...(project && component ? [`--header "X-Cairn-Component: ${component}"`] : []),
+    ...(project ? [`--header "X-Thaliyola-Project: ${project}"`] : []),
+    ...(project && component ? [`--header "X-Thaliyola-Component: ${component}"`] : []),
   ];
   const repoJson = JSON.stringify(
     {
       mcpServers: {
-        cairn: {
+        thaliyola: {
           type: "http",
           url: data.mcp_url,
           headers: {
-            Authorization: "Bearer ${CAIRN_TOKEN}",
-            ...(project ? { "X-Cairn-Project": project } : {}),
-            ...(project && component ? { "X-Cairn-Component": component } : {}),
+            Authorization: "Bearer ${THALIYOLA_TOKEN}",
+            ...(project ? { "X-Thaliyola-Project": project } : {}),
+            ...(project && component ? { "X-Thaliyola-Component": component } : {}),
           },
         },
       },
@@ -82,7 +82,7 @@ export function ConnectPage() {
     null,
     2,
   );
-  const genericJson = JSON.stringify({ mcpServers: { cairn: { type: "http", url: data.mcp_url, headers: { Authorization: `Bearer ${tok}` } } } }, null, 2);
+  const genericJson = JSON.stringify({ mcpServers: { thaliyola: { type: "http", url: data.mcp_url, headers: { Authorization: `Bearer ${tok}` } } } }, null, 2);
 
   async function createToken() {
     setTokenError(null);
@@ -98,7 +98,7 @@ export function ConnectPage() {
     <div className="page connect">
       <h1>Connect your tools</h1>
       <p className="lead">
-        Cairn is your team's shared knowledge for Claude: systems, project designs, API contracts, UI specs and what past investigations found. Connect
+        Thaliyola is your team's shared knowledge for Claude: systems, project designs, API contracts, UI specs and what past investigations found. Connect
         Claude once, and it searches here before investigating, loads project context before coding, and proposes what it learns for review.
       </p>
 
@@ -160,9 +160,9 @@ export function ConnectPage() {
           <span className="step-no">2</span> Connect Claude Code
         </h2>
         <h3>For all your work</h3>
-        <CopyBlock text={`claude mcp add --transport http cairn ${data.mcp_url} --scope user \\\n  ${headers[0]}`} />
+        <CopyBlock text={`claude mcp add --transport http thaliyola ${data.mcp_url} --scope user \\\n  ${headers[0]}`} />
         <p className="muted small">
-          In a repository that's listed under a project's settings → Repositories, Claude passes its git remote and Cairn picks the project and component by itself.
+          In a repository that's listed under a project's settings → Repositories, Claude passes its git remote and Thaliyola picks the project and component by itself.
         </p>
 
         <h3>For one project's repository (recommended)</h3>
@@ -191,25 +191,25 @@ export function ConnectPage() {
         </div>
         {project ? (
           <>
-            <CopyBlock label="In the repository, run:" text={`claude mcp add --transport http cairn ${data.mcp_url} \\\n  ${headers.join(" \\\n  ")}`} />
+            <CopyBlock label="In the repository, run:" text={`claude mcp add --transport http thaliyola ${data.mcp_url} \\\n  ${headers.join(" \\\n  ")}`} />
             <p className="muted small">
               Or commit a shared <code>.mcp.json</code> so everyone on the repo gets it, with each person's token kept in their own environment:
             </p>
             <CopyBlock label=".mcp.json" text={repoJson} />
-            <CopyBlock label="In your shell profile" text={`export CAIRN_TOKEN=${tok}`} />
+            <CopyBlock label="In your shell profile" text={`export THALIYOLA_TOKEN=${tok}`} />
             <CopyBlock
               label="Add to the repo's CLAUDE.md"
-              text={`## Team knowledge (Cairn)
-- Before investigating a bug or alert, search Cairn (search_knowledge) with the symptom as it first appeared.
+              text={`## Team knowledge (Thaliyola)
+- Before investigating a bug or alert, search Thaliyola (search_knowledge) with the symptom as it first appeared.
 - Before changing code, call get_project_context and handle open impact notices.
-- After confirming a root cause or making a design decision, propose it to Cairn. Never include secrets.`}
+- After confirming a root cause or making a design decision, propose it to Thaliyola. Never include secrets.`}
             />
           </>
         ) : (
           <p className="muted small">Choose a project to get the commands for its repository.</p>
         )}
         <p className="small">
-          Check the connection with <code>claude mcp list</code>: it should show <code>cairn … Connected</code>.
+          Check the connection with <code>claude mcp list</code>: it should show <code>thaliyola … Connected</code>.
         </p>
       </section>
 
@@ -226,7 +226,7 @@ export function ConnectPage() {
           </ol>
           <CopyBlock text={data.mcp_url} />
           <ol className="list" start={3}>
-            <li>Sign in with your Cairn account and approve. You can revoke access on your Account page.</li>
+            <li>Sign in with your Thaliyola account and approve. You can revoke access on your Account page.</li>
           </ol>
         </section>
       )}
@@ -241,14 +241,14 @@ export function ConnectPage() {
         <h2>Using it</h2>
         <p>
           You don't need to name tools. Ask normally: "the checkout alert is firing again, what do we know?", "I'm about to change the refunds screen",
-          "capture what we just found". These workflow prompts are also available as commands (in Claude Code: <code>/mcp__cairn__…</code>):
+          "capture what we just found". These workflow prompts are also available as commands (in Claude Code: <code>/mcp__thaliyola__…</code>):
         </p>
         <table className="table">
           <tbody>
             {data.catalog.prompts.map((p) => (
               <tr key={p.name}>
                 <td>
-                  <code>/mcp__cairn__{p.name}</code>
+                  <code>/mcp__thaliyola__{p.name}</code>
                   {p.arguments.length > 0 && <div className="small muted">{p.arguments.join(", ")}</div>}
                 </td>
                 <td>{p.description}</td>
@@ -290,7 +290,7 @@ export function GetStartedBanner() {
   return (
     <div className="get-started">
       <div>
-        <strong>Get started: connect Claude to Cairn</strong>
+        <strong>Get started: connect Claude to Thaliyola</strong>
         <p className="muted small">Create a token and copy one command. Claude will search team knowledge before it investigates and load project context before it codes.</p>
       </div>
       <a className="btn btn-primary" href={href("/connect")}>

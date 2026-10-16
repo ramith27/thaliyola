@@ -230,7 +230,7 @@ export function ImportPage({ scopes, articleTypes }: { scopes: ScopeInfo[]; arti
     <div className="page page-wide editor">
       <h1>Import documents</h1>
       <p className="lead">
-        Bring existing docs into Cairn: Markdown or HTML files, or a zip of them. Notion (Export → Markdown &amp; CSV), Confluence (Space export → HTML) and Google Docs
+        Bring existing docs into Thaliyola: Markdown or HTML files, or a zip of them. Notion (Export → Markdown &amp; CSV), Confluence (Space export → HTML) and Google Docs
         (Download → Web page) exports work as they are. Images in the zip become attachments; secrets are redacted.
       </p>
       <div className="row">
@@ -381,7 +381,7 @@ export function ExportButton({ scope, label = "Export as Markdown" }: { scope?: 
           const url = URL.createObjectURL(await res.blob());
           const a = document.createElement("a");
           a.href = url;
-          a.download = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "cairn-export.zip";
+          a.download = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "thaliyola-export.zip";
           a.click();
           setTimeout(() => URL.revokeObjectURL(url), 10_000);
         } finally {

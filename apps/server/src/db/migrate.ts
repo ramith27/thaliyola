@@ -22,7 +22,7 @@ export async function migrate(db: Db, log: (msg: string) => void = () => {}): Pr
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  const db = createPool(process.env.DATABASE_URL ?? "postgres://cairn:cairn@localhost:5432/cairn");
+  const db = createPool(process.env.DATABASE_URL ?? "postgres://thaliyola:thaliyola@localhost:5432/thaliyola");
   migrate(db, console.log)
     .then(() => db.end())
     .catch((err) => {

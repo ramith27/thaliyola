@@ -118,7 +118,7 @@ function General({ scope }: { scope: ScopeInfo }) {
             <label className="choice">
               <input type="radio" name="vis" checked={visibility === "team"} onChange={() => setVisibility("team")} />
               <span>
-                <strong>Everyone in Cairn</strong>
+                <strong>Everyone in Thaliyola</strong>
                 <span className="muted small">Anyone signed in can read it; members and teams decide who writes and approves.</span>
               </span>
             </label>
@@ -247,7 +247,7 @@ function AccessView({ slug, isProject, me, readOnly = false }: { slug: string; i
           </button>
           {me?.admin && me.auth_mode === "local" && (
             <a className="small" href={href("/admin/users")}>
-              Not on Cairn yet? Invite them
+              Not on Thaliyola yet? Invite them
             </a>
           )}
         </form>
@@ -434,7 +434,7 @@ function RepoFields({ value, onChange, slugPlaceholder = "e.g. api" }: { value: 
       </label>
       <div className="row">
         <label>
-          Name in Cairn
+          Name in Thaliyola
           <input value={value.slug} onChange={(e) => onChange({ ...value, slug: e.target.value })} placeholder={slugPlaceholder} pattern="[a-z0-9][a-z0-9-]*" />
         </label>
         <label>

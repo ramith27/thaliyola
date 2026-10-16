@@ -13,7 +13,7 @@ export interface RecentItem {
   title: string;
   link: string;
 }
-const RECENT_KEY = "cairn.recent";
+const RECENT_KEY = "thaliyola.recent";
 
 export function getRecent(): RecentItem[] {
   try {
@@ -28,7 +28,7 @@ export function recordVisit(item: RecentItem) {
   try {
     const next = [item, ...getRecent().filter((r) => r.id !== item.id)].slice(0, 8);
     localStorage.setItem(RECENT_KEY, JSON.stringify(next));
-    window.dispatchEvent(new Event("cairn:recent"));
+    window.dispatchEvent(new Event("thaliyola:recent"));
   } catch {
     /* storage unavailable: no history */
   }
@@ -38,8 +38,8 @@ export function useRecent() {
   const [items, setItems] = useState(getRecent);
   useEffect(() => {
     const on = () => setItems(getRecent());
-    window.addEventListener("cairn:recent", on);
-    return () => window.removeEventListener("cairn:recent", on);
+    window.addEventListener("thaliyola:recent", on);
+    return () => window.removeEventListener("thaliyola:recent", on);
   }, []);
   return items;
 }
@@ -68,8 +68,8 @@ export function useFavourites() {
   }, []);
   useEffect(() => {
     load();
-    window.addEventListener("cairn:favourites", load);
-    return () => window.removeEventListener("cairn:favourites", load);
+    window.addEventListener("thaliyola:favourites", load);
+    return () => window.removeEventListener("thaliyola:favourites", load);
   }, [load]);
   return items;
 }
@@ -84,7 +84,7 @@ export function FavouriteButton({ id }: { id: string }) {
       title={on ? "Remove from favourites" : "Add to favourites (shown in the sidebar)"}
       onClick={async () => {
         await api(`/favourites/${id}`, { method: on ? "DELETE" : "PUT" });
-        window.dispatchEvent(new Event("cairn:favourites"));
+        window.dispatchEvent(new Event("thaliyola:favourites"));
       }}
     >
       <I name="star" size={16} /> {on ? "Favourited" : "Favourite"}
@@ -267,7 +267,7 @@ export function InstantSearch({ initial, onOpenPalette }: { initial: string; onO
           {!list.length && <div className="instant-empty muted small">No matches yet. Press Enter to search everything.</div>}
           <a className="instant-row instant-all" href={href("/search", { q: q.trim() })} onClick={() => setOpen(false)}>
             <I name="sparkle" size={16} />
-            <span className="instant-title">Ask Cairn: “{q.trim()}”</span>
+            <span className="instant-title">Ask Thaliyola: “{q.trim()}”</span>
             <I name="arrow" size={14} />
           </a>
         </div>
@@ -276,7 +276,7 @@ export function InstantSearch({ initial, onOpenPalette }: { initial: string; onO
   );
 }
 
-// ---- Ask Cairn ------------------------------------------------------------------------
+// ---- Ask Thaliyola ------------------------------------------------------------------------
 
 interface AskResult {
   question: string;
@@ -336,7 +336,7 @@ export function AskBox() {
       }}
     >
       <I name="sparkle" size={18} />
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask Cairn: how do we handle refunds? what does 409 mean on POST /orders?" aria-label="Ask Cairn" />
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask Thaliyola: how do we handle refunds? what does 409 mean on POST /orders?" aria-label="Ask Thaliyola" />
       <button className="btn btn-primary" disabled={!q.trim()}>
         Ask
       </button>
@@ -450,7 +450,7 @@ export function CommandPalette({ scopes, onClose }: { scopes: ScopeInfo[]; onClo
       run: go(href(`/entity/${e.kind}/${e.name}`)),
     }));
     const askCmd: Command[] = term
-      ? [{ id: "ask", group: "Ask", label: <>Ask Cairn: “{q.trim()}”</>, text: q, icon: "sparkle", hint: <kbd>↵</kbd>, run: go(href("/search", { q: q.trim() })) }]
+      ? [{ id: "ask", group: "Ask", label: <>Ask Thaliyola: “{q.trim()}”</>, text: q, icon: "sparkle", hint: <kbd>↵</kbd>, run: go(href("/search", { q: q.trim() })) }]
       : [];
     return term ? [...askCmd, ...found, ...ents, ...favs, ...nav] : [...rec, ...favs, ...nav];
     // eslint-disable-next-line react-hooks/exhaustive-deps

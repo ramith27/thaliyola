@@ -6,7 +6,7 @@
  *   node dist/scripts/admin.js list-users
  *   node dist/scripts/admin.js create-token --email you@example.com --name "Claude Code" [--days 90]
  *   node dist/scripts/admin.js create-token --service rca-bot --name "nightly RCA job"
- *   node dist/scripts/admin.js export --out cairn-export.zip [--scope team]
+ *   node dist/scripts/admin.js export --out thaliyola-export.zip [--scope team]
  *
  * Reads DATABASE_URL like the server.
  */
@@ -47,7 +47,7 @@ async function serviceUserId(db: Db, name: string) {
   return rows[0]!.id;
 }
 
-const db = createPool(process.env.DATABASE_URL ?? "postgres://cairn:cairn@localhost:5432/cairn");
+const db = createPool(process.env.DATABASE_URL ?? "postgres://thaliyola:thaliyola@localhost:5432/thaliyola");
 try {
   await migrate(db);
   const command = positionals[0];
@@ -76,7 +76,7 @@ try {
     if (!values.out) throw new Error("--out <file.zip> is required");
     // Everything, as a system actor with admin reach (no person's read limits apply).
     const settings = settingsFrom(loadConfig());
-    const actor = { id: await serviceUserId(db, "cairn-export"), subject: "service:cairn-export", email: null, kind: "service" as const };
+    const actor = { id: await serviceUserId(db, "thaliyola-export"), subject: "service:thaliyola-export", email: null, kind: "service" as const };
     const out = await exportMarkdown({ db, settings, actor }, { scope: values.scope, all: true });
     writeFileSync(values.out, out.zip);
     console.log(`Wrote ${values.out}: ${out.articles} articles, ${out.findings} findings, ${out.assets} files.`);

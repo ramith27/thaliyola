@@ -61,7 +61,7 @@ export async function needsAttention(ctx: RequestContext, opts: { scope?: string
  * only one server instance does the work when several are running.
  */
 export function startJobs(db: Db, opts: { findingDays: number; articleDays: number; intervalHours: number; settings?: Settings }, log: (msg: string) => void) {
-  const LOCK = 7_402_211; // arbitrary, stable key for "cairn maintenance"
+  const LOCK = 7_402_211; // arbitrary, stable key for "thaliyola maintenance"
   async function run() {
     const client = await db.connect();
     try {

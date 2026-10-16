@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Renamed from Cairn to Thaliyola.** Breaking: API tokens are now `thaliyola_pat_…` (and `thaliyola_oat_`/`thaliyola_ort_` for OAuth), headers are `X-Thaliyola-Project`, `X-Thaliyola-Component` and `X-Thaliyola-Repo`, the MCP server name is `thaliyola`, the session cookie is `thaliyola_session`, packages are `@thaliyola/*`, and the native install uses `thaliyola-admin`, `/etc/thaliyola`, `/opt/thaliyola`, `/var/lib/thaliyola` and the `thaliyola` service. Existing tokens and client configs must be recreated.
+
 - Delete articles, findings and whole projects to a trash: hidden everywhere, open proposals closed, restorable by owners and admins, and permanently removable by admins (`POST /api/items/:id/delete`, `POST /api/projects/:slug/delete`, `/api/trash`)
 
 - Curation by connected agents: `get_tasks` / `complete_task` hand judgment work to the client's model (misfiled entries, missing repositories, duplicates, recurring problems, empty outlines, stale entries, missing overviews, unlinked entries, unanswered searches), a `curate` prompt runs the loop, `get_project_context` reports open tasks, and Review → Suggestions shows the queue (`GET /api/tasks`)
@@ -17,7 +19,7 @@
 
 - Projects manage their own access: a settings page with General, Members and access, and Repositories, open to the project's owners (not just admins); owners can't leave a project without an owner (`/api/scopes/:slug/access`)
 - Teams: groups of people that get a role on many projects at once (`/api/teams`, `PUT /api/scopes/:slug/teams`); effective roles combine direct and team roles everywhere (reading, proposing, approving, notifications, digests)
-- Any number of repositories per project, editable and removable, one project per repository; sessions find their project from the git remote (`X-Cairn-Repo` header, `repo` argument of `get_project_context`, `/api/repos/resolve`)
+- Any number of repositories per project, editable and removable, one project per repository; sessions find their project from the git remote (`X-Thaliyola-Repo` header, `repo` argument of `get_project_context`, `/api/repos/resolve`)
 - Move a folder or items into a project, keeping history and links, optionally turning sub-folders into repositories (`POST /api/move`)
 
 - Metrics page (`/api/success`): searches answered, reuse rate, review time, repeat problems, unowned and stale items; knowledge gaps for admins (`/api/gaps`), from a search log that keeps query text only for misses, redacted (`SEARCH_LOG_DAYS`)
@@ -28,13 +30,13 @@
 - First-run checklist on the home page, derived from what has happened (`/api/onboarding`)
 - New project page with components and a starter pack (overview, design doc, on-call runbook, and a linked API contract when there is a backend and a client)
 - Import of Markdown, HTML and zip files, including Notion, Confluence and Google Docs exports, with a dry-run preview, folders, image attachments and one review notification per batch (`POST /api/import`, `IMPORT_MAX_BYTES`)
-- Markdown export as a zip with front matter and attachments (`GET /api/export`, `cairn-admin export`)
+- Markdown export as a zip with front matter and attachments (`GET /api/export`, `thaliyola-admin export`)
 
 - Editor: formatting toolbar, live split preview, `/` block commands, `@` links to articles and findings, `#` links to entities, list continuation, image paste and drop (uploaded as attachments), local autosave with restore, and writing hints in new-article templates (`/api/templates/:type?hints=true`; `<!-- Hint: … -->` comments are removed on save)
 - Paste to draft (`/#/new/paste`): rule-based drafts of findings and articles from Slack threads, emails and notes, plus a `draft-from-paste` MCP prompt for AI clients
-- Web unit tests (`pnpm --filter @cairn/web test`)
+- Web unit tests (`pnpm --filter @thaliyola/web test`)
 
-- Finding things: an answer card above search results (the best section or finding, quoted, with a confidence label), an "Ask Cairn" box on the home page, results as you type in the search box (`/api/search?prefix=true` matches the last word as a prefix), and a ⌘K command palette for search, entities, navigation, favourites, recent items and theme
+- Finding things: an answer card above search results (the best section or finding, quoted, with a confidence label), an "Ask Thaliyola" box on the home page, results as you type in the search box (`/api/search?prefix=true` matches the last word as a prefix), and a ⌘K command palette for search, entities, navigation, favourites, recent items and theme
 - Favourites (per person, `GET /api/favourites`, `PUT`/`DELETE /api/favourites/:id`) and recently viewed items in the sidebar
 - Entity pages (`/api/entities?q=`, `/api/entities/:kind/:name`) linked from each item's "About" list
 - Copy a link to an article section; Share button on articles and findings
@@ -55,7 +57,7 @@
 - Search fuses normalized keyword and semantic scores instead of ranks, so the current-project boost can't lift a weak match over a much stronger one (found by the Docker CI job)
 - Fix: `docker compose up` no longer requires a Cloudflare tunnel token when the tunnel profile is off
 
-- Acceptance sweep (`pnpm --filter @cairn/server acceptance`) and a documented Claude Code acceptance run (`docs/acceptance.md`)
+- Acceptance sweep (`pnpm --filter @thaliyola/server acceptance`) and a documented Claude Code acceptance run (`docs/acceptance.md`)
 - CI builds the Docker image and smoke-tests the Compose stack
 - `investigate` prompt takes a single argument (multi-word symptoms survive clients that split prompt arguments on spaces)
 - `share_to_library` accepts drafts; the share is approved after the item itself
