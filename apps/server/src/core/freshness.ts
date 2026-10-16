@@ -1,4 +1,6 @@
+import type { Settings } from "../config.js";
 import type { Db } from "../db/pool.js";
+import { onStale } from "./notify.js";
 import type { RequestContext } from "./context.js";
 import { resolveScopeFilter } from "./scopes.js";
 
@@ -7,17 +9,25 @@ import { resolveScopeFilter } from "./scopes.js";
  * window become `possibly_stale`: they rank lower, carry a warning, and show
  * up in "needs attention" until someone verifies or supersedes them.
  */
-export async function markStale(db: Db, opts: { findingDays: number; articleDays: number }) {
-  const findings = await db.query(
+export async function markStale(db: Db, opts: { findingDays: number; articleDays: number }, settings?: Settings) {
+  const findings = await db.query<{ id: string; title: string; owner_id: string | null }>(
     `UPDATE findings SET status = 'possibly_stale'
-      WHERE status = 'published' AND coalesce(last_verified_at, updated_at) < now() - make_interval(days => $1)`,
+      WHERE status = 'published' AND coalesce(last_verified_at, updated_at) < now() - make_interval(days => $1)
+      RETURNING id, title, author_id AS owner_id`,
     [opts.findingDays],
   );
-  const articles = await db.query(
+  const articles = await db.query<{ id: string; title: string; owner_id: string | null }>(
     `UPDATE articles SET status = 'possibly_stale'
-      WHERE status = 'published' AND coalesce(last_verified_at, updated_at) < now() - make_interval(days => $1)`,
+      WHERE status = 'published' AND coalesce(last_verified_at, updated_at) < now() - make_interval(days => $1)
+      RETURNING id, title, owner_id`,
     [opts.articleDays],
   );
+  if (settings) {
+    await onStale(db, settings, [
+      ...findings.rows.map((r) => ({ ...r, kind: "finding" })),
+      ...articles.rows.map((r) => ({ ...r, kind: "article" })),
+    ]);
+  }
   return { findings: findings.rowCount ?? 0, articles: articles.rowCount ?? 0 };
 }
 
@@ -49,7 +59,7 @@ export async function needsAttention(ctx: RequestContext, opts: { scope?: string
  * Runs periodic maintenance in-process. A Postgres advisory lock makes sure
  * only one server instance does the work when several are running.
  */
-export function startJobs(db: Db, opts: { findingDays: number; articleDays: number; intervalHours: number }, log: (msg: string) => void) {
+export function startJobs(db: Db, opts: { findingDays: number; articleDays: number; intervalHours: number; settings?: Settings }, log: (msg: string) => void) {
   const LOCK = 7_402_211; // arbitrary, stable key for "cairn maintenance"
   async function run() {
     const client = await db.connect();
@@ -57,7 +67,7 @@ export function startJobs(db: Db, opts: { findingDays: number; articleDays: numb
       const { rows } = await client.query<{ locked: boolean }>("SELECT pg_try_advisory_lock($1) AS locked", [LOCK]);
       if (!rows[0]?.locked) return;
       try {
-        const stale = await markStale(db, opts);
+        const stale = await markStale(db, opts, opts.settings);
         await db.query("DELETE FROM sessions WHERE expires_at < now()");
         await db.query("DELETE FROM oauth_requests WHERE expires_at < now()");
         await db.query("DELETE FROM oauth_codes WHERE expires_at < now() - interval '1 day'");

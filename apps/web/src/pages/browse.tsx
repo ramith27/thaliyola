@@ -1,4 +1,5 @@
 import type { Folder, Me, Notice as NoticeT, ScopeInfo, SearchHit } from "../api";
+import { WatchButton } from "../components/notifications";
 import { api } from "../api";
 import { ErrorBox, formatDate, itemHref, Loading, Notice, ScopeBadge, Snippet, StatusBadge, TypeBadge } from "../components/ui";
 import { useApi } from "../hooks";
@@ -97,6 +98,7 @@ export function ScopePage({ slug, scopes, me }: { slug: string; scopes: ScopeInf
         <a className="btn" href={href("/new/finding", { scope: slug })}>
           New finding
         </a>
+        {scope && <WatchButton id={scope.id} />}
         {me.admin && (
           <a className="btn" href={href(`/scope/${slug}/settings`)}>
             Settings
@@ -133,7 +135,7 @@ function TreeTable({ folder, path }: { folder: Folder; path: string }) {
 }
 
 interface ProjectContext {
-  project: { slug: string; name: string; description: string };
+  project: { id: string; slug: string; name: string; description: string };
   component: { slug: string; kind: string } | null;
   components: { slug: string; kind: string; repo_url: string | null }[];
   open_impact_notices: (NoticeT & { source_title: string })[];
@@ -215,6 +217,7 @@ export function ProjectPage({ slug, route, me }: { slug: string; route: Route; m
         <a className="btn" href={href("/graph", { scope: slug })}>
           Graph
         </a>
+        <WatchButton id={data.project.id} />
         {me.admin && (
           <a className="btn" href={href(`/scope/${slug}/settings`)}>
             Settings

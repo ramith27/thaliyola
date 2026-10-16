@@ -31,7 +31,12 @@ const indexer = embedder ? startIndexer(db, embedder, (msg) => console.log(`[emb
 
 const jobs = startJobs(
   db,
-  { findingDays: config.STALE_AFTER_DAYS, articleDays: config.STALE_AFTER_DAYS_ARTICLES ?? config.STALE_AFTER_DAYS, intervalHours: config.MAINTENANCE_INTERVAL_HOURS },
+  {
+    findingDays: config.STALE_AFTER_DAYS,
+    articleDays: config.STALE_AFTER_DAYS_ARTICLES ?? config.STALE_AFTER_DAYS,
+    intervalHours: config.MAINTENANCE_INTERVAL_HOURS,
+    settings: settingsFrom(config),
+  },
   (msg) => console.log(`[maintenance] ${msg}`),
 );
 

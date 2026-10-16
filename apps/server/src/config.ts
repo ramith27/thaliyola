@@ -52,6 +52,12 @@ const Env = z
     STALE_AFTER_DAYS: z.coerce.number().int().positive().default(90),
     STALE_AFTER_DAYS_ARTICLES: z.coerce.number().int().positive().optional(),
     MAINTENANCE_INTERVAL_HOURS: z.coerce.number().positive().default(6),
+    // Email: smtp (SMTP_URL, e.g. smtps://user:pass@mail.example.com:465), json (log only) or off
+    MAIL_TRANSPORT: z.enum(["smtp", "json", "off"]).default("off"),
+    SMTP_URL: z.string().optional(),
+    MAIL_FROM: z.string().default("Cairn <cairn@localhost>"),
+    // Team channel for review and change events (Slack incoming webhook URL)
+    SLACK_WEBHOOK_URL: z.string().optional(),
     DUPLICATE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.6),
   })
   .superRefine((env, ctx) => {
@@ -73,6 +79,10 @@ export function settingsFrom(config: Config): Settings {
     adminEmails: config.ADMIN_EMAILS.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean),
     duplicateThreshold: config.DUPLICATE_THRESHOLD,
     authMode: config.AUTH_MODE,
+    mailTransport: config.MAIL_TRANSPORT === "smtp" && !config.SMTP_URL ? "off" : config.MAIL_TRANSPORT,
+    smtpUrl: config.SMTP_URL,
+    mailFrom: config.MAIL_FROM,
+    slackWebhookUrl: config.SLACK_WEBHOOK_URL,
     rateLimitPerMinute: config.RATE_LIMIT_PER_MINUTE,
     logRequests: config.LOG_REQUESTS === "true",
     publicUrl: config.PUBLIC_URL?.replace(/\/+$/, ""),
@@ -102,6 +112,10 @@ export interface Settings {
   adminEmails: string[];
   duplicateThreshold: number;
   authMode: "local" | "cloudflare" | "dev";
+  mailTransport: "smtp" | "json" | "off";
+  smtpUrl?: string;
+  mailFrom: string;
+  slackWebhookUrl?: string;
   rateLimitPerMinute: number;
   logRequests: boolean;
   publicUrl?: string;

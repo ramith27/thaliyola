@@ -13,6 +13,7 @@ import { buildMcpServer } from "../mcp/server.js";
 import { isAdmin } from "../core/permissions.js";
 import { apiErrorHandler, apiRouter } from "./api.js";
 import { accessLog, rateLimitPerActor } from "./middleware.js";
+import { actionsRouter, notificationsRouter } from "./notifications.js";
 import { accountRouter, publicAuthRouter, requirePasswordChanged } from "./auth.js";
 
 const DEFAULT_WEB_DIST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../web/dist");
@@ -67,6 +68,7 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
 
   // Stateless streamable HTTP: a fresh server + transport per request, bound to the caller.
   app.use("/auth", publicAuthRouter(db, settings));
+  app.use("/actions", actionsRouter(db, settings));
 
   // OAuth server for local mode (claude.ai connectors and other OAuth-only MCP clients).
   const oauth = settings.authMode === "local" && settings.publicUrl ? oauthRouter(db, settings, new URL(settings.publicUrl)) : undefined;
@@ -78,6 +80,7 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
     (req: Request, res: Response, next: NextFunction) => (req.path === "/assets" ? uploadJson(req, res, next) : next()),
     requirePasswordChanged,
     accountRouter(db, settings, (actor) => isAdmin({ db, actor, settings })),
+    notificationsRouter(db, settings),
     apiRouter({ db, settings, embedder, onWrite }),
     apiErrorHandler,
   );
@@ -111,7 +114,7 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
   // Web UI: static assets plus SPA fallback. Auth happens on the API calls it makes.
   if (existsSync(webDist)) {
     app.use(express.static(webDist, { index: false, maxAge: "1h" }));
-    app.get(/^\/(?!api\/|auth\/|oauth\/|\.well-known\/|mcp$|healthz$|authorize$|token$|register$|revoke$).*/, (_req, res) => {
+    app.get(/^\/(?!api\/|auth\/|oauth\/|actions\/|\.well-known\/|mcp$|healthz$|authorize$|token$|register$|revoke$).*/, (_req, res) => {
       res.set("Cache-Control", "no-cache").sendFile(path.join(webDist, "index.html"));
     });
   }

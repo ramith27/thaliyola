@@ -76,6 +76,7 @@ export async function authApi<T = any>(path: string, body?: unknown): Promise<T>
 }
 
 export interface ScopeInfo {
+  id: string;
   kind: "team" | "project" | "library";
   slug: string;
   name: string;

@@ -91,7 +91,7 @@ export async function getProjectContext(ctx: RequestContext, projectSlug?: strin
   }
 
   return {
-    project: { slug: project.slug, name: project.name, description: project.description, status: project.status },
+    project: { id: project.id, slug: project.slug, name: project.name, description: project.description, status: project.status },
     component: comp ? { slug: comp.slug, kind: comp.kind, repo_url: comp.repo_url } : null,
     components: (await listComponents(db, project.id)).map((c) => ({ slug: c.slug, kind: c.kind, repo_url: c.repo_url })),
     open_impact_notices: notices.rows,

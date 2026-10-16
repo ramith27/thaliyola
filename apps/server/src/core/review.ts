@@ -4,6 +4,7 @@ import { audit } from "./audit.js";
 import { reindexArticle, reindexFinding, replaceSection } from "./chunking.js";
 import { ConflictError, NotFoundError, ValidationError, type RequestContext } from "./context.js";
 import { getArticle, getFinding } from "./items.js";
+import { onDecision, onImpactNotices, track } from "./notify.js";
 import { assertCanApprove, assertCanRead, canApprove, readableScopes } from "./permissions.js";
 import { getReadableScope } from "./scopes.js";
 import { findItem } from "./writes.js";
@@ -82,6 +83,7 @@ function nextArticleBody(body: string, payload: Record<string, any>): string {
 export async function approveRevision(ctx: RequestContext, id: string): Promise<{ revision_id: string; state: string } & Record<string, unknown>> {
   const result = await approveInTx(ctx, id);
   ctx.onWrite?.();
+  track(afterDecision(ctx, id, result));
   return result;
 }
 
@@ -123,7 +125,26 @@ async function approveInTx(ctx: RequestContext, id: string): Promise<{ revision_
   });
 }
 
+/** Notifications after a decision; failures are logged, never surfaced to the reviewer. */
+async function afterDecision(ctx: RequestContext, id: string, result: Record<string, unknown>) {
+  try {
+    await onDecision(ctx.db, ctx.settings, id, ctx.actor.id);
+    if (typeof result.impact_notices === "number" && result.impact_notices > 0) {
+      const r = (await ctx.db.query<{ target_id: string }>("SELECT target_id FROM revisions WHERE id = $1", [id])).rows[0]!;
+      await onImpactNotices(ctx.db, ctx.settings, r.target_id, result.version as number);
+    }
+  } catch (err) {
+    console.error(`[notify] ${(err as Error).message}`);
+  }
+}
+
 export async function rejectRevision(ctx: RequestContext, id: string, reason: string) {
+  const result = await rejectInTx(ctx, id, reason);
+  track(afterDecision(ctx, id, result));
+  return result;
+}
+
+async function rejectInTx(ctx: RequestContext, id: string, reason: string) {
   if (!reason.trim()) throw new ValidationError("a reason is required to reject");
   return withTx(ctx.db, async (db) => {
     const r = await loadRevision(db, id, true);

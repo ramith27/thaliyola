@@ -23,6 +23,8 @@ export const TEST_SETTINGS: Settings = {
   adminEmails: ["admin@example.com"],
   duplicateThreshold: 0.6,
   authMode: "dev",
+  mailTransport: "off",
+  mailFrom: "Cairn <cairn@test>",
   rateLimitPerMinute: 0,
   logRequests: false,
   publicUrl: undefined,

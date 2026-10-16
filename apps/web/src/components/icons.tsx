@@ -125,6 +125,46 @@ export const icons = {
       <path d="M4 10h16M10 10v9" />
     </Icon>
   ),
+  bell: (p: SVGProps<SVGSVGElement>) => (
+    <Icon {...p}>
+      <path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9Z" />
+      <path d="M10 20a2 2 0 0 0 4 0" />
+    </Icon>
+  ),
+  eye: (p: SVGProps<SVGSVGElement>) => (
+    <Icon {...p}>
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
+      <circle cx="12" cy="12" r="3" />
+    </Icon>
+  ),
+  sun: (p: SVGProps<SVGSVGElement>) => (
+    <Icon {...p}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4" />
+    </Icon>
+  ),
+  moon: (p: SVGProps<SVGSVGElement>) => (
+    <Icon {...p}>
+      <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z" />
+    </Icon>
+  ),
+  monitor: (p: SVGProps<SVGSVGElement>) => (
+    <Icon {...p}>
+      <rect x="3" y="4" width="18" height="12" rx="2" />
+      <path d="M8 20h8M12 16v4" />
+    </Icon>
+  ),
+  star: (p: SVGProps<SVGSVGElement>) => (
+    <Icon {...p}>
+      <path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9L12 3.5Z" />
+    </Icon>
+  ),
+  link: (p: SVGProps<SVGSVGElement>) => (
+    <Icon {...p}>
+      <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
+      <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+    </Icon>
+  ),
   chart: (p: SVGProps<SVGSVGElement>) => (
     <Icon {...p}>
       <path d="M4 20V4M4 20h16" />

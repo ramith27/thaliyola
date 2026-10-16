@@ -48,8 +48,9 @@
   --tick: #8a93a3;
   --spark: #b6c2d3;
 }
+/* Dark palette: the OS setting, unless the person picked light; or an explicit dark choice. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     color-scheme: dark;
     --bg: #0b0f17;
     --surface: #121826;
@@ -87,6 +88,44 @@
     --spark: #3b4a63;
   }
 }
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0b0f17;
+    --surface: #121826;
+    --surface-2: #161d2c;
+    --surface-3: #1c2435;
+    --text: #e6eaf2;
+    --text-2: #c2cad8;
+    --muted: #8a95a8;
+    --border: #232c3d;
+    --border-strong: #2e3a50;
+    --accent: #4f8cff;
+    --accent-hover: #6a9fff;
+    --accent-soft: #172440;
+    --accent-text: #8fb4ff;
+    --ring: rgba(79, 140, 255, 0.4);
+    --warn: #f0b33a;
+    --warn-soft: #2b2312;
+    --danger: #ff7b72;
+    --danger-soft: #331a1b;
+    --ok: #4cc77a;
+    --ok-soft: #13291c;
+    --mark: #5b4a10;
+    --code: #1a2233;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.25);
+    --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.5);
+    /* Charts (validated dark steps) */
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --neutral-mark: #4a5568;
+    --grid: #1e2636;
+    --axis: #2e3a50;
+    --tick: #7d889c;
+    --spark: #3b4a63;
+  }
+:root[data-theme="light"] { color-scheme: light; }
 
 /* ============================================================ Base */
 * { box-sizing: border-box; }
@@ -428,3 +467,26 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
   .facts dt { margin-top: 0.4rem; }
   .graph-hint { display: none; }
 }
+
+/* Notifications, watch, theme */
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; }
+.topbar-right .user-menu { margin-left: 0; }
+.bell-btn { position: relative; width: 36px; height: 36px; border-radius: 50%; }
+.bell-count { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--danger); color: #fff; font-size: 0.68rem; font-weight: 700; display: grid; place-items: center; border: 2px solid var(--bg); }
+.notif-menu { width: 380px; max-height: 70vh; overflow-y: auto; padding: 0; }
+.notif-head { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 0.9rem; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); }
+.notif-empty { padding: 1rem; margin: 0; }
+.notif-list { list-style: none; margin: 0; padding: 0.3rem; }
+.notif-item { display: flex; gap: 0.65rem; width: 100%; text-align: left; background: none; border: 0; padding: 0.6rem; border-radius: var(--radius-sm); cursor: pointer; font: inherit; color: var(--text-2); }
+.notif-item:hover { background: var(--surface-3); }
+.notif-item.unread { color: var(--text); }
+.notif-item.unread .notif-title::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-right: 0.4rem; vertical-align: 1px; }
+.notif-icon { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--surface-3); color: var(--muted); flex-shrink: 0; }
+.notif-text { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.notif-title { font-weight: 550; font-size: 0.9rem; overflow-wrap: anywhere; }
+.btn-on { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, transparent); color: var(--accent-text); }
+.theme-switch { display: flex; gap: 0.2rem; padding: 0.35rem; margin: 0.2rem 0; background: var(--surface-3); border-radius: var(--radius-sm); }
+.theme-switch button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 0.3rem; border: 0; background: none; padding: 0.35rem; border-radius: 6px; font: inherit; font-size: 0.8rem; color: var(--muted); cursor: pointer; }
+.theme-switch button.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.prefs { display: flex; flex-direction: column; gap: 0.55rem; margin: 0.6rem 0; }
+@media (max-width: 860px) { .notif-menu { position: fixed; left: 0.5rem; right: 0.5rem; width: auto; top: 56px; } }

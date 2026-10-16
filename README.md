@@ -131,6 +131,17 @@ Behind Cloudflare Access, the browser is already signed in. In dev mode the UI a
 
 For UI development, run the server on :8080 and `pnpm --filter @cairn/web dev`. Vite serves on :5173 and proxies `/api`.
 
+### Notifications
+
+Everyone gets in-app notifications under the bell:
+- **Proposals to review:** sent to scope owners and admins. The email version carries a one-click Approve link, which opens a confirmation page first so mail scanners can't approve.
+- **Decisions:** the author hears when their proposal is approved or rejected.
+- **Upstream changes:** members of a project, and anyone watching it, hear when a contract or shared design it uses changes.
+- **Watched items:** anyone can watch an article, finding or project to hear about its changes.
+- **Stale items:** owners hear when something they own needs re-verifying.
+
+Email is sent over SMTP (`MAIL_TRANSPORT=smtp`, `SMTP_URL`, `MAIL_FROM`). Each person chooses which types are emailed on their Account page. Review and change events can also go to a team Slack channel (`SLACK_WEBHOOK_URL`). The theme (system, light or dark) is set from the avatar menu.
+
 ### Review
 
 Approval is deliberately not an MCP tool: agents propose, people approve. Reviewers use the web UI (`/#/review`) or the REST API:

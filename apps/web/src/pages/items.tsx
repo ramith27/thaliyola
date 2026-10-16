@@ -17,6 +17,7 @@ import { AddLinkForm, ShareToLibrary } from "../components/actions";
 import { Attachments } from "../components/assets";
 import { useApi } from "../hooks";
 import { RelationsPanel } from "./graph";
+import { WatchButton } from "../components/notifications";
 import { href, navigate, type Route } from "../router";
 
 function Meta({ item }: { item: Article | Finding }) {
@@ -142,6 +143,7 @@ export function ArticlePage({ id, route }: { id: string; route: Route }) {
           </a>
           <VerifyButton id={id} status={data.status} onDone={reload} />
           <ShareToLibrary id={id} scopeKind={data.scope.kind} status={data.status} publishedAs={publishedAs(data)} />
+          <WatchButton id={id} />
         </div>
         <SectionedMarkdown body={data.body_md} />
         <RelationsPanel id={id} />
@@ -296,6 +298,7 @@ export function FindingPage({ id, route }: { id: string; route: Route }) {
           </a>
           <VerifyButton id={id} status={data.status} onDone={reload} />
           <ShareToLibrary id={id} scopeKind={data.scope.kind} status={data.status} publishedAs={publishedAs(data)} />
+          <WatchButton id={id} />
         </div>
         <h2>Symptoms</h2>
         <Markdown text={data.symptoms} />

@@ -23,6 +23,8 @@ export interface RequestContext {
   embedder?: Embedder;
   /** Wakes the background embedding indexer after a write. */
   onWrite?: () => void;
+  /** Set by direct (self-approved) edits so reviewers aren't notified about a proposal that never waits. */
+  quietProposals?: boolean;
   /** Project slug from the X-Cairn-Project header; a tool's explicit `project` argument wins. */
   project?: string;
   /** Component slug from the X-Cairn-Component header. */

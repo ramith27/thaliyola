@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { api, authApi, type Me } from "../api";
 import { ErrorBox, formatDate, Loading, Notice } from "../components/ui";
+import { NotificationPrefs } from "../components/notifications";
 import { useApi } from "../hooks";
 
 export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
@@ -273,6 +274,7 @@ export function AccountPage({ me }: { me: Me }) {
       </p>
       <ApiTokens />
       <ConnectedApps />
+      <NotificationPrefs />
       {me.local_account && (
         <section>
           <h2>Password</h2>

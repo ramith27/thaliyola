@@ -150,7 +150,7 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
     handle("list_scopes", async (ctx) => {
       const readable = await readableScopes(ctx);
       const { rows } = await ctx.db.query(
-        `SELECT s.kind, s.slug, s.name, s.description, s.status, s.visibility,
+        `SELECT s.id, s.kind, s.slug, s.name, s.description, s.status, s.visibility,
                 coalesce((SELECT json_agg(json_build_object('slug', c.slug, 'kind', c.kind, 'repo_url', c.repo_url) ORDER BY c.slug)
                             FROM components c WHERE c.scope_id = s.id), '[]') AS components
            FROM scopes s WHERE s.status = 'active' AND ($1::uuid[] IS NULL OR s.id = ANY($1))

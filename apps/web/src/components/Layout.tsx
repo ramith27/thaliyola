@@ -2,7 +2,9 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { authApi, type Folder, type Me, type ScopeInfo } from "../api";
 import { useApi } from "../hooks";
 import { href, navigate, type Route } from "../router";
+import { getTheme, setTheme, type Theme } from "../theme";
 import { I, type IconName } from "./icons";
+import { NotificationBell } from "./notifications";
 
 export function Layout({ me, scopes, route, children }: { me: Me; scopes: ScopeInfo[]; route: Route; children: ReactNode }) {
   const [q, setQ] = useState(route.path[0] === "search" ? (route.query.get("q") ?? "") : "");
@@ -85,7 +87,10 @@ export function Layout({ me, scopes, route, children }: { me: Me; scopes: ScopeI
             <input ref={searchRef} type="search" placeholder="Search knowledge…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" />
             <kbd>{isMac ? "⌘K" : "Ctrl K"}</kbd>
           </form>
-          <UserMenu me={me} />
+          <div className="topbar-right">
+            <NotificationBell />
+            <UserMenu me={me} />
+          </div>
         </header>
         <main className="content">{children}</main>
       </div>
@@ -150,6 +155,7 @@ function UserMenu({ me }: { me: Me }) {
               <I name="team" size={16} /> Users
             </a>
           )}
+          <ThemeSwitch />
           {me.auth_mode === "local" && (
             <button
               className="menu-item"
@@ -164,6 +170,33 @@ function UserMenu({ me }: { me: Me }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function ThemeSwitch() {
+  const [theme, setT] = useState<Theme>(getTheme());
+  const options: { value: Theme; icon: IconName; label: string }[] = [
+    { value: "system", icon: "monitor", label: "System" },
+    { value: "light", icon: "sun", label: "Light" },
+    { value: "dark", icon: "moon", label: "Dark" },
+  ];
+  return (
+    <div className="theme-switch" role="radiogroup" aria-label="Theme">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          role="radio"
+          aria-checked={theme === o.value}
+          className={theme === o.value ? "active" : ""}
+          onClick={() => {
+            setTheme(o.value);
+            setT(o.value);
+          }}
+        >
+          <I name={o.icon} size={14} /> {o.label}
+        </button>
+      ))}
     </div>
   );
 }

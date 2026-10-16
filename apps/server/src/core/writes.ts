@@ -5,6 +5,7 @@ import { getArticle, getFinding } from "./items.js";
 import { assertCanPropose, assertCanRead } from "./permissions.js";
 import { onlyRedacted, redactFields, type Redaction } from "./redaction.js";
 import { toPgVector } from "./embeddings.js";
+import { onProposal, track } from "./notify.js";
 import { getComponent, getReadableScope, getScopeBySlug, resolveProject, type Scope } from "./scopes.js";
 import { linkEntities, normalizeTags, type EntityRef } from "./tags.js";
 import { missingSections } from "./templates.js";
@@ -112,6 +113,14 @@ async function addLinks(db: Queryable, target: { kind: string; id: string }, lin
     const { fields } = redactFields({ url: l.url, label: l.label ?? "" });
     await addSourceLink(db, target, l.system, fields.url, fields.label);
   }
+}
+
+/** Tells reviewers about a committed proposal (asynchronously; never fails the write). */
+function announce<T extends { revision_id?: string; status?: string }>(ctx: RequestContext, result: T): T {
+  if (result.revision_id && !ctx.quietProposals) {
+    track(onProposal(ctx.db, ctx.settings, result.revision_id).catch((err) => console.error(`[notify] ${(err as Error).message}`)));
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -254,7 +263,7 @@ export async function proposeFinding(ctx: RequestContext, input: ProposeFindingI
     }
   }
 
-  return withTx(ctx.db, async (db) => {
+  return announce(ctx, await withTx(ctx.db, async (db) => {
     const id = await insertFinding(db, {
       scopeId: scope.id,
       type: input.type,
@@ -281,7 +290,7 @@ export async function proposeFinding(ctx: RequestContext, input: ProposeFindingI
       baseVersion: 1,
       payload: {},
       authorId: ctx.actor.id,
-      summary: `New ${input.type}: ${fields.title}`.slice(0, LIMITS.summary),
+      summary: `New ${input.type.replace(/_/g, " ")}: ${fields.title}`.slice(0, LIMITS.summary),
       redactions,
     });
     ctx.onWrite?.();
@@ -293,7 +302,7 @@ export async function proposeFinding(ctx: RequestContext, input: ProposeFindingI
       redactions,
       message: "Stored as a draft and queued for review. It becomes searchable by default once approved.",
     };
-  });
+  }));
 }
 
 export interface UpdateFindingInput {
@@ -333,7 +342,7 @@ export async function updateFinding(ctx: RequestContext, input: UpdateFindingInp
     summary: summary.slice(0, LIMITS.summary),
     redactions,
   });
-  return { status: "pending_review" as const, revision_id: revisionId, base_version: item.version, redactions };
+  return announce(ctx, { status: "pending_review" as const, revision_id: revisionId, base_version: item.version, redactions });
 }
 
 // ---------------------------------------------------------------------------
@@ -365,7 +374,7 @@ export async function createArticle(ctx: RequestContext, input: CreateArticleInp
   const components = await componentIds(ctx.db, scope, input.components);
   for (const id of input.uses_ids ?? []) await findItemFor(ctx, id);
 
-  return withTx(ctx.db, async (db) => {
+  return announce(ctx, await withTx(ctx.db, async (db) => {
     const id = await insertArticle(db, {
       scopeId: scope.id,
       type: input.type,
@@ -391,7 +400,7 @@ export async function createArticle(ctx: RequestContext, input: CreateArticleInp
       baseVersion: 1,
       payload: {},
       authorId: ctx.actor.id,
-      summary: `New ${input.type}: ${fields.title}`.slice(0, LIMITS.summary),
+      summary: `New ${input.type.replace(/_/g, " ")}: ${fields.title}`.slice(0, LIMITS.summary),
       redactions,
     });
     const missing = missingSections(input.type, fields.body_md);
@@ -404,7 +413,7 @@ export async function createArticle(ctx: RequestContext, input: CreateArticleInp
       redactions,
       ...(missing.length ? { missing_template_sections: missing } : {}),
     };
-  });
+  }));
 }
 
 export interface ArticleEditInput {
@@ -446,7 +455,7 @@ export async function proposeArticleEdit(ctx: RequestContext, input: ArticleEdit
     summary: fields.summary.slice(0, LIMITS.summary),
     redactions,
   });
-  return { status: "pending_review" as const, revision_id: revisionId, base_version: item.version, redactions };
+  return announce(ctx, { status: "pending_review" as const, revision_id: revisionId, base_version: item.version, redactions });
 }
 
 export async function promoteFinding(ctx: RequestContext, input: { finding_id: string; article_id: string; version: number; section?: string }) {
@@ -473,7 +482,7 @@ export async function promoteFinding(ctx: RequestContext, input: { finding_id: s
     summary: `Promote finding "${f.title}" into ${section}`.slice(0, LIMITS.summary),
     redactions: [],
   });
-  return { status: "pending_review" as const, revision_id: revisionId, section, text };
+  return announce(ctx, { status: "pending_review" as const, revision_id: revisionId, section, text });
 }
 
 /** Evidence and design links (Figma frame, PR, Sentry issue) are metadata and apply directly. */
@@ -520,11 +529,11 @@ export async function shareToLibrary(ctx: RequestContext, input: { id: string; s
     summary: fields.summary.slice(0, LIMITS.summary),
     redactions: [],
   });
-  return {
+  return announce(ctx, {
     status: "pending_review" as const,
     revision_id: revisionId,
     message: "Queued for library owners. On approval a library copy is created and this project is linked to it.",
-  };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -558,7 +567,7 @@ export async function verifyEntry(ctx: RequestContext, input: { id: string; stil
     summary: `No longer valid: ${note}`.slice(0, LIMITS.summary),
     redactions: [],
   });
-  return { status: "pending_review" as const, revision_id: revisionId, message: "Queued: on approval the item is marked superseded." };
+  return announce(ctx, { status: "pending_review" as const, revision_id: revisionId, message: "Queued: on approval the item is marked superseded." });
 }
 
 type Ref = { kind: "article" | "finding" | "scope" | "component"; id: string; scopeId: string };
