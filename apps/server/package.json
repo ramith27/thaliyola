@@ -10,6 +10,7 @@
     "migrate": "tsx src/db/migrate.ts",
     "seed": "tsx src/scripts/seed.ts",
     "smoke": "tsx src/scripts/smoke.ts",
+    "acceptance": "tsx src/scripts/acceptance.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

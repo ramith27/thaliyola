@@ -318,7 +318,7 @@ export function buildMcpServer(ctx: RequestContext): McpServer {
       title: "Share to the library",
       description:
         "Propose publishing a project (or team) item to the shared Library so other projects can reuse it, " +
-        "e.g. a UI component spec, UX pattern, design tokens, API contract or tech pattern. Library owners review it.",
+        "e.g. a UI component spec, UX pattern, design tokens, API contract or tech pattern. Works on drafts too (reviewers approve the item first, then the share). Library owners review it.",
       inputSchema: {
         id: z.string().uuid(),
         summary: z.string().min(1).max(300).describe("Why other projects should reuse this"),

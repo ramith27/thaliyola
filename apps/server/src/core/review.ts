@@ -196,7 +196,8 @@ async function applyArticleEdit(db: Tx, ctx: RequestContext, item: { id: string;
 }
 
 /** Copies an item into the Library, with its links, entities and assets, and links the source to the copy. */
-async function applyShare(db: Tx, ctx: RequestContext, item: { kind: string; id: string; scope_id: string }, r: RevisionRow) {
+async function applyShare(db: Tx, ctx: RequestContext, item: { kind: string; id: string; scope_id: string; status: string }, r: RevisionRow) {
+  if (item.status === "draft") throw new ValidationError("approve the item itself first; it is still a draft");
   let copyId: string;
   if (item.kind === "article") {
     const { rows } = await db.query(

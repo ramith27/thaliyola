@@ -149,6 +149,8 @@ describe("share_to_library", () => {
     await db.query("DELETE FROM scope_members");
     await expect(shareToLibrary(member, { id: ids.decision, summary: "again" })).rejects.toThrow(/already published/);
     await expect(shareToLibrary(member, { id: copyId, summary: "x" })).rejects.toThrow(/already in the library/);
-    await expect(shareToLibrary(member, { id: ids.draft, summary: "x" })).rejects.toThrow(/only published/);
+    // A draft can be proposed, but the share can't be approved before the draft itself.
+    const draftShare = await shareToLibrary(member, { id: ids.draft, summary: "x" });
+    await expect(approveRevision(await ctxFor(db, { email: "admin@example.com" }), draftShare.revision_id)).rejects.toThrow(/still a draft/);
   });
 });

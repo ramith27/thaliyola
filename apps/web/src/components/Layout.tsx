@@ -109,19 +109,20 @@ function ScopeTree({ slug }: { slug: string }) {
 function FolderView({ folder }: { folder: Folder }) {
   return (
     <ul className="plain tree">
+      {/* Unfiled articles first, so they don't read as part of the folder above them. */}
+      {folder.articles.map((a) => (
+        <li key={a.id}>
+          <a href={href(`/article/${a.id}`)} className={a.status === "draft" ? "muted" : ""}>
+            {a.title}
+          </a>
+        </li>
+      ))}
       {Object.entries(folder.folders).map(([name, sub]) => (
         <li key={name}>
           <details open>
             <summary>{name}</summary>
             <FolderView folder={sub} />
           </details>
-        </li>
-      ))}
-      {folder.articles.map((a) => (
-        <li key={a.id}>
-          <a href={href(`/article/${a.id}`)} className={a.status === "draft" ? "muted" : ""}>
-            {a.title}
-          </a>
         </li>
       ))}
     </ul>

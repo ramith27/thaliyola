@@ -223,6 +223,12 @@ claude mcp add --transport http cairn http://localhost:8080/mcp \
   --header "X-Cairn-Project: order-service"
 ```
 
+### Acceptance
+
+[`docs/acceptance.md`](docs/acceptance.md) describes the full acceptance run and its latest results:
+- a sweep of all 23 MCP tools (`pnpm --filter @cairn/server acceptance`);
+- real Claude Code sessions acting as designer, backend developer, frontend developer, on-call engineer, admin and outsider.
+
 ### Smoke test
 
 After a deploy with the demo data loaded, run end-to-end checks against the live server. It plays a backend agent changing a contract, a reviewer approving it, and a frontend agent picking up the change:

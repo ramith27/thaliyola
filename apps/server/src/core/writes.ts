@@ -497,7 +497,8 @@ export async function shareToLibrary(ctx: RequestContext, input: { id: string; s
   const item = await findItemFor(ctx, input.id);
   const library = await getScopeBySlug(ctx.db, "library");
   if (item.scope_id === library.id) throw new ValidationError("this item is already in the library");
-  if (item.status !== "published" && item.status !== "possibly_stale") throw new ValidationError("only published items can be shared");
+  // Drafts can be proposed too; the share can only be approved once the item itself is approved.
+  if (!["draft", "published", "possibly_stale"].includes(item.status)) throw new ValidationError(`a ${item.status} item can't be shared`);
   await assertCanPropose(ctx, item.scope_id);
   const existing = await ctx.db.query(
     "SELECT to_id FROM relations WHERE from_id = $1 AND kind = 'published_as'",

@@ -17,13 +17,12 @@ export function registerPrompts(server: McpServer) {
     {
       title: "Investigate with team knowledge",
       description: "Search what the team already knows before investigating an alert, bug or question, and capture the result afterwards.",
-      argsSchema: {
-        symptom: z.string().describe("What you are seeing, as it first appeared"),
-        project: z.string().optional(),
-      },
+      // One argument only: some clients split prompt arguments on spaces, which would scatter a symptom
+      // across several fields. The project comes from the client's X-Cairn-Project header (or the agent).
+      argsSchema: { symptom: z.string().describe("What you are seeing, as it first appeared") },
     },
-    ({ symptom, project }) =>
-      user(`${projectLine(project)}Investigate: ${symptom}
+    ({ symptom }) =>
+      user(`Investigate: ${symptom}
 
 1. Call search_knowledge with the symptom phrased as it first appeared (add filters you already know: entity, type, project).
 2. Open only the relevant hits with get_article / get_finding. Treat stale (possibly_stale) entries as hints to confirm, not facts.

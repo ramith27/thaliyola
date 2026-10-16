@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { audit } from "./audit.js";
 import { ForbiddenError, NotFoundError, ValidationError, type RequestContext } from "./context.js";
 import { assertCanRead, canApprove } from "./permissions.js";
 import { redact } from "./redaction.js";
@@ -113,7 +112,6 @@ export async function uploadAsset(
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
     [item.scope_id, item.kind, item.id, input.mime, sha256, data.length, key, alt, filename, ctx.actor.id],
   );
-  await audit(ctx.db, ctx.actor.id, "upload_asset", item.id);
   return { asset_id: rows[0]!.id, filename, mime: input.mime, size_bytes: data.length, redactions };
 }
 
@@ -149,6 +147,5 @@ export async function deleteAsset(ctx: RequestContext, id: string) {
     throw new ForbiddenError("only the uploader or a scope owner can remove an asset");
   }
   await ctx.db.query("UPDATE assets SET deleted_at = now() WHERE id = $1", [id]);
-  await audit(ctx.db, ctx.actor.id, "delete_asset", row.target_id);
   return { asset_id: id, deleted: true };
 }

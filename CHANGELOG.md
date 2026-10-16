@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Acceptance sweep (`pnpm --filter @cairn/server acceptance`) and a documented Claude Code acceptance run (`docs/acceptance.md`)
+- CI builds the Docker image and smoke-tests the Compose stack
+- `investigate` prompt takes a single argument (multi-word symptoms survive clients that split prompt arguments on spaces)
+- `share_to_library` accepts drafts; the share is approved after the item itself
+- Fix: asset uploads and deletions were audited twice
+- Web UI: unfiled articles listed before folders in the sidebar tree
+
 ## 0.1.0 (2026-10-16)
 
 First release.
