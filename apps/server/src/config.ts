@@ -44,6 +44,8 @@ const Env = z
     EMBEDDING_CACHE_DIR: z.string().optional(),
     // Cosine similarity a vector-only hit needs to be returned at all
     SEARCH_MIN_SIMILARITY: z.coerce.number().min(0).max(1).default(0.6),
+    // ...and be within this much of the best semantic match for the query
+    SEARCH_SIMILARITY_WINDOW: z.coerce.number().min(0).max(1).default(0.02),
     // Cosine similarity at which an existing finding counts as a near-duplicate
     DUPLICATE_SIMILARITY: z.coerce.number().min(0).max(1).default(0.8),
     // Published entries not verified for this many days are flagged possibly_stale
@@ -90,6 +92,7 @@ export function settingsFrom(config: Config): Settings {
           }
         : undefined,
     searchMinSimilarity: config.SEARCH_MIN_SIMILARITY,
+    searchSimilarityWindow: config.SEARCH_SIMILARITY_WINDOW,
     duplicateSimilarity: config.DUPLICATE_SIMILARITY,
     assetMaxBytes: config.ASSET_MAX_BYTES,
   };
@@ -108,6 +111,7 @@ export interface Settings {
   /** Set when ASSET_STORE=s3. */
   s3?: import("./core/s3.js").S3Config;
   searchMinSimilarity: number;
+  searchSimilarityWindow: number;
   duplicateSimilarity: number;
   assetMaxBytes: number;
 }

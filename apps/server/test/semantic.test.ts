@@ -21,7 +21,8 @@ afterAll(async () => {
 
 describe("hybrid search (hashing embedder)", () => {
   const embedder = new HashingEmbedder([["refund", "refunded", "chargeback", "reimbursement"]]);
-  const settings = { ...TEST_SETTINGS, searchMinSimilarity: 0.15 };
+  // Hashing vectors have a very different similarity scale from bge, so no relative window here.
+  const settings = { ...TEST_SETTINGS, searchMinSimilarity: 0.15, searchSimilarityWindow: 1 };
 
   it("embeds every chunk, and re-embeds when the model changes", async () => {
     await indexAll(embedder);

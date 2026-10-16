@@ -180,6 +180,7 @@ export interface SearchHit {
   scope: { slug: string; kind: string };
   via_uses_link: boolean;
   match?: "keyword" | "semantic" | "keyword+semantic";
+  score: number;
   warning?: string;
 }
 

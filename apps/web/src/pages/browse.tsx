@@ -117,8 +117,18 @@ export function SearchPage({ route }: { route: Route }) {
       {loading && <Loading />}
       {data && (
         <>
-          <HitList title="Articles" hits={data.articles} />
-          <HitList title="Findings" hits={data.findings} />
+          {/* Whichever group holds the strongest match comes first. */}
+          {(data.findings[0]?.score ?? 0) > (data.articles[0]?.score ?? 0) * 1.25 ? (
+            <>
+              <HitList title="Findings" hits={data.findings} />
+              <HitList title="Articles" hits={data.articles} />
+            </>
+          ) : (
+            <>
+              <HitList title="Articles" hits={data.articles} />
+              <HitList title="Findings" hits={data.findings} />
+            </>
+          )}
           {!data.articles.length && !data.findings.length && <p className="muted">Nothing found for “{q}”.</p>}
         </>
       )}

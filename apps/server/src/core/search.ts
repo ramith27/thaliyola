@@ -112,6 +112,11 @@ export async function searchKnowledge(ctx: RequestContext, input: SearchInput): 
           AND ${filters}
         ORDER BY nn.dist LIMIT 50`
     : "SELECT NULL::bigint AS id, NULL::bigint AS r, NULL::float AS sim WHERE false";
+  // Small embedding models compress similarities into a narrow band, so a meaning-only hit must also be
+  // close to the best meaning match for this query, not just above the floor.
+  const vecWindowed = queryVector
+    ? `SELECT id, r, sim FROM (SELECT v.*, max(v.sim) OVER () AS best FROM vec_raw v) w WHERE sim >= best - ${p(ctx.settings.searchSimilarityWindow)}`
+    : "SELECT NULL::bigint AS id, NULL::bigint AS r, NULL::float AS sim WHERE false";
 
   const sql = `
     WITH q AS (
@@ -131,11 +136,13 @@ export async function searchKnowledge(ctx: RequestContext, input: SearchInput): 
                  AND ${filters}) x
        ORDER BY rank DESC LIMIT 50
     ),
-    vec AS (${vec}),
+    vec_raw AS (${vec}),
+    vec AS (${vecWindowed}),
     -- Reciprocal rank fusion of keyword and semantic candidates, then status/scope boosts.
     fused AS (
       SELECT coalesce(fts.id, vec.id) AS id,
-             coalesce(1.0 / (60 + fts.r), 0) + coalesce(1.0 / (60 + vec.r), 0) AS rrf,
+             -- Meaning-only matches weigh a little less than ones that also share the query's words.
+             coalesce(1.0 / (60 + fts.r), 0) + coalesce(1.0 / (60 + vec.r), 0) * CASE WHEN fts.id IS NULL THEN 0.8 ELSE 1.0 END AS rrf,
              vec.sim, fts.id IS NOT NULL AS keyword_match
         FROM fts FULL OUTER JOIN vec ON fts.id = vec.id
     ),

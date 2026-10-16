@@ -4,6 +4,10 @@ A shared team knowledge base exposed as a remote [MCP](https://modelcontextproto
 
 The server holds no LLM. Clients (Claude Code, claude.ai, scheduled agents) do the reasoning; Cairn stores, searches, validates and versions. Agent-written content goes through human review before it is published.
 
+| Project view for a frontend session | Search by meaning, not just keywords | Review an agent's proposed contract change |
+|---|---|---|
+| ![Project view](docs/images/project-frontend.png) | ![Search](docs/images/search.png) | ![Review](docs/images/review.png) |
+
 ## Concepts
 
 **Scopes**
@@ -98,7 +102,8 @@ Knowledge goes stale:
 Search is hybrid. Postgres full-text search and embedding similarity are merged with reciprocal rank fusion, then boosted for published, recently verified and current-project items. Embeddings come from a small model (`bge-small-en-v1.5`, int8) that runs in-process on CPU. It is not an LLM, needs no API key, and is downloaded once (~35 MB). New text is embedded in the background, so writes stay fast.
 
 - "card processor is throttling us" finds the payment-provider rate-limit RCA, even though they share no keywords.
-- Duplicate detection uses the same embeddings: a reworded copy of an existing finding is flagged. Thresholds were calibrated on real text and can be tuned (`DUPLICATE_SIMILARITY`, `SEARCH_MIN_SIMILARITY`).
+- Duplicate detection uses the same embeddings: a reworded copy of an existing finding is flagged. Thresholds were calibrated on real text and can be tuned (`DUPLICATE_SIMILARITY`, `SEARCH_MIN_SIMILARITY`, `SEARCH_SIMILARITY_WINDOW`).
+- Small embedding models put most text in a narrow similarity band. So a meaning-only hit must be above a floor *and* close to the best meaning match for the query, and it weighs a little less than hits that also share the query's words.
 - `EMBEDDINGS=off` falls back to keyword search only, e.g. for machines without internet access.
 
 On every write the server:
