@@ -229,6 +229,12 @@ claude mcp add --transport http cairn http://localhost:8080/mcp \
 - a sweep of all 23 MCP tools (`pnpm --filter @cairn/server acceptance`);
 - real Claude Code sessions acting as designer, backend developer, frontend developer, on-call engineer, admin and outsider.
 
+### Behind a reverse proxy
+
+[`deploy/native/nginx-cairn.conf`](deploy/native/nginx-cairn.conf) puts Cairn on port 80 behind Cloudflare (Tunnel or proxied DNS) or another proxy that terminates TLS. It passes the visitor's scheme and real IP (`CF-Connecting-IP`) through. Set `PUBLIC_URL` to the public https address. Browser writes are accepted from that origin even if a proxy rewrites the `Host` header.
+
+If an authentication gateway sits in front, let these paths through without the gateway's sign-in, because Cairn authenticates them itself (API tokens or OAuth) and MCP clients can't complete a browser sign-in: `/mcp`, `/.well-known/*`, `/authorize`, `/token`, `/register`, `/revoke`, `/oauth/*` and `/api/*`.
+
 ### Smoke test
 
 After a deploy with the demo data loaded, run end-to-end checks against the live server. It plays a backend agent changing a contract, a reviewer approving it, and a frontend agent picking up the change:

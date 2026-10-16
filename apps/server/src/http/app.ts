@@ -49,6 +49,7 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
   });
   if (settings.logRequests) app.use(accessLog());
   const rateLimit = rateLimitPerActor(settings.rateLimitPerMinute);
+  const publicOrigin = settings.publicUrl ? new URL(settings.publicUrl).origin : undefined;
   // Small bodies for everyone; the two routes that carry base64 uploads get a larger limit, but only after auth.
   const UPLOAD_PATHS = new Set(["/mcp", "/api/assets"]);
   const smallJson = express.json({ limit: "1mb" });
@@ -72,7 +73,7 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
   if (oauth) app.use(oauth.router);
   app.use(
     "/api",
-    requireAuth(db, authenticate),
+    requireAuth(db, authenticate, undefined, publicOrigin),
     rateLimit,
     (req: Request, res: Response, next: NextFunction) => (req.path === "/assets" ? uploadJson(req, res, next) : next()),
     requirePasswordChanged,
@@ -81,7 +82,7 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
     apiErrorHandler,
   );
 
-  app.post("/mcp", requireAuth(db, authenticate, oauth?.resourceMetadataUrl), rateLimit, uploadJson, requirePasswordChanged, async (req, res) => {
+  app.post("/mcp", requireAuth(db, authenticate, oauth?.resourceMetadataUrl, publicOrigin), rateLimit, uploadJson, requirePasswordChanged, async (req, res) => {
     const server = buildMcpServer({
       db,
       settings,

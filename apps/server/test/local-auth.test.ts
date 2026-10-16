@@ -98,6 +98,18 @@ describe("local sign-in", () => {
   });
 });
 
+describe("same-origin check behind a proxy", () => {
+  it("accepts the configured public origin even when the proxy rewrites Host", async () => {
+    const { sameOrigin } = await import("../src/auth/index.js");
+    const req = (h: Record<string, string>) => ({ method: "POST", header: (n: string) => h[n.toLowerCase()] }) as never;
+    const behindProxy = { host: "10.20.10.118", origin: "https://cairn.example.com", "sec-fetch-site": "same-origin" };
+    expect(sameOrigin(req(behindProxy))).toBe(false);
+    expect(sameOrigin(req(behindProxy), "https://cairn.example.com")).toBe(true);
+    expect(sameOrigin(req({ ...behindProxy, origin: "https://evil.example" }), "https://cairn.example.com")).toBe(false);
+    expect(sameOrigin(req({ ...behindProxy, "sec-fetch-site": "cross-site" }), "https://cairn.example.com")).toBe(false);
+  });
+});
+
 describe("temporary passwords and user management", () => {
   it("lets an admin create a user who must change the temporary password first", async () => {
     const admin = browser();

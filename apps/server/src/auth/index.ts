@@ -120,14 +120,16 @@ export function authenticatorFor(config: Config, db: Db): Authenticator {
  * authenticated by cookie must come from this origin (CSRF protection on top
  * of SameSite=Lax).
  */
-function sameOrigin(req: Request): boolean {
+export function sameOrigin(req: Request, publicOrigin?: string): boolean {
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return true;
   const site = req.header("sec-fetch-site");
   if (site && site !== "same-origin" && site !== "none") return false;
   const origin = req.header("origin");
   if (!origin) return !!site; // browsers send at least one of the two on cross-origin writes
   try {
-    return new URL(origin).host === req.header("host");
+    const host = new URL(origin).host;
+    // A proxy in front may rewrite Host; the configured public origin is always ours.
+    return host === req.header("host") || (!!publicOrigin && new URL(origin).origin === publicOrigin);
   } catch {
     return false;
   }
@@ -137,7 +139,7 @@ function sameOrigin(req: Request): boolean {
  * Rejects unauthenticated requests; attaches the user (created on first sight) as `res.locals.actor`.
  * With `resourceMetadataUrl`, 401s point OAuth clients at the protected-resource metadata (RFC 9728).
  */
-export function requireAuth(db: Db, authenticate: Authenticator, resourceMetadataUrl?: URL) {
+export function requireAuth(db: Db, authenticate: Authenticator, resourceMetadataUrl?: URL, publicOrigin?: string) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const identity = await authenticate(req);
@@ -146,7 +148,7 @@ export function requireAuth(db: Db, authenticate: Authenticator, resourceMetadat
         res.status(401).json({ error: "unauthenticated" });
         return;
       }
-      if (identity.via === "cookie" && !sameOrigin(req)) {
+      if (identity.via === "cookie" && !sameOrigin(req, publicOrigin)) {
         res.status(403).json({ error: "cross-site request refused" });
         return;
       }

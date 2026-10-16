@@ -9,7 +9,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { Settings } from "../config.js";
 import { audit } from "../core/audit.js";
 import type { Db } from "../db/pool.js";
-import { sessionToken } from "./index.js";
+import { sameOrigin as sameOriginCheck, sessionToken } from "./index.js";
 import { login, SESSION_COOKIE, sessionHash, userForSession } from "./local.js";
 
 /**
@@ -239,18 +239,6 @@ button.primary{background:var(--accent);border-color:var(--accent);color:var(--p
 </style></head><body><main><h1><img src="/favicon.svg" alt="" width="24" height="24"> ${escapeHtml(title)}</h1>${body}</main></body></html>`);
 }
 
-/** Same-origin check for the consent form (on top of the per-request CSRF token). */
-function sameOrigin(req: Request) {
-  const site = req.header("sec-fetch-site");
-  if (site && site !== "same-origin" && site !== "none") return false;
-  const origin = req.header("origin");
-  if (!origin) return !!site;
-  try {
-    return new URL(origin).host === req.header("host");
-  } catch {
-    return false;
-  }
-}
 
 function redirectWith(res: Response, redirectUri: string, params: Record<string, string | null>) {
   const url = new URL(redirectUri);
@@ -260,6 +248,9 @@ function redirectWith(res: Response, redirectUri: string, params: Record<string,
 
 function consentRouter(db: Db, settings: Settings) {
   const router = Router();
+  // Same-origin check for the consent forms (on top of the per-request CSRF token).
+  const publicOrigin = settings.publicUrl ? new URL(settings.publicUrl).origin : undefined;
+  const sameOrigin = (req: Request) => sameOriginCheck(req, publicOrigin);
   router.use(express.urlencoded({ extended: false, limit: "16kb" }));
   const csrfFor = (session: string, requestId: string) => sha256(`${sessionHash(session)}:${requestId}`);
 
