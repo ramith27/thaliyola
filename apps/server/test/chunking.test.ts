@@ -27,12 +27,13 @@ describe("replaceSection", () => {
   const md = "## Purpose\nWhy.\n\n## Fix\nOld fix.\n\n## Verify\nCheck.";
 
   it("replaces one section and keeps the others", () => {
-    expect(replaceSection(md, "fix", "New fix.")).toBe("## Purpose\nWhy.\n\n## Fix\n\nNew fix.\n\n## Verify\nCheck.");
+    expect(replaceSection(md, "fix", "New fix.")).toBe("## Purpose\nWhy.\n\n## Fix\nNew fix.\n\n## Verify\nCheck.");
+    expect(replaceSection("## Fix\n\nOld.\n", "Fix", "New.")).toBe("## Fix\n\nNew.\n");
   });
 
   it("appends to a section", () => {
-    expect(replaceSection(md, "Fix", "- also this")).toContain("## Fix\n\n- also this");
-    expect(replaceSection(md, "Fix", "- also this", "append")).toContain("## Fix\n\nOld fix.\n- also this\n");
+    expect(replaceSection(md, "Fix", "- also this")).toContain("## Fix\n- also this");
+    expect(replaceSection(md, "Fix", "- also this", "append")).toContain("## Fix\nOld fix.\n- also this\n");
   });
 
   it("adds a missing section at the end", () => {
@@ -40,6 +41,6 @@ describe("replaceSection", () => {
   });
 
   it("replaces the last section", () => {
-    expect(replaceSection(md, "Verify", "Done.")).toBe("## Purpose\nWhy.\n\n## Fix\nOld fix.\n\n## Verify\n\nDone.\n");
+    expect(replaceSection(md, "Verify", "Done.")).toBe("## Purpose\nWhy.\n\n## Fix\nOld fix.\n\n## Verify\nDone.\n");
   });
 });

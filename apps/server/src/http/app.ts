@@ -1,5 +1,8 @@
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express, { type NextFunction, type Request, type Response } from "express";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { requireAuth, type Authenticator } from "../auth/index.js";
 import type { Settings } from "../config.js";
 import type { Actor } from "../core/context.js";
@@ -7,9 +10,23 @@ import type { Db } from "../db/pool.js";
 import { buildMcpServer } from "../mcp/server.js";
 import { apiRouter } from "./api.js";
 
-export function createApp(db: Db, authenticate: Authenticator, settings: Settings) {
+const DEFAULT_WEB_DIST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../web/dist");
+
+const SECURITY_HEADERS: Record<string, string> = {
+  "Content-Security-Policy":
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; " +
+    "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "same-origin",
+};
+
+export function createApp(db: Db, authenticate: Authenticator, settings: Settings, webDist: string = DEFAULT_WEB_DIST) {
   const app = express();
   app.disable("x-powered-by");
+  app.use((_req, res, next) => {
+    res.set(SECURITY_HEADERS);
+    next();
+  });
   app.use(express.json({ limit: "2mb" }));
 
   app.get("/healthz", async (_req, res) => {
@@ -43,6 +60,14 @@ export function createApp(db: Db, authenticate: Authenticator, settings: Setting
   };
   app.get("/mcp", methodNotAllowed);
   app.delete("/mcp", methodNotAllowed);
+
+  // Web UI: static assets plus SPA fallback. Auth happens on the API calls it makes.
+  if (existsSync(webDist)) {
+    app.use(express.static(webDist, { index: false, maxAge: "1h" }));
+    app.get(/^\/(?!api\/|mcp$|healthz$).*/, (_req, res) => {
+      res.set("Cache-Control", "no-cache").sendFile(path.join(webDist, "index.html"));
+    });
+  }
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     console.error(err);

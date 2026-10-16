@@ -33,3 +33,13 @@ export async function assertCanApprove(ctx: RequestContext, scopeId: string): Pr
 export function assertAdmin(ctx: RequestContext): void {
   if (!isAdmin(ctx)) throw new ForbiddenError("admin only");
 }
+
+export async function canApprove(ctx: RequestContext, scopeId: string): Promise<boolean> {
+  try {
+    await assertCanApprove(ctx, scopeId);
+    return true;
+  } catch (err) {
+    if (err instanceof ForbiddenError) return false;
+    throw err;
+  }
+}

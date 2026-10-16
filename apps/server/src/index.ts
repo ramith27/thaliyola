@@ -13,7 +13,7 @@ if (config.AUTH_MODE === "dev") {
 
 await migrate(db, (msg) => console.log(`[migrate] ${msg}`));
 
-const server = createApp(db, authenticatorFor(config), settingsFrom(config)).listen(config.PORT, () => {
+const server = createApp(db, authenticatorFor(config), settingsFrom(config), config.WEB_DIST).listen(config.PORT, () => {
   console.log(`cairn-server listening on :${config.PORT} (auth: ${config.AUTH_MODE})`);
 });
 

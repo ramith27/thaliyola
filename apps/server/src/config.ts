@@ -13,6 +13,8 @@ const Env = z
     // Emails that may approve anywhere and manage projects and members
     ADMIN_EMAILS: z.string().default(""),
     // Share of a proposal's terms an existing finding must contain to count as a near-duplicate
+    // Built web UI to serve at / (defaults to apps/web/dist in the repo)
+    WEB_DIST: z.string().optional(),
     DUPLICATE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.6),
   })
   .superRefine((env, ctx) => {

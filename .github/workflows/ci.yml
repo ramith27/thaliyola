@@ -35,4 +35,5 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @cairn/server typecheck
       - run: pnpm --filter @cairn/server build
+      - run: pnpm --filter @cairn/web build
       - run: pnpm test

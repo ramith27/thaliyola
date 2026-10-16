@@ -50,9 +50,23 @@ On every write the server:
 - redacts secrets and personal data (keys, tokens, passwords, connection-string credentials, JWTs, emails, phone numbers) with fixed rules, and refuses a write when a required field held nothing else;
 - checks the version you read. Writes based on a stale version are refused with the current content.
 
+### Web UI
+
+The server also serves a web UI at `/` for people:
+
+- **Browse:** team, library and project scopes, each with a folder tree.
+- **Project view:** pick a component (backend, frontend, ...) to see the contracts it provides and consumes, upstream changes it still has to handle, the shared library items it uses, recent decisions and known issues.
+- **Search:** results are highlighted, and a hit jumps to the matching section.
+- **Read and edit:** articles (markdown with preview) and findings. Edits by scope owners and admins publish immediately; everyone else's edits become proposals.
+- **Review queue:** line diffs of current vs proposed text, with approve and reject.
+
+Behind Cloudflare Access, the browser is already signed in. In dev mode the UI asks for a dev token.
+
+For UI development, run the server on :8080 and `pnpm --filter @cairn/web dev`. Vite serves on :5173 and proxies `/api`.
+
 ### Review
 
-Approval is deliberately not an MCP tool: agents propose, people approve. Reviewers use the REST API (a web UI is next on the roadmap):
+Approval is deliberately not an MCP tool: agents propose, people approve. Reviewers use the web UI (`/#/review`) or the REST API:
 
 ```sh
 curl -H "Authorization: Bearer $TOKEN" localhost:8080/api/revisions                       # pending queue
@@ -103,6 +117,7 @@ docker compose exec server node dist/scripts/seed.js   # optional demo data
 
 ```sh
 pnpm install
+pnpm --filter @cairn/web build     # optional: the UI the server serves at /
 export DATABASE_URL=postgres://cairn:cairn@localhost:5432/cairn
 export AUTH_MODE=dev DEV_TOKENS=dev-token=you@example.com
 pnpm --filter @cairn/server seed   # migrates and loads demo data
@@ -140,6 +155,7 @@ The server verifies the `Cf-Access-Jwt-Assertion` header on every request agains
 ## Project layout
 
 ```
+apps/web/          React UI (Vite), served by the server at /
 apps/server/
   migrations/      SQL migrations (full data model)
   src/core/        domain services: scopes, search, items, project context,
@@ -153,7 +169,7 @@ apps/server/
 ## Roadmap
 
 - ~~**M1** Write tools, review queue, optimistic concurrency, redaction, impact notices on approval~~ (done)
-- **M2** Web UI: browse by scope, markdown editor, review queue with diffs
+- ~~**M2** Web UI: browse by scope, markdown editor, review queue with diffs~~ (done)
 - **M3** Library sharing (`share_to_library`), design items with asset storage (screenshots, token files), Figma links
 - **M3b** Semantic search (pgvector + local embedding model), duplicate detection
 - **M4** Per-scope roles, nightly freshness jobs, production hardening

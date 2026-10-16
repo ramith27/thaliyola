@@ -130,7 +130,8 @@ export async function searchKnowledge(ctx: RequestContext, input: SearchInput): 
     type: r.type,
     status: r.status,
     section: r.section,
-    snippet: r.snippet,
+    // Chunks are indexed with the item title in front; drop it from the snippet.
+    snippet: r.snippet.startsWith(r.title) ? r.snippet.slice(r.title.length).trimStart() : r.snippet,
     scope: { slug: r.scope_slug, kind: r.scope_kind },
     via_uses_link: r.via_uses_link,
     last_verified_at: r.last_verified_at?.toISOString() ?? null,

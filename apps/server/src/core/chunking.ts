@@ -83,7 +83,9 @@ export function replaceSection(markdown: string, heading: string, text: string, 
   if (start === -1) return `${markdown.trimEnd()}\n\n## ${heading}\n\n${body}\n`;
   const existing = lines.slice(start + 1, end).join("\n").trim();
   const next = mode === "append" && existing ? `${existing}\n${body}` : body;
+  // Keep the document's own spacing after the heading (blank line or not).
+  const gap = existing && lines[start + 1]?.trim() !== "" ? "\n" : "\n\n";
   const before = lines.slice(0, start + 1).join("\n");
   const after = lines.slice(end).join("\n");
-  return `${before}\n\n${next}\n${after ? `\n${after}` : ""}`;
+  return `${before}${gap}${next}\n${after ? `\n${after}` : ""}`;
 }

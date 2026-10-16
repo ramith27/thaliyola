@@ -367,6 +367,8 @@ export interface ArticleEditInput {
   /** Section heading to replace (or add); omit to replace the whole body. */
   section?: string;
   text: string;
+  /** New title (whole-article edits from the UI). */
+  title?: string;
 }
 
 export async function proposeArticleEdit(ctx: RequestContext, input: ArticleEditInput) {
@@ -377,16 +379,22 @@ export async function proposeArticleEdit(ctx: RequestContext, input: ArticleEdit
   if (item.version !== input.version) {
     throw new ConflictError(`article is at version ${item.version}, not ${input.version}`, await getArticle(ctx, input.id));
   }
-  const { fields, redactions } = redactFields({ text: input.text, summary: input.summary.trim(), section: (input.section ?? "").trim() });
+  const { fields, redactions } = redactFields({
+    text: input.text,
+    summary: input.summary.trim(),
+    section: (input.section ?? "").trim(),
+    title: (input.title ?? "").trim(),
+  });
   requireText("summary", fields.summary);
   checkLength("text", fields.text, LIMITS.body);
+  checkLength("title", fields.title, LIMITS.title);
   const revisionId = await insertRevision(ctx.db, {
     targetKind: "article",
     targetId: item.id,
     scopeId: item.scope_id,
     op: "update",
     baseVersion: item.version,
-    payload: { section: fields.section || null, text: fields.text, mode: "replace" },
+    payload: { section: fields.section || null, text: fields.text, mode: "replace", ...(fields.title ? { title: fields.title } : {}) },
     authorId: ctx.actor.id,
     summary: fields.summary.slice(0, LIMITS.summary),
     redactions,

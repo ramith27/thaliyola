@@ -162,10 +162,10 @@ async function applyArticleEdit(db: Tx, ctx: RequestContext, item: { id: string;
   const current = (await db.query("SELECT body_md FROM articles WHERE id = $1", [item.id])).rows[0];
   const body = nextArticleBody(current.body_md, r.payload);
   const { rows } = await db.query(
-    `UPDATE articles SET body_md = $2, version = version + 1, updated_at = now(), last_verified_at = now(),
+    `UPDATE articles SET body_md = $2, title = coalesce($3, title), version = version + 1, updated_at = now(), last_verified_at = now(),
             status = CASE WHEN status = 'possibly_stale' THEN 'published' ELSE status END
       WHERE id = $1 RETURNING id, scope_id, title, body_md, version, status`,
-    [item.id, body],
+    [item.id, body, r.payload.title ?? null],
   );
   const updated = rows[0];
   await reindexArticle(db, updated);
