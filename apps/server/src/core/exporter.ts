@@ -198,7 +198,8 @@ export async function exportSite(ctx: RequestContext, opts: { scope?: string; vi
       const full = path.join(dir, name);
       const r = rel ? `${rel}/${name}` : name;
       if (statSync(full).isDirectory()) walk(full, r);
-      else if (!/^(manifest\.webmanifest|icons\/)/.test(r)) files[r === "viewer.html" ? "index.html" : r] = new Uint8Array(readFileSync(full));
+      // Only the viewer itself: the page, its bundle and the icon (the web app's other public files stay out).
+      else if (r === "viewer.html" || r === "favicon.svg" || r.startsWith("assets/")) files[r === "viewer.html" ? "index.html" : r] = new Uint8Array(readFileSync(full));
     }
   };
   walk(opts.viewerDir);

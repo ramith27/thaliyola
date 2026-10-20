@@ -144,9 +144,11 @@ describe("static site export", () => {
     writeFileSync(join(viewer, "viewer.html"), "<html>viewer</html>");
     mkdirSync(join(viewer, "assets"));
     writeFileSync(join(viewer, "assets", "viewer.js"), "console.log(1)");
+    writeFileSync(join(viewer, "connect.sh"), "#!/bin/sh");
     const out = await exportSite(await admin(), { scope: "ledger", viewerDir: viewer });
     const files = unzipSync(out.zip);
     expect(Object.keys(files)).toEqual(expect.arrayContaining(["index.html", "assets/viewer.js", "wiki.json"]));
+    expect(Object.keys(files)).not.toContain("connect.sh");
     const wiki = JSON.parse(strFromU8(files["wiki.json"]!));
     expect(wiki.title).toBe("Ledger");
     const page = wiki.pages.find((p: { title: string }) => p.title === "Ledger API overview");
