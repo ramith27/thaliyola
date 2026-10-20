@@ -228,10 +228,18 @@ Thaliyola can keep a living wiki for every repository, written by your own codin
 - **Reading:** pages render Mermaid diagrams; a Sources panel lists each fact with a link to the exact lines on GitHub, GitLab or Bitbucket and flags stale ones. Pages refresh live while an agent writes (`/api/events`, server-sent events; nginx needs buffering off for it, see `deploy/native/nginx-thaliyola.conf`).
 - **Static site:** project settings → General → Download as a static site gives a zip with a self-contained reader (search, folders, diagrams, sources) to host anywhere (`GET /api/export/site?scope=`). The Markdown export follows the Open Knowledge Format (front matter with `kind` and provenance, `index.md`, `log.md`).
 
+## Team sources and the inbox
+
+Thaliyola can watch what the team reads and bring it into an **inbox** (Inbox in the sidebar), still without a model on the server:
+- **Sources:** RSS/Atom feeds, web pages (an item when the page, or a CSS-selected part of it, changes), Hacker News searches, Slack channel threads (with at least N replies), Notion pages (a database or everything shared with the integration) and Tavily web searches. Project owners add sources to their projects, admins to Team and Library; each has a schedule (hourly to weekly), a preview, Check now and Pause.
+- **Credentials** stay in the server environment (`SLACK_BOT_TOKEN`, `NOTION_TOKEN`, `TAVILY_API_KEY`), never in the database. Feeds and page watches only reach public addresses, checked on every redirect, unless `SOURCES_ALLOW_PRIVATE=true`. Fetched text is redacted like any other write.
+- **Triage:** connected agents get `triage_inbox` curation tasks (or run `/mcp__thaliyola__triage-inbox`): they capture what matters as findings or articles with the source link and mark the item filed, or dismiss it with a reason (`list_inbox`, `get_inbox_item`, `resolve_inbox_item`). People can do the same on the Inbox page, or start a draft from an item. A filed item whose source changes comes back marked updated. Agents can also add sources (`add_source`).
+- API: `/api/sources` (GET, POST, PATCH, DELETE, `/preview`, `/:id/run`) and `/api/inbox` (`/:id`, `/:id/resolve`, `/:id/reopen`). `SOURCES=off` stops fetching.
+
 ## Agent integrations
 
 [`integrations/`](integrations) has everything needed to make agents use Thaliyola by default:
-- **Prompts:** `investigate`, `start-coding`, `capture`, `draft-from-paste`, `curate`, `review-stale`, `document-repo` and `update-docs`, served by every Thaliyola server.
+- **Prompts:** `investigate`, `start-coding`, `capture`, `draft-from-paste`, `curate`, `review-stale`, `document-repo`, `update-docs` and `triage-inbox`, served by every Thaliyola server.
 - **Curation by the client's model:** Thaliyola has no LLM, so it hands judgment work to connected agents. `get_tasks` returns tasks with instructions: entries filed in the team space that belong to a project, project pages missing their repository, look-alike findings, recurring problems, empty outline sections, stale entries, projects without an overview, unlinked entries, and (for admins) searches that found nothing. The agent acts through normal tools (`move_entry` proposes moving an entry to a project, folder and/or repository) and reports with `complete_task`; handed-out tasks are reserved for an hour and finished ones stay hidden. `get_project_context` mentions open tasks so agents tidy as they go. Run it with the `curate` prompt (`/mcp__thaliyola__curate` in Claude Code), on demand or on a schedule (e.g. `claude -p "/mcp__thaliyola__curate"` from cron). Review → Suggestions shows the queue and what agents did. (MCP sampling isn't used: the endpoint is stateless and most clients don't support it.)
 - **Every coding agent:** `curl -fsSL https://<server>/connect.sh | sh` adds Thaliyola to Claude Code, Codex, Gemini CLI, Copilot CLI, VS Code, Cursor, Windsurf, OpenCode and Kiro; the Connect page has the manual setup for each.
 - **Claude Code:** a plugin with the `thaliyola` skill, a per-repo `.mcp.json` template, and a CLAUDE.md snippet.
@@ -293,7 +301,7 @@ claude mcp add --transport http thaliyola http://localhost:8080/mcp \
 ### Acceptance
 
 [`docs/acceptance.md`](docs/acceptance.md) describes the full acceptance run and its latest results:
-- a sweep of all 36 MCP tools (`pnpm --filter @thaliyola/server acceptance`);
+- a sweep of all 40 MCP tools (`pnpm --filter @thaliyola/server acceptance`);
 - real Claude Code sessions acting as designer, backend developer, frontend developer, on-call engineer, admin and outsider.
 
 ### Behind a reverse proxy

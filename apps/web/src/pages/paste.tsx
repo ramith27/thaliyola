@@ -4,8 +4,19 @@ import { draftArticle, draftFinding, setPrefill } from "../paste";
 import { navigate } from "../router";
 
 /** Paste a Slack thread, email or notes; get a draft finding or article to check and save. */
+/** Text handed over by another page (e.g. an inbox item), read once. */
+function handedOver(): string {
+  try {
+    const t = sessionStorage.getItem("thaliyola.pasteDraft") ?? "";
+    sessionStorage.removeItem("thaliyola.pasteDraft");
+    return t;
+  } catch {
+    return "";
+  }
+}
+
 export function PasteDraftPage() {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(handedOver);
   const [kind, setKind] = useState<"finding" | "article">("finding");
   const draft = useMemo(() => (text.trim() ? (kind === "finding" ? draftFinding(text) : draftArticle(text)) : null), [text, kind]);
 

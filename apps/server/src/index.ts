@@ -2,6 +2,7 @@ import { authenticatorFor } from "./auth/index.js";
 import { ensureBaseScopes } from "./core/bootstrap.js";
 import { HashingEmbedder, LocalEmbedder, startIndexer } from "./core/embeddings.js";
 import { startJobs } from "./core/freshness.js";
+import { startSourceJobs } from "./core/sources.js";
 import { loadConfig, settingsFrom } from "./config.js";
 import { migrate } from "./db/migrate.js";
 import { createPool } from "./db/pool.js";
@@ -40,6 +41,8 @@ const jobs = startJobs(
   (msg) => console.log(`[maintenance] ${msg}`),
 );
 
+const sources = startSourceJobs(db, settingsFrom(config), (msg) => console.log(`[sources] ${msg}`));
+
 const server = createApp({
   db,
   authenticate: authenticatorFor(config, db),
@@ -55,6 +58,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     indexer?.stop();
     jobs.stop();
+    sources.stop();
     server.close(() => void db.end().then(() => process.exit(0)));
   });
 }

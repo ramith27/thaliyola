@@ -96,6 +96,17 @@ export const icons = {
       <path d="M4 13h4.5l1 2h5l1-2H20" />
     </Icon>
   ),
+  rss: (p: SVGProps<SVGSVGElement>) => (
+    <Icon {...p}>
+      <path d="M5 11a8 8 0 0 1 8 8M5 5a14 14 0 0 1 14 14" />
+      <circle cx="6" cy="18" r="1.2" />
+    </Icon>
+  ),
+  trash: (p: SVGProps<SVGSVGElement>) => (
+    <Icon {...p}>
+      <path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5" />
+    </Icon>
+  ),
   user: (p: SVGProps<SVGSVGElement>) => (
     <Icon {...p}>
       <circle cx="12" cy="8.5" r="3.5" />

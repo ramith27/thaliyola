@@ -799,3 +799,35 @@ pre.diff { overflow-x: auto; max-width: 100%; }
 .settings-section textarea.body-input { width: 100%; max-width: 760px; }
 .host-tabs { margin: 0.4rem 0 0.8rem; }
 .host-tabs .chip { cursor: pointer; font-family: inherit; }
+
+/* Inbox and sources */
+.inbox-filters { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; justify-content: space-between; margin: 0.4rem 0 1rem; }
+.inbox-filters .chips { margin-top: 0; }
+.inbox-filters .chip, .add-source .chip { cursor: pointer; font-family: inherit; }
+.inbox-filters select { width: auto; max-width: 100%; }
+.inbox-list, .source-list { margin-top: 1rem; }
+.inbox-item, .source-list .source { padding: 0.85rem 1rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); margin-bottom: 0.6rem; }
+.inbox-meta { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
+.inbox-title { font-size: 1rem; margin: 0.35rem 0 0.25rem; overflow-wrap: anywhere; }
+.inbox-excerpt { margin: 0 0 0.5rem; color: var(--text-2); font-size: 0.9rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.inbox-item .inline-form { margin-top: 0.3rem; }
+.inbox-item .inline-form input { flex: 1; min-width: 12rem; }
+.source-list .source { display: flex; gap: 0.75rem; align-items: flex-start; }
+.source-list .source.is-off { opacity: 0.65; }
+.source-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; }
+.source-detail { overflow-wrap: anywhere; }
+.error-text { color: var(--danger); }
+.empty-state { padding: 2rem 1rem; text-align: center; border: 1px dashed var(--border); border-radius: var(--radius-sm); }
+.add-source { margin: 0.5rem 0 1.2rem; padding: 1rem 1.1rem; max-width: 760px; }
+.add-source h2 { margin-top: 0; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+.sources-help { margin-top: 1.5rem; }
+@media (max-width: 860px) {
+  .source-list .source { flex-direction: column; }
+  .form-row { grid-template-columns: 1fr; }
+}
+.add-source label { display: block; margin: 0.9rem 0 0.35rem; }
+.add-source label .muted { font-weight: 400; }
+.add-source input, .add-source select { width: 100%; }
+.add-source .preview-box { margin-top: 0.8rem; }
+.add-source .form-row label { margin-top: 0.9rem; }

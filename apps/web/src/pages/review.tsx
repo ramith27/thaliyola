@@ -647,6 +647,8 @@ const TASK_TEXT: Record<string, string> = {
   write_overview: "Projects without an overview",
   link_related: "Entries with no links",
   answer_gap: "Searches that found nothing",
+  stale_claims: "Documentation facts whose code changed",
+  triage_inbox: "New items from team sources",
 };
 
 interface TaskSummary {

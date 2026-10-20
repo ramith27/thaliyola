@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Team sources and an inbox: RSS/Atom feeds, watched web pages, Hacker News searches, Slack channel threads, Notion pages and Tavily web searches fetched on a schedule (credentials from `SLACK_BOT_TOKEN`, `NOTION_TOKEN`, `TAVILY_API_KEY`; public addresses only unless `SOURCES_ALLOW_PRIVATE=true`); Inbox and Sources pages with preview, Check now, pause, dismiss and draft-from-item; `triage_inbox` curation tasks, a `triage-inbox` prompt and `list_inbox`, `get_inbox_item`, `resolve_inbox_item` and `add_source` MCP tools (`/api/sources`, `/api/inbox`)
+
 - More agent hosts: `GET /connect.sh` installs Thaliyola into Claude Code, Codex, Gemini CLI, Copilot CLI, VS Code, Cursor, Windsurf, OpenCode and Kiro (asks per agent, backs up configs, `--yes`, `--only`, `--dry-run`); the Connect page has manual setup for each and an AGENTS.md snippet
 - CI templates (GitHub Actions, GitLab CI, Bitbucket Pipelines) that run `update-docs` headless on every merge, shown on the Connect page and in `integrations/ci/`
 - Repository URLs drop embedded credentials (CI checkout tokens) before they're stored or shown

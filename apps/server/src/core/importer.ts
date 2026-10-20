@@ -285,3 +285,12 @@ export async function importDocs(
   }
   return { dry_run: false, format: parsed.format, imported, failed, skipped: parsed.skipped, pages: summary };
 }
+
+/** HTML from anywhere (a fetched page, a feed entry) as a title and Markdown, main content only. */
+export function htmlToMarkdown(html: string): { title: string; body_md: string } {
+  const doc = domino.createDocument(html, true);
+  for (const sel of ["script", "style", "noscript", "nav", "footer", "header", "aside", "form", "iframe"]) for (const el of Array.from(doc.querySelectorAll(sel))) el.remove();
+  const root = doc.querySelector("article") ?? doc.querySelector("main") ?? doc.querySelector('[role="main"]') ?? doc.body;
+  const title = (doc.title || doc.querySelector("h1")?.textContent || "").trim();
+  return { title, body_md: root ? turndown().turndown(root.innerHTML).replace(/\n{3,}/g, "\n\n").trim() : "" };
+}

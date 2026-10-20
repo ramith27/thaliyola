@@ -66,6 +66,13 @@ const Env = z
     // Team channel for review and change events (Slack incoming webhook URL)
     SLACK_WEBHOOK_URL: z.string().optional(),
     DUPLICATE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.6),
+    // Team sources (feeds, pages, Slack, Notion, Hacker News, web search) fetched into the inbox
+    SOURCES: z.enum(["on", "off"]).default("on"),
+    SLACK_BOT_TOKEN: z.string().optional(),
+    NOTION_TOKEN: z.string().optional(),
+    TAVILY_API_KEY: z.string().optional(),
+    // Let feeds and page watches reach private networks (intranet wikis). Off: only public addresses
+    SOURCES_ALLOW_PRIVATE: z.enum(["true", "false"]).default("false"),
   })
   .superRefine((env, ctx) => {
     if (env.AUTH_MODE === "dev" && !env.DEV_TOKENS.trim()) {
@@ -116,10 +123,19 @@ export function settingsFrom(config: Config): Settings {
     digestDay: config.DIGEST_DAY,
     digestHour: config.DIGEST_HOUR,
     searchLogDays: config.SEARCH_LOG_DAYS,
+    sources: {
+      enabled: config.SOURCES === "on",
+      slackToken: config.SLACK_BOT_TOKEN || undefined,
+      notionToken: config.NOTION_TOKEN || undefined,
+      tavilyKey: config.TAVILY_API_KEY || undefined,
+      allowPrivate: config.SOURCES_ALLOW_PRIVATE === "true",
+    },
   };
 }
 
 export interface Settings {
+  /** Team sources; absent in tests that don't use them. */
+  sources?: { enabled: boolean; slackToken?: string; notionToken?: string; tavilyKey?: string; allowPrivate: boolean };
   adminEmails: string[];
   duplicateThreshold: number;
   authMode: "local" | "cloudflare" | "dev";

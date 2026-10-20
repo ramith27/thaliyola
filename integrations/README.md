@@ -14,6 +14,7 @@ Thaliyola pays off when the tools people already use read from it first and writ
 | `curate` | Work through the curation tasks the server hands out (misfiled entries, duplicates, stale facts) |
 | `document-repo` | Write grounded documentation for the repository you're in (first run) |
 | `update-docs` | Refresh only the pages and facts that changed since the last documented commit |
+| `triage-inbox` | File what team sources brought in (feeds, pages, Slack, Notion, searches) as knowledge, dismiss the rest |
 
 ## Claude Code
 
@@ -109,6 +110,7 @@ Example jobs:
 
 | Job | Prompt sketch |
 |---|---|
+| Daily inbox triage | `claude -p "/mcp__thaliyola__triage-inbox"`: files what sources brought in and dismisses the rest. |
 | Weekly freshness pass | "Run the Thaliyola `review-stale` prompt for scope team; verify what still holds, propose corrections, retire what's gone." |
 | Slack → findings | "Read yesterday's resolved threads in #incidents (Slack MCP). For each confirmed root cause not already in Thaliyola (`search_knowledge`), `propose_finding` with the thread as a source link." |
 | Sentry → known issues | "List unresolved Sentry issues older than 7 days (Sentry MCP). Link each to existing Thaliyola findings (`add_source_link`) or propose a known_issue." |

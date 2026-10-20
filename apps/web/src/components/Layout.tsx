@@ -12,6 +12,7 @@ export function Layout({ me, scopes, route, children }: { me: Me; scopes: ScopeI
   const [menuOpen, setMenuOpen] = useState(false);
   const [palette, setPalette] = useState(false);
   const pending = useApi<{ revisions: unknown[] }>("/revisions?state=pending&limit=200");
+  const inbox = useApi<{ counts: Record<string, number> }>("/inbox?limit=1");
   const favourites = useFavourites();
   const recent = useRecent();
 
@@ -51,6 +52,7 @@ export function Layout({ me, scopes, route, children }: { me: Me; scopes: ScopeI
           <NavLink to="/" icon="home" label="Home" active={section === undefined} />
           <NavLink to="/graph" icon="graph" label="Knowledge graph" active={section === "graph"} />
           <NavLink to="/review" icon="review" label="Review" active={section === "review"} count={pendingCount} />
+          <NavLink to="/inbox" icon="inbox" label="Inbox" active={section === "inbox" || section === "sources"} count={inbox.data?.counts.new ?? 0} />
           <NavLink to="/metrics" icon="chart" label="Metrics" active={section === "metrics"} />
           <NavLink to="/connect" icon="plug" label="Connect" active={section === "connect"} />
         </nav>
@@ -191,7 +193,7 @@ function UserMenu({ me }: { me: Me }) {
             <I name="team" size={16} /> Teams
           </a>
           <a className="menu-item" href={href("/trash")} onClick={() => setOpen(false)}>
-            <I name="inbox" size={16} /> Trash
+            <I name="trash" size={16} /> Trash
           </a>
           <a className="menu-item" href={href("/connect")} onClick={() => setOpen(false)}>
             <I name="plug" size={16} /> Connect your tools

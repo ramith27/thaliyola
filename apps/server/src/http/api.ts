@@ -19,6 +19,8 @@ import { taskSummary } from "../core/tasks.js";
 import { eventStream } from "../core/events.js";
 import { agentsMdBlock, claimsFor, docsStatus, resolveClaims, updateDocSettings } from "../core/docs.js";
 import { approveProjectRequest, createOrRequestProject, declineProjectRequest, listProjectRequests } from "../core/project-requests.js";
+import { SOURCE_KINDS } from "../core/connectors.js";
+import { createSource, deleteSource, getInboxItem, listInbox, listSources, previewSource, reopenInboxItem, resolveInboxItem, runSourceNow, updateSource } from "../core/sources.js";
 import { deleteItem, deleteProject, emptyItem, emptyProject, listTrash, restoreItem, restoreProject } from "../core/trash.js";
 import { listPurges, purgeItem } from "../core/purge.js";
 import { insights, knowledgeGraph } from "../core/insights.js";
@@ -265,6 +267,63 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
     ),
   );
   router.get("/purges", handle("list_purges", async (ctx) => ({ purges: await listPurges(ctx) })));
+  // Team sources and the inbox.
+  const sourceKind = z.enum(SOURCE_KINDS);
+  const sourceConfig = z.record(z.string(), z.union([z.string(), z.number()])).default({});
+  router.get("/sources", handle("list_sources", (ctx) => listSources(ctx)));
+  router.post(
+    "/sources",
+    handle("create_source", (ctx, req) => {
+      const b = z
+        .object({ kind: sourceKind, name: z.string().max(120).default(""), scope: z.string(), config: sourceConfig, interval_minutes: z.number().int().optional(), enabled: z.boolean().optional() })
+        .parse(req.body);
+      return createSource(ctx, b);
+    }),
+  );
+  router.post(
+    "/sources/preview",
+    handle("preview_source", (ctx, req) => previewSource(ctx, z.object({ kind: sourceKind, scope: z.string(), config: sourceConfig }).parse(req.body))),
+  );
+  router.patch(
+    "/sources/:id",
+    handle("update_source", (ctx, req) =>
+      updateSource(
+        ctx,
+        uuid.parse(req.params.id),
+        z.object({ name: z.string().max(120).optional(), scope: z.string().optional(), config: sourceConfig.optional(), interval_minutes: z.number().int().optional(), enabled: z.boolean().optional() }).parse(req.body),
+      ),
+    ),
+  );
+  router.delete("/sources/:id", handle("delete_source", (ctx, req) => deleteSource(ctx, uuid.parse(req.params.id))));
+  router.post("/sources/:id/run", handle("run_source", (ctx, req) => runSourceNow(ctx, uuid.parse(req.params.id))));
+  router.get(
+    "/inbox",
+    handle("list_inbox", (ctx, req) =>
+      listInbox(
+        ctx,
+        z
+          .object({
+            scope: z.string().optional(),
+            status: z.enum(["new", "filed", "dismissed", "all"]).optional(),
+            source: z.string().uuid().optional(),
+            limit: z.coerce.number().int().optional(),
+            offset: z.coerce.number().int().min(0).optional(),
+          })
+          .parse(req.query),
+      ),
+    ),
+  );
+  router.get("/inbox/:id", handle("get_inbox_item", (ctx, req) => getInboxItem(ctx, uuid.parse(req.params.id))));
+  router.post(
+    "/inbox/:id/resolve",
+    handle("resolve_inbox_item", (ctx, req) =>
+      resolveInboxItem(ctx, {
+        id: uuid.parse(req.params.id),
+        ...z.object({ outcome: z.enum(["filed", "dismissed"]), item_id: z.string().uuid().optional(), revision_id: z.string().uuid().optional(), note: z.string().max(1000).optional() }).parse(req.body),
+      }),
+    ),
+  );
+  router.post("/inbox/:id/reopen", handle("reopen_inbox_item", (ctx, req) => reopenInboxItem(ctx, uuid.parse(req.params.id))));
   router.get("/tasks", handle("task_summary", (ctx, req) => taskSummary(ctx, { project: z.string().optional().parse(req.query.project) })));
   router.post("/items/:id/delete", handle("delete_item", (ctx, req) => deleteItem(ctx, uuid.parse(req.params.id))));
   router.get("/trash", handle("list_trash", (ctx) => listTrash(ctx)));
