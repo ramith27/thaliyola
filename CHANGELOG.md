@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- More agent hosts: `GET /connect.sh` installs Thaliyola into Claude Code, Codex, Gemini CLI, Copilot CLI, VS Code, Cursor, Windsurf, OpenCode and Kiro (asks per agent, backs up configs, `--yes`, `--only`, `--dry-run`); the Connect page has manual setup for each and an AGENTS.md snippet
+- CI templates (GitHub Actions, GitLab CI, Bitbucket Pipelines) that run `update-docs` headless on every merge, shown on the Connect page and in `integrations/ci/`
+- Repository URLs drop embedded credentials (CI checkout tokens) before they're stored or shown
+
 - Repository documentation written by connected agents: documentation runs (`docs_begin` → `docs_submit_plan` → `docs_next_page` → `docs_submit_page` → `docs_finish`), `document-repo` and `update-docs` prompts, every fact stored as a claim with source-line evidence, incremental updates that mark only the facts and pages touched by changed files (and do nothing when nothing relevant changed), per-project instructions and gitignore-style ignore rules, Mermaid checks, a managed AGENTS.md block, and a `stale_claims` curation task
 - Mermaid diagrams render in articles; a Sources panel shows each page's grounded facts with links to the exact lines and lets owners re-check stale ones (`/api/items/:id/claims`)
 - Project settings → Documentation: instructions, ignore rules, documented commit per repository, recent runs and the AGENTS.md block (`/api/projects/:slug/docs`)

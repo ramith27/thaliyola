@@ -6,6 +6,7 @@
  *   node dist/scripts/admin.js list-users
  *   node dist/scripts/admin.js create-token --email you@example.com --name "Claude Code" [--days 90]
  *   node dist/scripts/admin.js create-token --service rca-bot --name "nightly RCA job"
+ *   node dist/scripts/admin.js create-token --service docs-bot --name "CI docs" --owner-of order-service
  *   node dist/scripts/admin.js export --out thaliyola-export.zip [--scope team]
  *
  * Reads DATABASE_URL like the server.
@@ -28,6 +29,7 @@ const { positionals, values } = parseArgs({
     days: { type: "string" },
     out: { type: "string" },
     scope: { type: "string" },
+    "owner-of": { type: "string", multiple: true },
   },
 });
 
@@ -69,6 +71,16 @@ try {
     if (!values.name) throw new Error("--name is required");
     const owner = values.service ? await serviceUserId(db, values.service) : values.email ? await userId(db, values.email) : null;
     if (!owner) throw new Error("pass --email (a person's token) or --service (a bot's token)");
+    // A bot that writes docs must own its projects so pages publish without review.
+    for (const slug of values["owner-of"] ?? []) {
+      const scope = (await db.query<{ id: string }>("SELECT id FROM scopes WHERE slug = $1 AND kind = 'project'", [slug])).rows[0];
+      if (!scope) throw new Error(`no project ${slug}`);
+      await db.query(
+        "INSERT INTO scope_members (scope_id, user_id, role) VALUES ($1, $2, 'owner') ON CONFLICT (scope_id, user_id) DO UPDATE SET role = 'owner'",
+        [scope.id, owner],
+      );
+      console.error(`Owner of ${slug}.`);
+    }
     const token = await createApiToken(db, owner, values.name, values.days ? Number(values.days) : undefined);
     console.log(token.token);
     console.error("Shown once. Use it as: Authorization: Bearer <token>");

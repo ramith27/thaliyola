@@ -1,6 +1,6 @@
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express, { type NextFunction, type Request, type Response } from "express";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { requireAuth, type Authenticator } from "../auth/index.js";
@@ -131,6 +131,13 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
 
   // Web UI: static assets plus SPA fallback. Auth happens on the API calls it makes.
   if (existsSync(webDist)) {
+    // Install script for agent hosts, with this server's address filled in.
+    app.get("/connect.sh", (req, res) => {
+      const origin = settings.publicUrl ?? `${req.protocol}://${req.header("host")}`;
+      const file = path.join(webDist, "connect.sh");
+      if (!/^https?:\/\/[A-Za-z0-9.\-:[\]]+(\/[A-Za-z0-9._~\-/]*)?$/.test(origin) || !existsSync(file)) return void res.status(404).type("text/plain").send("Not available\n");
+      res.set("Cache-Control", "no-cache").type("text/x-shellscript").send(readFileSync(file, "utf8").replaceAll("__THALIYOLA_URL__", origin.replace(/\/+$/, "")));
+    });
     app.use(express.static(webDist, { index: false, maxAge: "1h" }));
     app.get(/^\/(?!api\/|auth\/|oauth\/|actions\/|\.well-known\/|mcp$|healthz$|authorize$|token$|register$|revoke$).*/, (_req, res) => {
       res.set("Cache-Control", "no-cache").sendFile(path.join(webDist, "index.html"));

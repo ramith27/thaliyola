@@ -10,6 +10,10 @@ Thaliyola pays off when the tools people already use read from it first and writ
 | `start-coding` | Load project/component context (contracts, decisions, shared designs, upstream changes) before changing code |
 | `capture` | Turn a confirmed outcome into a reviewed finding or article |
 | `review-stale` | Re-verify entries nobody has checked recently |
+| `draft-from-paste` | Turn a pasted Slack thread, email or notes into a draft finding or article |
+| `curate` | Work through the curation tasks the server hands out (misfiled entries, duplicates, stale facts) |
+| `document-repo` | Write grounded documentation for the repository you're in (first run) |
+| `update-docs` | Refresh only the pages and facts that changed since the last documented commit |
 
 ## Claude Code
 
@@ -54,6 +58,39 @@ claude --plugin-dir /path/to/thaliyola/integrations/claude-code
 ```
 
 To use the skill on its own, copy `claude-code/skills/thaliyola` into `.claude/skills/` in a repo, or into `~/.claude/skills/`.
+
+## Other coding agents
+
+One command adds Thaliyola to every agent it finds on a machine (Claude Code, Codex, Gemini CLI, GitHub Copilot CLI, VS Code, Cursor, Windsurf, OpenCode, Kiro). It asks before each one and backs up config files first:
+
+```sh
+curl -fsSL https://thaliyola.example.com/connect.sh | THALIYOLA_TOKEN=thaliyola_pat_… sh
+# non-interactive, only some agents:  … | sh -s -- --yes --only codex,cursor      preview:  … | sh -s -- --dry-run
+```
+
+The script is [`apps/web/public/connect.sh`](../apps/web/public/connect.sh); the server fills in its own address. The Connect page shows the same setup by hand for each agent, with the chosen project's headers:
+
+| Agent | Config | Server entry |
+|---|---|---|
+| Codex | `~/.codex/config.toml` | `[mcp_servers.thaliyola]` with `url` and `http_headers` |
+| Cursor | `~/.cursor/mcp.json` or `.cursor/mcp.json` | `mcpServers.thaliyola` with `url` and `headers` (`${env:THALIYOLA_TOKEN}` in committed files) |
+| VS Code (Copilot agent mode) | `.vscode/mcp.json` | `servers.thaliyola` with `type: "http"`, token from a `promptString` input |
+| GitHub Copilot CLI | `~/.copilot/mcp-config.json` | `mcpServers.thaliyola` with `type: "http"`, `url`, `headers`, `tools: ["*"]` |
+| Gemini CLI | `~/.gemini/settings.json` (or `gemini mcp add --transport http`) | `mcpServers.thaliyola` with `httpUrl` and `headers` |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` | `mcpServers.thaliyola` with `serverUrl` and `headers` |
+| OpenCode | `opencode.json` | `mcp.thaliyola` with `type: "remote"`, `url`, `headers` (`{env:THALIYOLA_TOKEN}` in committed files) |
+| Kiro | `~/.kiro/settings/mcp.json` | `mcpServers.thaliyola` with `url` and `headers` |
+
+Most of these read `AGENTS.md` (Gemini CLI reads `GEMINI.md`, Kiro reads `.kiro/steering/`); put the same snippet as for `CLAUDE.md` there. `docs_finish` and `get_agents_md_block` return a managed block for it too.
+
+## Keep repository docs current in CI
+
+After the first `/mcp__thaliyola__document-repo`, a CI job keeps the docs in step with the code: Claude Code runs headless, sends the changed files, and rewrites only the pages whose facts changed (nothing at all when nothing relevant changed).
+
+- [`ci/github-actions.yml`](ci/github-actions.yml), [`ci/gitlab-ci.yml`](ci/gitlab-ci.yml), [`ci/bitbucket-pipelines.yml`](ci/bitbucket-pipelines.yml)
+- Secrets: `ANTHROPIC_API_KEY` and `THALIYOLA_TOKEN`. Use a bot token that owns the project so pages publish directly (`sudo thaliyola-admin create-token --service docs-bot --name "CI docs" --owner-of <project>`); with a writer role they go to review.
+- The full git history is fetched so the job can diff against the last documented commit. Tools are limited to Thaliyola, reading files and read-only git commands.
+- Credentials that CI systems put in the remote URL are dropped before Thaliyola stores or shows it.
 
 ## claude.ai
 

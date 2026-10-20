@@ -1,5 +1,5 @@
 import { withTx, type Queryable } from "../db/pool.js";
-import { createComponent, createScope, relate, repoKey } from "./bootstrap.js";
+import { cleanRepoUrl, createComponent, createScope, relate, repoKey } from "./bootstrap.js";
 import { ValidationError, type RequestContext } from "./context.js";
 import { newArticle } from "./direct.js";
 import { ARTICLE_TEMPLATES, SECTION_HINTS } from "./templates.js";
@@ -131,7 +131,7 @@ export async function updateComponent(
   if (!c) throw new ValidationError(`${project} has no component '${slug}'`);
   if (patch.slug !== undefined && !SLUG.test(patch.slug)) throw new ValidationError("slug must be lowercase letters, digits and hyphens");
   if (patch.repo_url) await assertRepoFree(ctx, patch.repo_url, c.id);
-  const repo = patch.repo_url === undefined ? undefined : patch.repo_url?.trim() || null;
+  const repo = patch.repo_url === undefined ? undefined : cleanRepoUrl(patch.repo_url);
   const { rows } = await ctx.db.query(
     `UPDATE components SET slug = coalesce($2, slug), kind = coalesce($3, kind), description = coalesce($4, description),
             repo_url = CASE WHEN $5 THEN $6 ELSE repo_url END, repo_key = CASE WHEN $5 THEN $7 ELSE repo_key END

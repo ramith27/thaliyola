@@ -25,10 +25,17 @@ export function repoKey(url: string | null | undefined): string | null {
     .toLowerCase();
 }
 
+/** A repository URL safe to store and show: credentials in http(s) URLs (CI checkouts embed tokens) are dropped. */
+export function cleanRepoUrl(url: string | null | undefined): string | null {
+  const u = url?.trim();
+  if (!u) return null;
+  return u.replace(/^(https?:\/\/)[^@/]+@/i, "$1");
+}
+
 export async function createComponent(db: Queryable, scopeId: string, slug: string, kind: string, repoUrl?: string, description = "") {
   const { rows } = await db.query<{ id: string }>(
     "INSERT INTO components (scope_id, slug, kind, repo_url, repo_key, description) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
-    [scopeId, slug, kind, repoUrl ?? null, repoKey(repoUrl), description],
+    [scopeId, slug, kind, cleanRepoUrl(repoUrl), repoKey(repoUrl), description],
   );
   return rows[0]!.id;
 }

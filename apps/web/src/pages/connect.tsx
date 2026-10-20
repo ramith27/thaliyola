@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api } from "../api";
 import { ErrorBox, Loading, Notice } from "../components/ui";
+import { CiDocs, OtherAgents } from "../components/hosts";
 import { useApi } from "../hooks";
 import { href } from "../router";
 
@@ -82,7 +83,6 @@ export function ConnectPage() {
     null,
     2,
   );
-  const genericJson = JSON.stringify({ mcpServers: { thaliyola: { type: "http", url: data.mcp_url, headers: { Authorization: `Bearer ${tok}` } } } }, null, 2);
 
   async function createToken() {
     setTokenError(null);
@@ -232,9 +232,16 @@ export function ConnectPage() {
       )}
 
       <section className="step">
-        <h2>Other MCP clients</h2>
-        <p className="muted small">Any client that supports remote MCP servers over HTTP (streamable HTTP) with a bearer token:</p>
-        <CopyBlock text={genericJson} />
+        <h2>Other coding agents</h2>
+        <p className="muted small">
+          Codex, Cursor, VS Code, Copilot CLI, Gemini CLI, Windsurf, OpenCode, Kiro and any other client with remote MCP. {project ? `Set up for ${chosen?.name ?? project}${component ? ` (${component})` : ""}.` : "Choose a project above to add its headers."}
+        </p>
+        <OtherAgents setup={{ url: data.mcp_url, token: tok, project: project || undefined, component: component || undefined }} origin={data.origin} />
+      </section>
+
+      <section className="step">
+        <h2>Keep repository docs current in CI</h2>
+        <CiDocs mcpUrl={data.mcp_url} />
       </section>
 
       <section className="step">

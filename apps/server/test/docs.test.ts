@@ -155,3 +155,12 @@ describe("static site export", () => {
     await expect(exportSite(await admin(), { scope: "ledger", viewerDir: join(viewer, "nope") })).rejects.toThrow(/isn't built/);
   });
 });
+
+describe("repository URLs", () => {
+  it("drops credentials that CI checkouts put in http(s) remotes", async () => {
+    const { cleanRepoUrl, repoKey } = await import("../src/core/bootstrap.js");
+    expect(cleanRepoUrl("https://gitlab-ci-token:glcbt-abc@gitlab.com/acme/api.git")).toBe("https://gitlab.com/acme/api.git");
+    expect(cleanRepoUrl("git@github.com:acme/api.git")).toBe("git@github.com:acme/api.git");
+    expect(repoKey("https://x-access-token:ghs_1@github.com/Acme/API.git")).toBe(repoKey("git@github.com:acme/api.git"));
+  });
+});

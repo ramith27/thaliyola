@@ -797,3 +797,5 @@ pre.diff { overflow-x: auto; max-width: 100%; }
   .viewer-main { padding: 1rem; }
 }
 .settings-section textarea.body-input { width: 100%; max-width: 760px; }
+.host-tabs { margin: 0.4rem 0 0.8rem; }
+.host-tabs .chip { cursor: pointer; font-family: inherit; }

@@ -1,5 +1,6 @@
 import { withTx } from "../db/pool.js";
 import { audit } from "./audit.js";
+import { cleanRepoUrl } from "./bootstrap.js";
 import { NotFoundError, ValidationError, type RequestContext } from "./context.js";
 import { editArticle, newArticle } from "./direct.js";
 import { assertCanPropose, canApprove } from "./permissions.js";
@@ -145,7 +146,7 @@ async function resolveTarget(ctx: RequestContext, input: { project?: string; rep
   let component = input.component;
   if (input.repo && (!project || !component)) {
     const found = await resolveRepo(ctx.db, input.repo);
-    if (!found) throw new NotFoundError(`no project has the repository ${input.repo}; add it under the project's settings → Repositories (or create_project)`);
+    if (!found) throw new NotFoundError(`no project has the repository ${cleanRepoUrl(input.repo)}; add it under the project's settings → Repositories (or create_project)`);
     project ??= found.project;
     component ??= found.component;
   }

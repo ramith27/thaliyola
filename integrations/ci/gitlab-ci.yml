@@ -1,0 +1,12 @@
+# Add to .gitlab-ci.yml. Masked CI/CD variables: ANTHROPIC_API_KEY, THALIYOLA_TOKEN.
+thaliyola-docs:
+  image: node:22
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    GIT_DEPTH: 0
+  resource_group: thaliyola-docs
+  script:
+    - npm install -g @anthropic-ai/claude-code
+    - 'claude mcp add --transport http thaliyola https://thaliyola.example.com/mcp --header "Authorization: Bearer $THALIYOLA_TOKEN"'
+    - 'claude -p "/mcp__thaliyola__update-docs" --allowedTools "mcp__thaliyola,Read,Glob,Grep,Bash(git diff:*),Bash(git log:*),Bash(git rev-parse:*),Bash(git remote get-url:*),Bash(git ls-files:*)"'

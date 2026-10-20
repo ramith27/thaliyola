@@ -1,0 +1,29 @@
+# .github/workflows/thaliyola-docs.yml: keep this repository's Thaliyola docs current on every merge.
+# Secrets: ANTHROPIC_API_KEY, THALIYOLA_TOKEN (a bot account that owns the project, so pages publish directly).
+name: Update docs (Thaliyola)
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+concurrency:
+  group: thaliyola-docs
+  cancel-in-progress: false
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install -g @anthropic-ai/claude-code
+      - name: Update documentation
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          THALIYOLA_TOKEN: ${{ secrets.THALIYOLA_TOKEN }}
+        run: |
+          claude mcp add --transport http thaliyola https://thaliyola.example.com/mcp --header "Authorization: Bearer $THALIYOLA_TOKEN"
+          claude -p "/mcp__thaliyola__update-docs" --allowedTools "mcp__thaliyola,Read,Glob,Grep,Bash(git diff:*),Bash(git log:*),Bash(git rev-parse:*),Bash(git remote get-url:*),Bash(git ls-files:*)"
