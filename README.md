@@ -64,6 +64,17 @@ A project can declare that it **uses** an item from the library or from another 
 | `upload_asset` | Attach a screenshot (PNG/JPEG/WebP/GIF), token JSON, markdown or PDF. Text files are redacted; images can't be |
 | `share_to_library` | Propose publishing a project item to the library. On approval by a library owner, a copy (with its links and files) is created and the project is linked to it |
 
+**Repository documentation tools.** The agent reads the code; Thaliyola keeps the plan, the pages, the grounded facts and what changed:
+
+| Tool | Purpose |
+|---|---|
+| `docs_begin` | Start or resume a run for a repository at a commit. For updates, takes the changed files and returns the pages and facts they affect, or a no-op |
+| `docs_submit_plan` / `docs_next_page` / `docs_skip_page` | The ordered pages for the run, handed out one at a time with their current text and facts |
+| `docs_submit_page` | A whole page plus its claims, each with evidence (`repo://path#L40-L82`). Mermaid diagrams are checked; owners' pages publish directly, others go to review |
+| `docs_finish` | Records the documented commit and returns the managed AGENTS.md block |
+| `docs_inspect_claims` / `resolve_claims` | A page's facts with links to the exact source lines, and marking stale ones re-checked or retired |
+| `get_agents_md_block` | The `<!-- THALIYOLA:START -->` block to keep in the repository's AGENTS.md / CLAUDE.md |
+
 ### File storage
 
 Uploaded files are content-addressed and stored either on local disk (`ASSET_DIR`, the default) or in any S3-compatible service: AWS S3, Cloudflare R2, MinIO or Garage. Use S3 when several Thaliyola servers share files or the disk isn't durable:
@@ -208,10 +219,19 @@ X-Thaliyola-Project: order-service
 X-Thaliyola-Component: frontend
 ```
 
+## Repository documentation
+
+Thaliyola can keep a living wiki for every repository, written by your own coding agent (there is still no LLM on the server):
+- **First run:** in Claude Code, open the repository and run `/mcp__thaliyola__document-repo`. The agent plans the pages (overview, architecture, flows, data model, APIs, runbooks), writes them one at a time, and backs every fact with evidence: the file and lines at the documented commit.
+- **Updates:** `/mcp__thaliyola__update-docs` sends the files changed since the last documented commit. Thaliyola marks the facts whose evidence changed as stale and returns only the affected pages; when nothing relevant changed the run ends at once. Run it by hand or headless in CI (`claude -p "/mcp__thaliyola__update-docs"`).
+- **Settings:** project settings → Documentation holds instructions for agents (audience, required pages, things to leave out) and gitignore-style ignore rules, shows each repository's documented commit, and gives the managed AGENTS.md block.
+- **Reading:** pages render Mermaid diagrams; a Sources panel lists each fact with a link to the exact lines on GitHub, GitLab or Bitbucket and flags stale ones. Pages refresh live while an agent writes (`/api/events`, server-sent events; nginx needs buffering off for it, see `deploy/native/nginx-thaliyola.conf`).
+- **Static site:** project settings → General → Download as a static site gives a zip with a self-contained reader (search, folders, diagrams, sources) to host anywhere (`GET /api/export/site?scope=`). The Markdown export follows the Open Knowledge Format (front matter with `kind` and provenance, `index.md`, `log.md`).
+
 ## Agent integrations
 
 [`integrations/`](integrations) has everything needed to make agents use Thaliyola by default:
-- **Prompts:** `investigate`, `start-coding`, `capture`, `draft-from-paste`, `curate` and `review-stale`, served by every Thaliyola server.
+- **Prompts:** `investigate`, `start-coding`, `capture`, `draft-from-paste`, `curate`, `review-stale`, `document-repo` and `update-docs`, served by every Thaliyola server.
 - **Curation by the client's model:** Thaliyola has no LLM, so it hands judgment work to connected agents. `get_tasks` returns tasks with instructions: entries filed in the team space that belong to a project, project pages missing their repository, look-alike findings, recurring problems, empty outline sections, stale entries, projects without an overview, unlinked entries, and (for admins) searches that found nothing. The agent acts through normal tools (`move_entry` proposes moving an entry to a project, folder and/or repository) and reports with `complete_task`; handed-out tasks are reserved for an hour and finished ones stay hidden. `get_project_context` mentions open tasks so agents tidy as they go. Run it with the `curate` prompt (`/mcp__thaliyola__curate` in Claude Code), on demand or on a schedule (e.g. `claude -p "/mcp__thaliyola__curate"` from cron). Review → Suggestions shows the queue and what agents did. (MCP sampling isn't used: the endpoint is stateless and most clients don't support it.)
 - **Claude Code:** a plugin with the `thaliyola` skill, a per-repo `.mcp.json` template, and a CLAUDE.md snippet.
 - **claude.ai:** connector setup.
@@ -272,7 +292,7 @@ claude mcp add --transport http thaliyola http://localhost:8080/mcp \
 ### Acceptance
 
 [`docs/acceptance.md`](docs/acceptance.md) describes the full acceptance run and its latest results:
-- a sweep of all 27 MCP tools (`pnpm --filter @thaliyola/server acceptance`);
+- a sweep of all 36 MCP tools (`pnpm --filter @thaliyola/server acceptance`);
 - real Claude Code sessions acting as designer, backend developer, frontend developer, on-call engineer, admin and outsider.
 
 ### Behind a reverse proxy

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Repository documentation written by connected agents: documentation runs (`docs_begin` → `docs_submit_plan` → `docs_next_page` → `docs_submit_page` → `docs_finish`), `document-repo` and `update-docs` prompts, every fact stored as a claim with source-line evidence, incremental updates that mark only the facts and pages touched by changed files (and do nothing when nothing relevant changed), per-project instructions and gitignore-style ignore rules, Mermaid checks, a managed AGENTS.md block, and a `stale_claims` curation task
+- Mermaid diagrams render in articles; a Sources panel shows each page's grounded facts with links to the exact lines and lets owners re-check stale ones (`/api/items/:id/claims`)
+- Project settings → Documentation: instructions, ignore rules, documented commit per repository, recent runs and the AGENTS.md block (`/api/projects/:slug/docs`)
+- Live refresh: pages, the project view and the graph update while agents write (`GET /api/events`, server-sent events)
+- Static site export: a zip with a standalone reader for a project or the whole knowledge base (`GET /api/export/site`); the Markdown export now follows the Open Knowledge Format 0.2 (front matter with `kind` and provenance, `index.md`, `log.md`)
+
 - `create_project` MCP tool: a session working in code with no project creates it (admins) or requests it (everyone else), with its repositories; admins approve or decline requests under Review → New projects (`/api/project-requests`)
 
 - Mobile: bottom tab bar with a create sheet, full-screen search with Cancel, a More sheet for secondary actions on articles, findings and projects, tap-to-select and pinch-to-zoom in the graph, wrapping stat tiles, a one-row editor toolbar, 16px inputs (no iOS zoom), safe-area spacing, and an installable web app (manifest, icons, theme colour); fixed pages that scrolled sideways on phones (article, history)

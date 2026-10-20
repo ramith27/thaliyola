@@ -47,3 +47,43 @@ export function useShortcuts(keys: Record<string, () => void>, enabled = true) {
     return () => window.removeEventListener("keydown", onKey);
   }, [keys, enabled]);
 }
+
+/**
+ * Calls `refresh` when knowledge changes on the server (server-sent events).
+ * Dev-token sessions can't send their token on an event stream, so they poll
+ * every 30 seconds instead. Hidden tabs refresh when shown again.
+ */
+export function useLiveRefresh(refresh: () => void) {
+  useEffect(() => {
+    let stale = false;
+    const fire = () => {
+      if (document.hidden) stale = true;
+      else refresh();
+    };
+    const onVisible = () => {
+      if (!document.hidden && stale) {
+        stale = false;
+        refresh();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    let source: EventSource | null = null;
+    let poll: ReturnType<typeof setInterval> | null = null;
+    let devToken = false;
+    try {
+      devToken = !!localStorage.getItem("thaliyola.devToken");
+    } catch {
+      /* storage unavailable */
+    }
+    if (devToken || typeof EventSource === "undefined") poll = setInterval(fire, 30_000);
+    else {
+      source = new EventSource("/api/events", { withCredentials: true });
+      source.addEventListener("changed", fire);
+    }
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      source?.close();
+      if (poll) clearInterval(poll);
+    };
+  }, [refresh]);
+}

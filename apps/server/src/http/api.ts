@@ -11,11 +11,13 @@ import { ConflictError, ForbiddenError, NotFoundError, ValidationError, type Act
 import { editArticle, editFinding, newArticle, newFinding } from "../core/direct.js";
 import { ask, getEntity, listFavourites, searchEntities, setFavourite } from "../core/discover.js";
 import { needsAttention } from "../core/freshness.js";
-import { exportMarkdown } from "../core/exporter.js";
+import { exportMarkdown, exportSite } from "../core/exporter.js";
 import { importDocs } from "../core/importer.js";
 import { dismissGap, knowledgeGaps, successMetrics } from "../core/metrics.js";
 import { onboarding } from "../core/onboarding.js";
 import { taskSummary } from "../core/tasks.js";
+import { eventStream } from "../core/events.js";
+import { agentsMdBlock, claimsFor, docsStatus, resolveClaims, updateDocSettings } from "../core/docs.js";
 import { approveProjectRequest, createOrRequestProject, declineProjectRequest, listProjectRequests } from "../core/project-requests.js";
 import { deleteItem, deleteProject, emptyItem, emptyProject, listTrash, restoreItem, restoreProject } from "../core/trash.js";
 import { listPurges, purgeItem } from "../core/purge.js";
@@ -75,7 +77,7 @@ const repoUrl = z
   .max(500)
   .refine((v) => v === "" || /^([a-z+]+:\/\/)?([^@\s/]+@)?[\w.-]+(:\d+)?[/:][\w./~-]+$/i.test(v.trim()), "not a repository URL");
 
-export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; settings: Settings; embedder?: Embedder; onWrite?: () => void }) {
+export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: { db: Db; settings: Settings; embedder?: Embedder; onWrite?: () => void; viewerDir?: string }) {
   const router = Router();
   const ctxOf = (req: Request, res: Response): RequestContext => ({
     db,
@@ -219,6 +221,23 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
       return importDocs(ctx, { filename: q.filename, data: new Uint8Array(req.body), scope: q.scope, type: q.type, folder: q.folder, dryRun: q.dry_run === "true" });
     }),
   );
+  router.get("/export/site", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const ctx = ctxOf(req, res);
+      const scope = z.string().optional().parse(req.query.scope);
+      const out = await exportSite(ctx, { scope, viewerDir });
+      await audit(ctx.db, ctx.actor.id, "api:export_site", null);
+      res
+        .set({
+          "Content-Type": "application/zip",
+          "Content-Disposition": `attachment; filename="thaliyola-site-${scope ?? "all"}-${new Date().toISOString().slice(0, 10)}.zip"`,
+          "Cache-Control": "no-store",
+        })
+        .send(Buffer.from(out.zip));
+    } catch (err) {
+      next(err);
+    }
+  });
   router.get("/export", async (req: Request, res: Response, next: NextFunction) => {
     try {
       const ctx = ctxOf(req, res);
@@ -293,6 +312,28 @@ export function apiRouter({ db, settings, embedder, onWrite }: { db: Db; setting
     "/project-requests/:id/decline",
     handle("decline_project_request", (ctx, req) => declineProjectRequest(ctx, uuid.parse(req.params.id), z.object({ note: z.string().max(1000) }).parse(req.body).note)),
   );
+  router.get("/projects/:slug/docs", handle("docs_status", (ctx, req) => docsStatus(ctx, String(req.params.slug))));
+  router.put(
+    "/projects/:slug/docs-settings",
+    handle("update_doc_settings", (ctx, req) =>
+      updateDocSettings(ctx, String(req.params.slug), z.object({ instructions: z.string().max(20000).optional(), ignore: z.string().max(20000).optional() }).parse(req.body)),
+    ),
+  );
+  router.get(
+    "/projects/:slug/agents-md",
+    handle("agents_md", async (ctx, req) => ({ block: await agentsMdBlock(ctx, String(req.params.slug), z.string().optional().parse(req.query.component)) })),
+  );
+  router.get("/items/:id/claims", handle("claims", (ctx, req) => claimsFor(ctx, uuid.parse(req.params.id))));
+  router.post(
+    "/items/:id/claims/resolve",
+    handle("resolve_claims", (ctx, req) =>
+      resolveClaims(ctx, {
+        article_id: uuid.parse(req.params.id),
+        ...z.object({ confirm: z.array(z.object({ id: uuid })).optional(), retire: z.array(z.object({ id: uuid, reason: z.string().max(500).optional() })).optional() }).parse(req.body),
+      }),
+    ),
+  );
+  router.get("/events", (req, res) => eventStream(req, res));
   router.get("/onboarding", handle("onboarding", (ctx) => onboarding(ctx)));
   router.get("/favourites", handle("list_favourites", async (ctx) => ({ favourites: await listFavourites(ctx) })));
   router.put("/favourites/:id", handle("add_favourite", (ctx, req) => setFavourite(ctx, uuid.parse(req.params.id), true)));

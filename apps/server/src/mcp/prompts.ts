@@ -99,6 +99,42 @@ ${text}
   );
 
   server.registerPrompt(
+    "document-repo",
+    {
+      title: "Document this repository",
+      description: "Write grounded, linked documentation for the repository you're in, as articles in its Thaliyola project (first run, or a full rewrite).",
+      argsSchema: { focus: z.string().optional().describe("Optional: an area to emphasise") },
+    },
+    ({ focus }) =>
+      user(`Document this repository in Thaliyola${focus ? `, emphasising ${focus}` : ""}.
+
+1. Get the git remote (git remote get-url origin) and commit (git rev-parse HEAD). Call docs_begin with repo and head_sha, mode "init". If the project doesn't exist, create_project first.
+2. Follow the returned instructions and never read or cite paths matched by its ignore rules.
+3. Research the code and tests. Plan pages a new teammate needs: an overview, architecture, the main flows, data model, APIs and contracts, configuration, how to run, test and release. Submit with docs_submit_plan (give each page its main sources).
+4. Loop: docs_next_page, read its sources, write the page, docs_submit_page with every factual statement as a claim with evidence (repo://path#Lstart-Lend). Add Mermaid diagrams (flowchart, sequenceDiagram, erDiagram, stateDiagram-v2) where the code shows the structure; if a page is rejected for a diagram, fix it and resubmit.
+5. docs_finish, then put the returned agents_md block into AGENTS.md (and CLAUDE.md if present), replacing any existing THALIYOLA block. Summarise what you wrote.
+
+Facts only: if the code doesn't show it, leave it out or mark it as an open question.`),
+  );
+
+  server.registerPrompt(
+    "update-docs",
+    {
+      title: "Update this repository's docs",
+      description: "Bring the repository's Thaliyola documentation in line with the code: only the pages and facts the changes affect; a no-op when nothing relevant changed.",
+      argsSchema: { since: z.string().optional().describe("Optional base commit (defaults to the last documented commit)") },
+    },
+    ({ since }) =>
+      user(`Update this repository's documentation in Thaliyola.
+
+1. git remote get-url origin and git rev-parse HEAD. Call docs_begin with repo, head_sha and mode "update"${since ? `, base_sha "${since}"` : ""}. If it asks for changed_files, run git diff --name-only <base>..HEAD (and list deleted files) and call again.
+2. A no-op means you're done: say so.
+3. Otherwise submit a plan with the affected pages (and new pages only if unmapped_changes add something worth documenting).
+4. For each page (docs_next_page): check its stale claims against the current code, keep what still holds, rewrite what changed, and resubmit the whole page with fresh claims and evidence (docs_submit_page).
+5. docs_finish, refresh the AGENTS.md block, and summarise what changed.`),
+  );
+
+  server.registerPrompt(
     "curate",
     {
       title: "Curate the knowledge base",

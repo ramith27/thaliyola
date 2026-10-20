@@ -25,6 +25,7 @@ export const TASK_KINDS = [
   "write_overview",
   "link_related",
   "answer_gap",
+  "stale_claims",
 ] as const;
 export type TaskKind = (typeof TASK_KINDS)[number];
 
@@ -41,6 +42,10 @@ export interface Task {
 const DO_NOT = "Don't change anything you aren't sure about: complete_task with outcome 'skipped' and a short note instead.";
 
 const INSTRUCTIONS: Record<TaskKind, string> = {
+  stale_claims:
+    "Facts on this documentation page point at code that has changed. With the repository checked out, look at each stale claim (docs_inspect_claims) against the current code: " +
+    "resolve_claims to confirm those that still hold (with updated evidence) and retire those that don't, then fix the page text with propose_article_edit; or, for many changes, run the update-docs prompt. " +
+    DO_NOT,
   file_into_project:
     "This entry sits in the shared team space but looks like it belongs to a project. Read it (get_article / get_finding) and the candidate projects (get_project_context). " +
     "If it's about one project, call move_entry with that project, the right repository (repo) when it's about one codebase, and for articles a folder that fits the project's tree. " +
@@ -81,6 +86,7 @@ const INSTRUCTIONS: Record<TaskKind, string> = {
 };
 
 const PRIORITY: Record<TaskKind, number> = {
+  stale_claims: 4,
   file_into_project: 1,
   tag_repository: 2,
   merge_duplicates: 3,
@@ -296,6 +302,27 @@ async function candidates(ctx: RequestContext, opts: { kind?: TaskKind; kinds?: 
     }
   }
 
+  if (want("stale_claims")) {
+    const { rows } = await db.query<{ id: string; title: string; scope: string; component: string; stale: number }>(
+      `SELECT a.id, a.title, s.slug AS scope, d.component, count(c.id)::int AS stale
+         FROM claims c JOIN articles a ON a.id = c.article_id JOIN scopes s ON s.id = a.scope_id LEFT JOIN doc_pages d ON d.article_id = a.id
+        WHERE c.status = 'stale' AND a.status IN ('published', 'possibly_stale') AND ($1::uuid[] IS NULL OR a.scope_id = ANY($1)) AND ($2::uuid IS NULL OR a.scope_id = $2)
+        GROUP BY a.id, s.slug, d.component ORDER BY stale DESC LIMIT 30`,
+      [readable, projectId],
+    );
+    for (const r of rows) {
+      tasks.push({
+        id: `stale_claims:${r.id}`,
+        kind: "stale_claims",
+        title: `${r.stale} fact${r.stale > 1 ? "s" : ""} on “${r.title}” may be out of date`,
+        project: r.scope,
+        targets: [{ kind: "article", id: r.id, title: r.title, scope: r.scope }],
+        context: { repository: r.component || null, stale_claims: r.stale },
+        instructions: INSTRUCTIONS.stale_claims,
+      });
+    }
+  }
+
   // Search gaps show what people looked for, so only admins' agents get them.
   if (want("answer_gap") && isAdmin(ctx) && !projectId) {
     const { rows } = await db.query<{ query: string; n: number }>(
@@ -383,7 +410,7 @@ export async function taskSummary(ctx: RequestContext, opts: { project?: string 
 
 /** A short note for get_project_context when there's curation work in the project (cheap kinds only). */
 export async function projectHint(ctx: RequestContext, project: string) {
-  const open = await openTasks(ctx, { project, kinds: ["file_into_project", "tag_repository", "fill_outline", "verify_stale", "write_overview"] });
+  const open = await openTasks(ctx, { project, kinds: ["file_into_project", "tag_repository", "fill_outline", "verify_stale", "write_overview", "stale_claims"] });
   if (!open.length) return null;
   const byKind: Partial<Record<TaskKind, number>> = {};
   for (const t of open) byKind[t.kind] = (byKind[t.kind] ?? 0) + 1;

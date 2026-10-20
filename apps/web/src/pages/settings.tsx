@@ -48,6 +48,7 @@ export function ScopeSettingsPage({ slug, scopes, me, route }: { slug: string; s
         ["general", "General"],
         ["access", "Members and access"],
         ["repos", `Repositories (${scope.components.length})`],
+        ["docs", "Documentation"],
       ]
     : [
         ["general", "General"],
@@ -70,6 +71,7 @@ export function ScopeSettingsPage({ slug, scopes, me, route }: { slug: string; s
       {tab === "general" && <General scope={scope} />}
       {tab === "access" && <AccessView slug={slug} isProject={project} me={me} />}
       {tab === "repos" && project && <Repositories scope={scope} />}
+      {tab === "docs" && project && <DocsSettings scope={scope} />}
     </div>
   );
 }
@@ -152,6 +154,7 @@ function General({ scope }: { scope: ScopeInfo }) {
       <h2>Data</h2>
       <div className="actions">
         <ExportButton scope={scope.slug} label={`Export ${scope.name} as Markdown`} />
+        <ExportButton scope={scope.slug} site label="Download as a static site" />
         <a className="btn" href={href("/import")}>
           Import documents
         </a>
@@ -507,3 +510,121 @@ function DeleteProject({ scope }: { scope: ScopeInfo }) {
     </section>
   );
 }
+
+// ---- Documentation ------------------------------------------------------------------------
+
+interface DocsStatus {
+  repositories: { slug: string; kind: string; repo_url: string | null; docs_sha: string | null; docs_updated_at: string | null; pages: number; claims: number; stale_claims: number }[];
+  runs: { id: string; repository: string | null; mode: string; status: string; head_sha: string; started_at: string; summary: string | null; by: string; pages: number; written: number }[];
+  instructions: string;
+  ignore: string;
+}
+
+/**
+ * Repository documentation written by connected agents: what's documented at
+ * which commit, how current it is, and the instructions and ignore rules
+ * agents follow.
+ */
+function DocsSettings({ scope }: { scope: ScopeInfo }) {
+  const { data, reload } = useApi<DocsStatus>(`/projects/${scope.slug}/docs`);
+  const [instructions, setInstructions] = useState<string | null>(null);
+  const [ignore, setIgnore] = useState<string | null>(null);
+  const [block, setBlock] = useState<{ repo: string; text: string } | null>(null);
+  const { act, error, saved } = useAction(reload);
+  if (!data) return <Loading />;
+  const ins = instructions ?? data.instructions;
+  const ign = ignore ?? data.ignore;
+  return (
+    <section className="settings-section">
+      <p className="muted">
+        A coding agent with the repository checked out writes these docs: every fact on a page points at the source lines it came from, and when the code changes,
+        only the affected pages and facts are redone. In Claude Code, open the repository and run <code>/mcp__thaliyola__document-repo</code> the first time, then{" "}
+        <code>/mcp__thaliyola__update-docs</code> (by hand or in CI).
+      </p>
+      <h2>Repositories</h2>
+      {!data.repositories.length && <p className="muted">Add the project's repositories first (Repositories tab).</p>}
+      <ul className="plain repo-list">
+        {data.repositories.map((r) => (
+          <li key={r.slug} className="repo">
+            <div className="repo-main">
+              <div>
+                <strong>{r.slug}</strong> <span className="badge badge-type">{r.kind}</span>
+                {r.stale_claims > 0 && <span className="badge badge-possibly_stale">{r.stale_claims} stale facts</span>}
+              </div>
+              <span className="small muted">
+                {r.docs_sha
+                  ? `Documented at ${r.docs_sha.slice(0, 10)} · ${formatDateShort(r.docs_updated_at)} · ${r.pages} ${r.pages === 1 ? "page" : "pages"} · ${r.claims} grounded ${r.claims === 1 ? "fact" : "facts"}`
+                  : "Not documented yet"}
+              </span>
+            </div>
+            <div className="row-actions">
+              <button
+                className="link-btn small"
+                onClick={async () => setBlock({ repo: r.slug, text: (await api<{ block: string }>(`/projects/${scope.slug}/agents-md?component=${r.slug}`)).block })}
+              >
+                AGENTS.md block
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {block && (
+        <div className="card agents-block">
+          <div className="card-head">
+            <div>
+              <h3>AGENTS.md block for {block.repo}</h3>
+              <p>Agents keep this up to date at the end of each run. To add it by hand, paste it into AGENTS.md (and CLAUDE.md if the repository has one).</p>
+            </div>
+            <button className="btn btn-small" onClick={() => navigator.clipboard.writeText(block.text).catch(() => undefined)}>
+              Copy
+            </button>
+          </div>
+          <pre className="code-block">{block.text}</pre>
+        </div>
+      )}
+
+      <h2>Instructions for agents</h2>
+      <p className="muted small">What to document and how: the audience, pages that must exist, conventions, things to leave out. Agents receive this at the start of every run.</p>
+      <textarea className="body-input" rows={6} value={ins} onChange={(e) => setInstructions(e.target.value)} placeholder="e.g. Write for new backend engineers. Always include a runbook for each worker. Don't document internal admin tools." />
+      <h2>Ignore rules</h2>
+      <p className="muted small">gitignore-style paths agents must not read or cite (secrets, vendored code, generated files). Use ! to make exceptions.</p>
+      <textarea className="body-input" rows={5} value={ign} onChange={(e) => setIgnore(e.target.value)} placeholder={"secrets/\n*.pem\nvendor/**\n!vendor/README.md"} />
+      <ErrorBox error={error} />
+      {saved && <Notice kind="ok">{saved}</Notice>}
+      <div className="actions">
+        <button
+          className="btn btn-primary"
+          disabled={ins === data.instructions && ign === data.ignore}
+          onClick={() => act("Saved", () => api(`/projects/${scope.slug}/docs-settings`, { method: "PUT", body: { instructions: ins, ignore: ign } }))}
+        >
+          Save
+        </button>
+      </div>
+
+      <h2>Recent runs</h2>
+      {!data.runs.length && <p className="muted">No documentation runs yet.</p>}
+      <div className="table-wrap">
+        <table className="table">
+          <tbody>
+            {data.runs.map((r) => (
+              <tr key={r.id}>
+                <td>
+                  {r.repository ?? "project"} · {r.mode}
+                  <div className="small muted">{r.summary ?? `${r.written}/${r.pages} pages`}</div>
+                </td>
+                <td>
+                  <span className={`badge badge-${r.status === "done" ? "published" : r.status === "noop" ? "type" : "pending"}`}>{r.status === "noop" ? "up to date" : r.status}</span>
+                </td>
+                <td className="small muted">
+                  {r.head_sha.slice(0, 8)} · {formatDateShort(r.started_at)} · {r.by}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+const formatDateShort = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "");

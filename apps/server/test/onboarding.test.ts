@@ -177,7 +177,10 @@ describe("export", () => {
     const cvr = names.find((n) => n.endsWith("conversion-rate.md"))!;
     expect(cvr.startsWith("team/")).toBe(true);
     const text = strFromU8(files[cvr]!);
-    expect(text).toMatch(/^---\ntitle: "Conversion rate"\nid: "[0-9a-f-]+"\ntype: "metric"/);
+    expect(text).toMatch(/^---\nokf: "0.2"\ntitle: "Conversion rate"\nid: "[0-9a-f-]+"\nkind: "article"\ntype: "metric"/);
+    expect(text).toMatch(/provenance: \{"generated":false,"sources":\[\],"verified":/);
+    expect(names).toEqual(expect.arrayContaining(["index.md", "log.md", "README.md"]));
+    expect(strFromU8(files["index.md"]!)).toMatch(/## team[\s\S]*\[Conversion rate\]\(team\//);
     // The image attached by the import test above.
     expect(names.some((n) => n.startsWith("assets/"))).toBe(true);
     const withImage = names.filter((n) => n.endsWith(".md")).map((n) => strFromU8(files[n]!)).find((t) => t.includes("](../") && t.includes("assets/"));

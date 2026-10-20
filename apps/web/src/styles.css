@@ -768,3 +768,32 @@ html { -webkit-tap-highlight-color: transparent; }
 @keyframes sheet-up { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (pointer: coarse) and (min-width: 861px) { .graph-open { display: inline-flex; margin-top: 0.4rem; } .graph-tooltip { pointer-events: auto; } }
 pre.diff { overflow-x: auto; max-width: 100%; }
+.mermaid-diagram { margin: 0.8rem 0; padding: 0.8rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow-x: auto; text-align: center; }
+.mermaid-diagram svg { max-width: 100%; height: auto; }
+.mermaid-diagram.loading { min-height: 120px; }
+.mermaid-error pre { max-height: 14rem; }
+.claims-panel { margin: 1.6rem 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.claims-panel.has-stale { border-color: color-mix(in srgb, var(--status-warning, #d97706) 55%, var(--border)); }
+.claims-toggle { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 0.6rem; padding: 0.75rem 1rem; background: none; border: 0; font: inherit; color: var(--text); cursor: pointer; text-align: left; }
+.claims-toggle .badge { margin-left: 0.5rem; }
+.claims-body { padding: 0 1rem 0.9rem; }
+.claims-body h4 { margin: 0.8rem 0 0.3rem; font-size: 0.9rem; }
+.claim-list li { padding: 0.5rem 0; border-top: 1px solid var(--border); }
+.claim-list li.stale { background: color-mix(in srgb, var(--status-warning, #d97706) 8%, transparent); margin: 0 -0.5rem; padding: 0.5rem; border-radius: 6px; }
+.claim-evidence { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.2rem; align-items: baseline; }
+.claim-evidence code { font-size: 0.78rem; overflow-wrap: anywhere; }
+.claim-actions { display: inline-flex; gap: 0.7rem; margin-left: 0.6rem; }
+.agents-block { margin: 0.8rem 0 1.2rem; padding: 1rem 1.1rem; }
+.agents-block pre { white-space: pre-wrap; font-size: 0.8rem; }
+
+/* Static site viewer */
+.viewer { display: grid; grid-template-columns: 270px minmax(0, 1fr); min-height: 100vh; background: var(--bg); }
+.viewer-side { position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 1rem 0.75rem; border-right: 1px solid var(--border); background: var(--surface); }
+.viewer-search { width: 100%; margin: 0.5rem 0 0.75rem; }
+.viewer-main { padding: 1.5rem 2rem 3rem; }
+@media (max-width: 860px) {
+  .viewer { grid-template-columns: minmax(0, 1fr); }
+  .viewer-side { position: static; height: auto; max-height: 45vh; border-right: 0; border-bottom: 1px solid var(--border); }
+  .viewer-main { padding: 1rem; }
+}
+.settings-section textarea.body-input { width: 100%; max-width: 760px; }

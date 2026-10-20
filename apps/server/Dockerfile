@@ -23,6 +23,7 @@ COPY --from=build /out/package.json package.json
 COPY --from=build /repo/apps/server/dist dist
 COPY --from=build /repo/apps/server/migrations migrations
 COPY --from=build /repo/apps/web/dist web
+COPY --from=build /repo/apps/web/dist-viewer viewer
 RUN mkdir -p /data/assets /data/models && chown node:node /data/assets /data/models
 USER node
 EXPOSE 8080

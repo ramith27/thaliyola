@@ -5,7 +5,7 @@ import { MoreActions } from "../components/more";
 import { MoveFolder } from "../components/move";
 import { api } from "../api";
 import { ErrorBox, formatDate, itemHref, Loading, Notice, ScopeBadge, Snippet, StatusBadge, TypeBadge } from "../components/ui";
-import { useApi } from "../hooks";
+import { useApi, useLiveRefresh } from "../hooks";
 import { href, type Route } from "../router";
 import { useState } from "react";
 
@@ -167,6 +167,7 @@ export function ProjectPage({ slug, route, me, scopes = [] }: { slug: string; ro
   const component = route.query.get("component") ?? undefined;
   const path = `/projects/${encodeURIComponent(slug)}/context${component ? `?component=${encodeURIComponent(component)}` : ""}`;
   const { data, error, reload } = useApi<ProjectContext>(path);
+  useLiveRefresh(reload);
   const [ackError, setAckError] = useState<Error | null>(null);
 
   if (error) return <ErrorBox error={error} />;

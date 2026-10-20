@@ -14,11 +14,14 @@ import {
   WriteOutcome,
 } from "../components/ui";
 import { AddLinkForm, PurgeZone, ShareToLibrary } from "../components/actions";
+import { ClaimsPanel } from "../components/claims";
 import { MoreActions } from "../components/more";
 import { MoveItem } from "../components/move";
 import { DeleteItemButton, TrashedNotice } from "./trash";
 import { Attachments } from "../components/assets";
-import { useApi } from "../hooks";
+import { useApi, useLiveRefresh } from "../hooks";
+
+const noop = () => undefined;
 import { RelationsPanel } from "./graph";
 import { WatchButton } from "../components/notifications";
 import { FavouriteButton, recordVisit, SectionLink, ShareButton } from "../components/find";
@@ -135,6 +138,7 @@ export function ArticlePage({ id, route, me, scopes = [] }: { id: string; route:
   const editing = route.path[2] === "edit";
   const section = route.query.get("section");
   const { data, error, reload } = useApi<Article>(`/articles/${id}`);
+  useLiveRefresh(editing ? noop : reload);
 
   useEffect(() => {
     if (data) recordVisit({ kind: "article", id, title: data.title, link: href(`/article/${id}`) });
@@ -196,6 +200,7 @@ export function ArticlePage({ id, route, me, scopes = [] }: { id: string; route:
           />
         )}
         <SectionedMarkdown body={data.body_md} articleId={id} />
+        <ClaimsPanel articleId={id} canEdit={data.status !== "deleted"} />
         <RelationsPanel id={id} />
         {me?.admin && <PurgeZone id={id} title={data.title} kind="article" />}
       </article>
@@ -337,6 +342,7 @@ export function FindingPage({ id, route, me, scopes = [] }: { id: string; route:
   const [moving, setMoving] = useState(false);
   const editing = route.path[2] === "edit";
   const { data, error, reload } = useApi<Finding>(`/findings/${id}`);
+  useLiveRefresh(editing ? noop : reload);
   useEffect(() => {
     if (data) recordVisit({ kind: "finding", id, title: data.title, link: href(`/finding/${id}`) });
   }, [data, id]);

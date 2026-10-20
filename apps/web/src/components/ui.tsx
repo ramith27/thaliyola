@@ -4,6 +4,7 @@ import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Related, SourceLink } from "../api";
 import { AssetImage } from "./assets";
+import { MermaidDiagram } from "./mermaid";
 import { href } from "../router";
 
 /**
@@ -26,6 +27,14 @@ export function Markdown({ text }: { text: string }) {
                 {children}
               </a>
             ),
+          pre: ({ node, children }) => {
+            // ```mermaid blocks become diagrams.
+            const code = node?.children?.[0] as { tagName?: string; properties?: { className?: string[] }; children?: { value?: string }[] } | undefined;
+            if (code?.tagName === "code" && code.properties?.className?.includes("language-mermaid")) {
+              return <MermaidDiagram code={(code.children ?? []).map((c) => c.value ?? "").join("")} />;
+            }
+            return <pre>{children}</pre>;
+          },
           img: ({ src, alt }) => {
             if (typeof src !== "string") return null;
             if (src.startsWith("asset:")) return <AssetImage id={src.slice(6)} alt={alt ?? ""} />;

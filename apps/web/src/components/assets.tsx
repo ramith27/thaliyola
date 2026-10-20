@@ -4,12 +4,18 @@ import { ErrorBox } from "./ui";
 
 const ACCEPT = "image/png,image/jpeg,image/webp,image/gif,application/json,application/pdf,text/plain,text/markdown,.md";
 
+/** The static site export ships assets as files; it registers where each one is. */
+let staticAssets: Record<string, string> | null = null;
+export function setStaticAssets(map: Record<string, string>) {
+  staticAssets = map;
+}
+
 /** Object URL for an asset, revoked when the component unmounts. */
 function useAssetUrl(id: string | undefined) {
-  const [url, setUrl] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [url, setUrl] = useState<string | null>(id && staticAssets ? (staticAssets[id] ?? null) : null);
+  const [failed, setFailed] = useState(!!(id && staticAssets && !staticAssets[id]));
   useEffect(() => {
-    if (!id) return;
+    if (!id || staticAssets) return;
     let objectUrl: string | null = null;
     let cancelled = false;
     fetchAssetBlob(id)

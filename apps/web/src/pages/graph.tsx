@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ScopeInfo } from "../api";
 import { I } from "../components/icons";
 import { ErrorBox, Loading } from "../components/ui";
-import { useApi } from "../hooks";
+import { useApi, useLiveRefresh } from "../hooks";
 import { href, navigate, type Route } from "../router";
 
 interface GNode extends SimulationNodeDatum {
@@ -59,9 +59,10 @@ export function GraphPage({ route, scopes }: { route: Route; scopes: ScopeInfo[]
   const scope = route.query.get("scope") ?? "";
   const focus = route.query.get("focus") ?? "";
   const params = new URLSearchParams({ ...(scope ? { scope } : {}), ...(focus ? { focus, depth: "2" } : {}) }).toString();
-  const { data, error } = useApi<{ nodes: Omit<GNode, "degree">[]; edges: { source: string; target: string; kind: string }[]; truncated: boolean }>(
+  const { data, error, reload } = useApi<{ nodes: Omit<GNode, "degree">[]; edges: { source: string; target: string; kind: string }[]; truncated: boolean }>(
     `/graph${params ? `?${params}` : ""}`,
   );
+  useLiveRefresh(reload);
   const focusNode = focus ? data?.nodes.find((n) => n.id === focus) : undefined;
   const [query, setQuery] = useState("");
   const [asTable, setAsTable] = useState(false);
@@ -189,6 +190,7 @@ export function GraphCanvas({
   const drag = useRef<{ mode: "pan" | "node"; id?: string; sx: number; sy: number; vx: number; vy: number; moved: boolean } | null>(null);
   // Touch: active pointers for pinch-to-zoom.
   const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const positions = useRef(new Map<string, { x: number; y: number }>());
   const pinch = useRef<{ dist: number; k: number } | null>(null);
 
   const { nodes, edges, sim } = useMemo(() => {
@@ -197,7 +199,11 @@ export function GraphCanvas({
       degree.set(e.source, (degree.get(e.source) ?? 0) + 1);
       degree.set(e.target, (degree.get(e.target) ?? 0) + 1);
     }
-    const nodes: GNode[] = rawNodes.map((n) => ({ ...n, degree: degree.get(n.id) ?? 0 }));
+    // Nodes already on screen keep their place when the graph refreshes; new ones settle in around them.
+    const nodes: GNode[] = rawNodes.map((n) => {
+      const p = positions.current.get(n.id);
+      return { ...n, degree: degree.get(n.id) ?? 0, ...(p ? { x: p.x, y: p.y } : {}) };
+    });
     const edges: GEdge[] = rawEdges.map((e) => ({ ...e }));
     const sim = forceSimulation(nodes)
       // Small graphs get more room so their (always shown) labels don't collide.
@@ -230,14 +236,17 @@ export function GraphCanvas({
 
   useEffect(() => {
     // Settle most of the layout before the first paint, then animate the rest.
-    for (let i = 0; i < 160; i++) sim.tick();
-    fit();
+    const known = nodes.filter((n) => positions.current.has(n.id)).length;
+    const refreshing = known > nodes.length / 2;
+    for (let i = 0; i < (refreshing ? 15 : 160); i++) sim.tick();
+    if (!refreshing) fit();
     let frame = 0;
     sim.on("tick", () => {
+      for (const n of nodes) positions.current.set(n.id, { x: n.x ?? 0, y: n.y ?? 0 });
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => setTick((t) => t + 1));
     });
-    sim.alpha(0.3).restart();
+    sim.alpha(refreshing ? 0.08 : 0.3).restart();
     return () => {
       sim.stop();
       cancelAnimationFrame(frame);

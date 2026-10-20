@@ -26,6 +26,7 @@ import {
 import { resolveRepo } from "../core/scopes.js";
 import { completeTask, getTasks, TASK_KINDS } from "../core/tasks.js";
 import { createOrRequestProject } from "../core/project-requests.js";
+import { agentsMdBlock, claimsFor, docsBegin, docsFinish, docsNextPage, docsSkipPage, docsSubmitPage, docsSubmitPlan, resolveClaims } from "../core/docs.js";
 import { getProjectContext } from "../core/projects.js";
 import { listProjects } from "../core/scopes.js";
 import { searchKnowledge } from "../core/search.js";
@@ -39,6 +40,7 @@ How to use it:
 - Before investigating an alert, bug or question, call search_knowledge first. Phrase the query the way the symptom first appeared.
 - Before changing code in a project, call get_project_context (pass the project, and the component if you know it: backend, frontend, ...; or pass the repo's git remote URL as repo and Thaliyola finds both). Read open impact notices first.
 - Project knowledge belongs in that project's scope (project argument), not in "team": each project has its own members and access. Use "team" only for org-wide systems, metrics and runbooks. If you find something filed in the wrong place, propose move_entry.
+- Documenting a repository: the update-docs / document-repo prompts drive docs_begin → docs_submit_plan → docs_next_page → docs_submit_page → docs_finish. Every fact on a page is a claim with evidence (repo://path#Lx-Ly), so later code changes flag exactly what to re-check.
 - No project for the code you're in? Call create_project (with its repositories and git URLs). An admin's session creates it immediately; otherwise it's a request an admin approves, and you write your notes up once it exists.
 - Thaliyola has no model of its own; you are its judgment. get_tasks returns curation work (misfiled entries, missing repositories, duplicates, empty outlines, stale entries, unanswered searches). Do it when the user asks you to tidy or curate, or in a scheduled run, and report each with complete_task.
 - Open only the relevant hits with get_article / get_finding; search results are compact summaries.
@@ -578,6 +580,133 @@ export function buildMcpServer(ctx: RequestContext): McpServer {
       },
     },
     (args) => run("complete_task", null, () => completeTask(ctx, args)),
+  );
+
+  // ---- Repository documentation (agent writes, Thaliyola keeps the queue, claims and drift) ----
+  const evidenceArg = z.union([z.string(), z.object({ path: z.string(), start: z.number().int().optional(), end: z.number().int().optional(), sha: z.string().optional() })]);
+  server.registerTool(
+    "docs_begin",
+    {
+      title: "Begin a documentation run",
+      description:
+        "Start (or resume) writing the documentation for a repository. Pass the current commit; for an update also the files changed since the last documented commit. " +
+        "Returns the project's docs instructions and ignore rules, the existing pages, and for updates which pages and facts the changes affect (or a no-op when nothing relevant changed).",
+      inputSchema: {
+        project: projectArg,
+        repo: z.string().optional().describe("git remote URL; finds the project and repository"),
+        component: z.string().optional().describe("Repository (component) slug"),
+        head_sha: z.string().describe("git rev-parse HEAD"),
+        base_sha: z.string().optional().describe("Defaults to the last documented commit"),
+        mode: z.enum(["init", "update"]).optional(),
+        changed_files: z.array(z.string()).optional().describe("git diff --name-only <base>..HEAD"),
+        deleted_files: z.array(z.string()).optional(),
+      },
+    },
+    (args) => run("docs_begin", null, () => docsBegin(ctx, args)),
+  );
+  server.registerTool(
+    "docs_submit_plan",
+    {
+      title: "Submit the documentation plan",
+      description: "The ordered pages to write in this run: an overview first, then architecture, flows, data model, APIs, runbooks. Each page names its main source paths.",
+      inputSchema: {
+        run_id: z.string().uuid(),
+        pages: z.array(
+          z.object({
+            key: z.string().describe("stable id, e.g. 'architecture'"),
+            title: z.string(),
+            folder: z.string().optional(),
+            type: z.string().describe("article type: system, tech_spec, api_contract, runbook, design_doc, decision, table, ..."),
+            purpose: z.string().optional(),
+            sources: z.array(z.string()).optional().describe("main files/directories this page is based on"),
+          }),
+        ),
+      },
+    },
+    (args) => run("docs_submit_plan", null, () => docsSubmitPlan(ctx, args)),
+  );
+  server.registerTool(
+    "docs_next_page",
+    {
+      title: "Next documentation page",
+      description: "The next page to write in the run, with its current text and claims when updating. Returns done when all pages are written.",
+      inputSchema: { run_id: z.string().uuid() },
+    },
+    (args) => run("docs_next_page", null, () => docsNextPage(ctx, args)),
+  );
+  server.registerTool(
+    "docs_submit_page",
+    {
+      title: "Submit a documentation page",
+      description:
+        "The whole page in Markdown plus its claims: every factual statement with evidence (repo://path#L40-L82 at the run's commit). Mermaid diagrams are checked; fix and resubmit if rejected. " +
+        "Owners' pages publish directly; others go to review.",
+      inputSchema: {
+        run_id: z.string().uuid(),
+        key: z.string(),
+        title: z.string().optional(),
+        body_md: z.string(),
+        summary: z.string().optional(),
+        claims: z.array(z.object({ section: z.string().optional(), text: z.string(), evidence: z.array(evidenceArg) })),
+      },
+    },
+    (args) => run("docs_submit_page", null, () => docsSubmitPage(ctx, args)),
+  );
+  server.registerTool(
+    "docs_skip_page",
+    {
+      title: "Skip a documentation page",
+      description: "Leave a planned page out of this run, with the reason.",
+      inputSchema: { run_id: z.string().uuid(), key: z.string(), reason: z.string() },
+    },
+    (args) => run("docs_skip_page", null, () => docsSkipPage(ctx, args)),
+  );
+  server.registerTool(
+    "docs_finish",
+    {
+      title: "Finish the documentation run",
+      description: "Close the run, record the documented commit, and get the managed AGENTS.md block to put in the repository.",
+      inputSchema: { run_id: z.string().uuid(), summary: z.string().optional() },
+    },
+    (args) => run("docs_finish", null, () => docsFinish(ctx, args)),
+  );
+  server.registerTool(
+    "docs_inspect_claims",
+    {
+      title: "Inspect a page's claims",
+      description: "The grounded facts on a page, their evidence (with links) and which are stale because their source changed.",
+      inputSchema: { article_id: z.string().uuid() },
+      annotations: { readOnlyHint: true },
+    },
+    (args) => run("docs_inspect_claims", args.article_id, () => claimsFor(ctx, args.article_id)),
+  );
+  server.registerTool(
+    "resolve_claims",
+    {
+      title: "Confirm or retire claims",
+      description: "After checking stale claims against the current code: confirm those that still hold (with updated evidence), retire those that don't (rewrite the page text with propose_article_edit or a docs run).",
+      inputSchema: {
+        article_id: z.string().uuid(),
+        confirm: z.array(z.object({ id: z.string().uuid(), evidence: z.array(evidenceArg).optional(), sha: z.string().optional() })).optional(),
+        retire: z.array(z.object({ id: z.string().uuid(), reason: z.string().optional() })).optional(),
+      },
+    },
+    (args) => run("resolve_claims", args.article_id, () => resolveClaims(ctx, args)),
+  );
+  server.registerTool(
+    "get_agents_md_block",
+    {
+      title: "Get the AGENTS.md block",
+      description: "The managed block (between THALIYOLA markers) for a repository's AGENTS.md / CLAUDE.md: where its knowledge lives and how agents should use it.",
+      inputSchema: { project: projectArg, component: z.string().optional() },
+      annotations: { readOnlyHint: true },
+    },
+    (args) =>
+      run("get_agents_md_block", null, async () => {
+        const project = args.project ?? ctx.project;
+        if (!project) throw new ValidationError("pass project");
+        return { block: await agentsMdBlock(ctx, project, args.component ?? ctx.component) };
+      }),
   );
 
   server.registerTool(

@@ -366,7 +366,7 @@ export function ImportPage({ scopes, articleTypes }: { scopes: ScopeInfo[]; arti
 
 // ---- Export --------------------------------------------------------------------------
 
-export function ExportButton({ scope, label = "Export as Markdown" }: { scope?: string; label?: string }) {
+export function ExportButton({ scope, label = "Export as Markdown", site = false }: { scope?: string; label?: string; site?: boolean }) {
   const [busy, setBusy] = useState(false);
   return (
     <button
@@ -376,12 +376,12 @@ export function ExportButton({ scope, label = "Export as Markdown" }: { scope?: 
         setBusy(true);
         try {
           const token = getToken();
-          const res = await fetch(`/api/export${scope ? `?scope=${encodeURIComponent(scope)}` : ""}`, { headers: token ? { authorization: `Bearer ${token}` } : {}, credentials: "same-origin" });
+          const res = await fetch(`/api/export${site ? "/site" : ""}${scope ? `?scope=${encodeURIComponent(scope)}` : ""}`, { headers: token ? { authorization: `Bearer ${token}` } : {}, credentials: "same-origin" });
           if (!res.ok) throw new Error(`export failed (${res.status})`);
           const url = URL.createObjectURL(await res.blob());
           const a = document.createElement("a");
           a.href = url;
-          a.download = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "thaliyola-export.zip";
+          a.download = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? (site ? "thaliyola-site.zip" : "thaliyola-export.zip");
           a.click();
           setTimeout(() => URL.revokeObjectURL(url), 10_000);
         } finally {

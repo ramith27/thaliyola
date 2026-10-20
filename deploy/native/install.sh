@@ -106,6 +106,7 @@ mkdir "$APP_DIR.new"
 cp -a "$STAGE/app/node_modules" "$STAGE/app/package.json" "$APP_DIR.new/"
 cp -a apps/server/dist apps/server/migrations "$APP_DIR.new/"
 cp -a apps/web/dist "$APP_DIR.new/web"
+if [ -d apps/web/dist-viewer ]; then cp -a apps/web/dist-viewer "$APP_DIR.new/viewer"; fi
 chown -R root:root "$APP_DIR.new"
 chmod -R u=rwX,go=rX "$APP_DIR.new"  # readable by the service user, writable only by root
 rm -rf "$APP_DIR.old"

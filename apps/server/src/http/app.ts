@@ -9,6 +9,7 @@ import type { Settings } from "../config.js";
 import type { Embedder } from "../core/embeddings.js";
 import type { Actor } from "../core/context.js";
 import type { Db } from "../db/pool.js";
+import { emitChanged } from "../core/events.js";
 import { resolveRepo } from "../core/scopes.js";
 import { buildMcpServer } from "../mcp/server.js";
 import { isAdmin } from "../core/permissions.js";
@@ -39,7 +40,18 @@ export interface AppOptions {
   onWrite?: () => void;
 }
 
-export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DIST, embedder, onWrite }: AppOptions) {
+/** The static site viewer build sits next to the web build (dev: apps/web/dist-viewer; installed: /opt/thaliyola/viewer). */
+function viewerDirFor(webDist: string) {
+  const installed = path.join(path.dirname(webDist), "viewer");
+  return existsSync(installed) ? installed : path.join(path.dirname(webDist), "dist-viewer");
+}
+
+export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DIST, embedder, onWrite: onWriteHook }: AppOptions) {
+  // Every published change re-indexes (if configured) and tells open pages to refresh.
+  const onWrite = () => {
+    onWriteHook?.();
+    emitChanged();
+  };
   const app = express();
   app.disable("x-powered-by");
   // Honour X-Forwarded-* from a proxy or tunnel on the same machine (secure cookies, client IP for login throttling).
@@ -84,7 +96,7 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
     requirePasswordChanged,
     accountRouter(db, settings, (actor) => isAdmin({ db, actor, settings })),
     notificationsRouter(db, settings),
-    apiRouter({ db, settings, embedder, onWrite }),
+    apiRouter({ db, settings, embedder, onWrite, viewerDir: viewerDirFor(webDist) }),
     apiErrorHandler,
   );
 
