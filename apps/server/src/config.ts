@@ -73,6 +73,10 @@ const Env = z
     TAVILY_API_KEY: z.string().optional(),
     // Let feeds and page watches reach private networks (intranet wikis). Off: only public addresses
     SOURCES_ALLOW_PRIVATE: z.enum(["true", "false"]).default("false"),
+    // Vulnerabilities: daily re-check of uploaded dependencies against OSV, and the CISA KEV catalog
+    VULN_SCAN: z.enum(["on", "off"]).default("on"),
+    OSV_API_URL: z.string().url().default("https://api.osv.dev"),
+    KEV_URL: z.string().url().default("https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"),
   })
   .superRefine((env, ctx) => {
     if (env.AUTH_MODE === "dev" && !env.DEV_TOKENS.trim()) {
@@ -130,12 +134,15 @@ export function settingsFrom(config: Config): Settings {
       tavilyKey: config.TAVILY_API_KEY || undefined,
       allowPrivate: config.SOURCES_ALLOW_PRIVATE === "true",
     },
+    security: { enabled: config.VULN_SCAN === "on", osvUrl: config.OSV_API_URL, kevUrl: config.KEV_URL },
   };
 }
 
 export interface Settings {
   /** Team sources; absent in tests that don't use them. */
   sources?: { enabled: boolean; slackToken?: string; notionToken?: string; tavilyKey?: string; allowPrivate: boolean };
+  /** Vulnerability matching; `fetch` is injected in tests. */
+  security?: { enabled: boolean; osvUrl: string; kevUrl: string; fetch?: typeof fetch };
   adminEmails: string[];
   duplicateThreshold: number;
   authMode: "local" | "cloudflare" | "dev";

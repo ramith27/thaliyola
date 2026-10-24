@@ -96,6 +96,12 @@ export const icons = {
       <path d="M4 13h4.5l1 2h5l1-2H20" />
     </Icon>
   ),
+  shield: (p: SVGProps<SVGSVGElement>) => (
+    <Icon {...p}>
+      <path d="M12 3 5 6v5.5c0 4.3 2.9 8 7 9.5 4.1-1.5 7-5.2 7-9.5V6l-7-3Z" />
+      <path d="m9 12 2 2 4-4" />
+    </Icon>
+  ),
   rss: (p: SVGProps<SVGSVGElement>) => (
     <Icon {...p}>
       <path d="M5 11a8 8 0 0 1 8 8M5 5a14 14 0 0 1 14 14" />

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Scan any project from Claude Code: `/mcp__thaliyola__security-check full` scans dependencies and reviews the code with whatever audit tools are installed, then publishes findings and a review record to the project. An owner's first scan adds an unregistered repository to the project. `record_security_review` logs what each review covered. Repeat findings keep one entry. Project pages get a Security card, and the dashboard shows recent scans and reviews and the last code review per repository
+
+- Security: per-project vulnerability register and dashboard. Lockfiles uploaded by agents (`scan_dependencies` hands out a one-time link and command) or CI (`POST /api/dependencies`) are matched against OSV.dev, deduplicated across advisory ids, and re-checked daily. Agents and people report what they find (`report_vulnerability`). CISA KEV flags actively exploited ones. Critical and actively exploited ones notify the project's writers and owners. Details are for writers and above; readers see counts. Also `list_vulnerabilities`, `get_vulnerability`, `update_vulnerability`, the `security-check` prompt, open critical/high vulnerabilities in `get_project_context`, a dependency step in the CI templates, and a Security page with trend, by-repository, packages, coverage and a filterable list
+
 - Team sources and an inbox: RSS/Atom feeds, watched web pages, Hacker News searches, Slack channel threads, Notion pages and Tavily web searches fetched on a schedule (credentials from `SLACK_BOT_TOKEN`, `NOTION_TOKEN`, `TAVILY_API_KEY`; public addresses only unless `SOURCES_ALLOW_PRIVATE=true`); Inbox and Sources pages with preview, Check now, pause, dismiss and draft-from-item; `triage_inbox` curation tasks, a `triage-inbox` prompt and `list_inbox`, `get_inbox_item`, `resolve_inbox_item` and `add_source` MCP tools (`/api/sources`, `/api/inbox`)
 
 - More agent hosts: `GET /connect.sh` installs Thaliyola into Claude Code, Codex, Gemini CLI, Copilot CLI, VS Code, Cursor, Windsurf, OpenCode and Kiro (asks per agent, backs up configs, `--yes`, `--only`, `--dry-run`); the Connect page has manual setup for each and an AGENTS.md snippet

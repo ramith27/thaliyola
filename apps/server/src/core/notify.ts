@@ -9,7 +9,7 @@ import type { Db, Queryable } from "../db/pool.js";
  * asynchronous so writes never wait on a mail server.
  */
 
-export type NotificationKind = "review" | "decided" | "change" | "watch" | "stale" | "comment" | "assigned" | "invite";
+export type NotificationKind = "review" | "decided" | "change" | "watch" | "stale" | "comment" | "assigned" | "invite" | "security";
 
 export interface NotificationInput {
   kind: NotificationKind;
@@ -30,6 +30,7 @@ export const NOTIFICATION_KINDS: { kind: NotificationKind; label: string }[] = [
   { kind: "change", label: "A contract or shared design my project uses changed" },
   { kind: "watch", label: "Something I watch changed" },
   { kind: "stale", label: "Something I own needs re-verifying" },
+  { kind: "security", label: "A critical or actively exploited vulnerability affects my project" },
 ];
 
 const pending = new Set<Promise<unknown>>();

@@ -11,6 +11,8 @@ import type { Actor } from "../core/context.js";
 import type { Db } from "../db/pool.js";
 import { emitChanged } from "../core/events.js";
 import { resolveRepo } from "../core/scopes.js";
+import { uploadWithToken } from "../core/security.js";
+import { NotFoundError, ValidationError } from "../core/context.js";
 import { buildMcpServer } from "../mcp/server.js";
 import { isAdmin } from "../core/permissions.js";
 import { apiErrorHandler, apiRouter } from "./api.js";
@@ -65,11 +67,12 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
   const rateLimit = rateLimitPerActor(settings.rateLimitPerMinute);
   const publicOrigin = settings.publicUrl ? new URL(settings.publicUrl).origin : undefined;
   // Small bodies for everyone; the routes that carry uploads get a larger limit, but only after auth.
-  const UPLOAD_PATHS = new Set(["/mcp", "/api/assets", "/api/import"]);
+  const UPLOAD_PATHS = new Set(["/mcp", "/api/assets", "/api/import", "/api/dependencies"]);
   const smallJson = express.json({ limit: "1mb" });
   const uploadJson = express.json({ limit: Math.ceil(settings.assetMaxBytes * 1.4) + 1024 * 1024 });
   const importRaw = express.raw({ type: () => true, limit: settings.importMaxBytes });
-  app.use((req, res, next) => (UPLOAD_PATHS.has(req.path) ? next() : smallJson(req, res, next)));
+  const lockfilesRaw = express.raw({ type: () => true, limit: "25mb" });
+  app.use((req, res, next) => (UPLOAD_PATHS.has(req.path) || req.path.startsWith("/deps/upload/") ? next() : smallJson(req, res, next)));
 
   app.get("/healthz", async (_req, res) => {
     try {
@@ -81,6 +84,18 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
   });
 
   // Stateless streamable HTTP: a fresh server + transport per request, bound to the caller.
+  // Lockfile upload through a one-time link from scan_dependencies: the link is the credential.
+  app.post("/deps/upload/:token", lockfilesRaw, async (req, res) => {
+    try {
+      if (!Buffer.isBuffer(req.body) || !req.body.length) return void res.status(400).type("text/plain").send("Send the tar.gz of lockfiles as the request body.\n");
+      const r = await uploadWithToken(db, settings, String(req.params.token), req.body);
+      res.json(r);
+    } catch (err) {
+      const status = err instanceof NotFoundError ? 404 : err instanceof ValidationError ? 400 : 500;
+      if (status === 500) console.error(err);
+      res.status(status).json({ error: status === 500 ? "upload failed" : (err as Error).message });
+    }
+  });
   app.use("/auth", publicAuthRouter(db, settings));
   app.use("/actions", actionsRouter(db, settings));
 
@@ -93,6 +108,7 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
     rateLimit,
     (req: Request, res: Response, next: NextFunction) => (req.path === "/assets" ? uploadJson(req, res, next) : next()),
     (req: Request, res: Response, next: NextFunction) => (req.path === "/import" ? importRaw(req, res, next) : next()),
+    (req: Request, res: Response, next: NextFunction) => (req.path === "/dependencies" ? lockfilesRaw(req, res, next) : next()),
     requirePasswordChanged,
     accountRouter(db, settings, (actor) => isAdmin({ db, actor, settings })),
     notificationsRouter(db, settings),

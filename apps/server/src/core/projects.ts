@@ -2,6 +2,7 @@ import type { RequestContext } from "./context.js";
 import { ValidationError } from "./context.js";
 import { readableScopes } from "./permissions.js";
 import { projectHint } from "./tasks.js";
+import { projectSecurity } from "./security.js";
 import { getComponent, getReadableScope, listComponents, resolveProject } from "./scopes.js";
 
 const OVERVIEW_MAX_CHARS = 6000;
@@ -113,6 +114,7 @@ export async function getProjectContext(ctx: RequestContext, projectSlug?: strin
     uses: uses.rows,
     ...(await projectHint(ctx, project.slug).then((c) => (c ? { curation: c } : {})).catch(() => ({}))),
     open_known_issues: knownIssues.rows,
+    ...(await projectSecurity(ctx, project.id, comp?.slug).then((s) => (s ? { security: s } : {})).catch(() => ({}))),
   };
 }
 

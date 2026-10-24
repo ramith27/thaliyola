@@ -13,6 +13,7 @@ import { InviteAcceptPage } from "./pages/invite";
 import { ImportPage, NewProjectPage } from "./pages/setup";
 import { PasteDraftPage } from "./pages/paste";
 import { InboxPage, SourcesPage } from "./pages/sources";
+import { SecurityPage, VulnerabilityPage } from "./pages/security";
 import { HistoryPage } from "./pages/history";
 import { Layout } from "./components/Layout";
 import { ErrorBox, Loading } from "./components/ui";
@@ -131,6 +132,9 @@ export function App() {
       break;
     case "trash":
       page = <TrashPage />;
+      break;
+    case "security":
+      page = id ? <VulnerabilityPage id={id} /> : <SecurityPage route={route} scopes={boot.scopes} />;
       break;
     case "inbox":
       page = <InboxPage route={route} scopes={boot.scopes} />;

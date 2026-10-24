@@ -143,7 +143,20 @@ export function OtherAgents({ setup, origin }: { setup: Setup; origin: string })
 
 const ALLOWED = "mcp__thaliyola,Read,Glob,Grep,Bash(git diff:*),Bash(git log:*),Bash(git rev-parse:*),Bash(git remote get-url:*),Bash(git ls-files:*)";
 
+const LOCKFILE_GLOBS =
+  "'*package-lock.json' '*npm-shrinkwrap.json' '*pnpm-lock.yaml' '*yarn.lock' '*requirements.txt' '*poetry.lock' '*uv.lock' '*Pipfile.lock' '*go.mod' '*Cargo.lock' '*Gemfile.lock' '*composer.lock' '*packages.lock.json' '*gradle.lockfile' '*requirements*.txt'";
+
+/** Sends the repository's lockfiles to Thaliyola, which matches them against OSV and updates the security dashboard. */
+export function dependencyUpload(mcpUrl: string) {
+  const base = mcpUrl.replace(/\/mcp$/, "");
+  return (
+    `git ls-files -z -- ${LOCKFILE_GLOBS} | tar --null -T - -czf - | curl -fsS -X POST -H "Authorization: Bearer $THALIYOLA_TOKEN" -H 'Content-Type: application/gzip' ` +
+    `--data-binary @- --url-query "repo=$(git remote get-url origin)" --url-query "sha=$(git rev-parse HEAD)" ${base}/api/dependencies`
+  );
+}
+
 export function ciTemplates(mcpUrl: string) {
+  const deps = dependencyUpload(mcpUrl);
   const setup = `claude mcp add --transport http thaliyola ${mcpUrl} --header "Authorization: Bearer $THALIYOLA_TOKEN"`;
   const runDocs = `claude -p "/mcp__thaliyola__update-docs" --allowedTools "${ALLOWED}"`;
   return [
@@ -167,6 +180,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Check dependencies for vulnerabilities
+        env:
+          THALIYOLA_TOKEN: \${{ secrets.THALIYOLA_TOKEN }}
+        run: |
+          ${deps}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -193,6 +211,8 @@ jobs:
     GIT_DEPTH: 0
   resource_group: thaliyola-docs
   script:
+    - |
+      ${deps}
     - npm install -g @anthropic-ai/claude-code
     - '${setup}'
     - '${runDocs}'
@@ -212,6 +232,8 @@ jobs:
           clone:
             depth: full
           script:
+            - |
+              ${deps}
             - npm install -g @anthropic-ai/claude-code
             - '${setup}'
             - '${runDocs}'
@@ -228,7 +250,8 @@ export function CiDocs({ mcpUrl }: { mcpUrl: string }) {
   return (
     <>
       <p className="muted small">
-        After the first <code>/mcp__thaliyola__document-repo</code>, a CI job can keep the docs current on every merge: Claude Code runs headless, sends the changed files,
+        After the first <code>/mcp__thaliyola__document-repo</code>, a CI job can keep the docs and the security dashboard current on every merge. Its first step
+        uploads the lockfiles for vulnerability matching (no Anthropic key needed; keep just that step if you only want security). Then Claude Code runs headless, sends the changed files,
         and rewrites only the pages whose facts changed (and does nothing when nothing relevant changed). Create a bot token that owns the project, so pages publish directly, with{" "}
         <code>thaliyola-admin create-token --service docs-bot --name "CI docs" --owner-of &lt;project&gt;</code> on the server; with a writer token they go to review.
       </p>

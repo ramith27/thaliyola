@@ -7,6 +7,8 @@ thaliyola-docs:
     GIT_DEPTH: 0
   resource_group: thaliyola-docs
   script:
+    - |
+      git ls-files -z -- '*package-lock.json' '*npm-shrinkwrap.json' '*pnpm-lock.yaml' '*yarn.lock' '*requirements.txt' '*poetry.lock' '*uv.lock' '*Pipfile.lock' '*go.mod' '*Cargo.lock' '*Gemfile.lock' '*composer.lock' '*packages.lock.json' '*gradle.lockfile' '*requirements*.txt' | tar --null -T - -czf - | curl -fsS -X POST -H "Authorization: Bearer $THALIYOLA_TOKEN" -H 'Content-Type: application/gzip' --data-binary @- --url-query "repo=$(git remote get-url origin)" --url-query "sha=$(git rev-parse HEAD)" https://thaliyola.example.com/api/dependencies
     - npm install -g @anthropic-ai/claude-code
     - 'claude mcp add --transport http thaliyola https://thaliyola.example.com/mcp --header "Authorization: Bearer $THALIYOLA_TOKEN"'
     - 'claude -p "/mcp__thaliyola__update-docs" --allowedTools "mcp__thaliyola,Read,Glob,Grep,Bash(git diff:*),Bash(git log:*),Bash(git rev-parse:*),Bash(git remote get-url:*),Bash(git ls-files:*)"'

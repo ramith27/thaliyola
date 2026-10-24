@@ -3,6 +3,7 @@ import { WatchButton } from "../components/notifications";
 import { AnswerCard, FavouriteButton } from "../components/find";
 import { MoreActions } from "../components/more";
 import { MoveFolder } from "../components/move";
+import { ProjectSecurity } from "./security";
 import { api } from "../api";
 import { ErrorBox, formatDate, itemHref, Loading, Notice, ScopeBadge, Snippet, StatusBadge, TypeBadge } from "../components/ui";
 import { useApi, useLiveRefresh } from "../hooks";
@@ -296,6 +297,7 @@ export function ProjectPage({ slug, route, me, scopes = [] }: { slug: string; ro
         </section>
       </div>
 
+      <ProjectSecurity project={slug} component={component} />
       <section>
         <h2>Open known issues</h2>
         <LinkList items={data.open_known_issues} kind="finding" empty="None." />

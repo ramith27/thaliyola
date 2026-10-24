@@ -228,6 +228,19 @@ Thaliyola can keep a living wiki for every repository, written by your own codin
 - **Reading:** pages render Mermaid diagrams; a Sources panel lists each fact with a link to the exact lines on GitHub, GitLab or Bitbucket and flags stale ones. Pages refresh live while an agent writes (`/api/events`, server-sent events; nginx needs buffering off for it, see `deploy/native/nginx-thaliyola.conf`).
 - **Static site:** project settings → General → Download as a static site gives a zip with a self-contained reader (search, folders, diagrams, sources) to host anywhere (`GET /api/export/site?scope=`). The Markdown export follows the Open Knowledge Format (front matter with `kind` and provenance, `index.md`, `log.md`).
 
+## Security: vulnerabilities
+
+Every project gets a vulnerability register and a **Security** dashboard, available to agents over MCP as well. There's still no scanner or model on the server:
+- **Dependencies:** an agent calls `scan_dependencies` and runs the one-line command it returns. The command sends only the repository's lockfiles (npm, pnpm, yarn, pip, poetry, uv, Pipfile, Go modules, Cargo, Bundler, Composer, NuGet, Gradle) to a one-time upload link, so no token is needed in the shell. CI can upload on every merge with a token (`POST /api/dependencies?repo=…&sha=…`; see `integrations/ci/`). Thaliyola matches exact versions against [OSV.dev](https://osv.dev), keeps one entry when OSV lists the same issue under several ids, records severity (CVSS 3.x computed from the vector, else the advisory's rating) and the upgrade that fixes it, and re-checks every repository daily as new advisories appear. A vulnerability closes by itself once a later upload no longer has that version.
+- **Scan any project from Claude Code:** open a repository and run `/mcp__thaliyola__security-check` (dependencies only) or `/mcp__thaliyola__security-check full`. The full check also reviews the code: auth, injection, secrets, crypto, configuration, CI and infrastructure files, and data exposure. It uses `npm audit`, `pip-audit`, `govulncheck`, `cargo audit`, `semgrep`, `gitleaks` or `trivy` when they're installed, and confirms each finding in the code. Add `yes` as the second argument to also upgrade vulnerable packages. If the repository isn't in a project yet, an owner's first scan adds it (`scan_dependencies` with `project`).
+- **Reported:** agents and people publish what they find in code review, pentests or incidents with `report_vulnerability` (severity or CVSS vector, location, details; text is redacted). A finding reported again by a later review keeps its existing entry. `record_security_review` logs each review (summary, areas covered, tools, findings) so every repository shows when it was last scanned and reviewed.
+- **Actively exploited:** CISA's Known Exploited Vulnerabilities catalog is refreshed daily, and matching CVEs are flagged and sorted first.
+- **Announced:** new critical or actively exploited vulnerabilities notify the project's writers, owners and admins (in-app and email, kind "security"). The team Slack channel gets counts only.
+- **Who sees what:** details are for the project's writers, owners and admins; other readers see counts. Owners accept risks or mark false positives, always with a note. `get_project_context` gives coding agents the open critical and high vulnerabilities for their repository.
+- **On each project page**, a Security card shows open counts by severity and when dependencies were last scanned and the code last reviewed. It links to the dashboard filtered to that project.
+- **Dashboard** (`#/security`): open critical, high and actively exploited counts; fixes available; fixed in the last 30 days and median time to fix; a 90-day trend; open vulnerabilities by repository; the most affected packages; scan and code-review coverage per repository with a Scan button; recent scans and reviews; and a filterable list with a page for each vulnerability.
+- MCP tools: `scan_dependencies`, `list_vulnerabilities`, `get_vulnerability`, `report_vulnerability`, `record_security_review`, `update_vulnerability`; the `security-check` prompt (arguments: `depth`, `fix`, `project`). API: `/api/security`, `/api/security/reviews`, `/api/vulnerabilities`, `/api/dependencies`. `VULN_SCAN=off` stops the daily checks.
+
 ## Team sources and the inbox
 
 Thaliyola can watch what the team reads and bring it into an **inbox** (Inbox in the sidebar), still without a model on the server:
@@ -239,7 +252,7 @@ Thaliyola can watch what the team reads and bring it into an **inbox** (Inbox in
 ## Agent integrations
 
 [`integrations/`](integrations) has everything needed to make agents use Thaliyola by default:
-- **Prompts:** `investigate`, `start-coding`, `capture`, `draft-from-paste`, `curate`, `review-stale`, `document-repo`, `update-docs` and `triage-inbox`, served by every Thaliyola server.
+- **Prompts:** `investigate`, `start-coding`, `capture`, `draft-from-paste`, `curate`, `review-stale`, `document-repo`, `update-docs`, `triage-inbox` and `security-check`, served by every Thaliyola server.
 - **Curation by the client's model:** Thaliyola has no LLM, so it hands judgment work to connected agents. `get_tasks` returns tasks with instructions: entries filed in the team space that belong to a project, project pages missing their repository, look-alike findings, recurring problems, empty outline sections, stale entries, projects without an overview, unlinked entries, and (for admins) searches that found nothing. The agent acts through normal tools (`move_entry` proposes moving an entry to a project, folder and/or repository) and reports with `complete_task`; handed-out tasks are reserved for an hour and finished ones stay hidden. `get_project_context` mentions open tasks so agents tidy as they go. Run it with the `curate` prompt (`/mcp__thaliyola__curate` in Claude Code), on demand or on a schedule (e.g. `claude -p "/mcp__thaliyola__curate"` from cron). Review → Suggestions shows the queue and what agents did. (MCP sampling isn't used: the endpoint is stateless and most clients don't support it.)
 - **Every coding agent:** `curl -fsSL https://<server>/connect.sh | sh` adds Thaliyola to Claude Code, Codex, Gemini CLI, Copilot CLI, VS Code, Cursor, Windsurf, OpenCode and Kiro; the Connect page has the manual setup for each.
 - **Claude Code:** a plugin with the `thaliyola` skill, a per-repo `.mcp.json` template, and a CLAUDE.md snippet.
@@ -301,7 +314,7 @@ claude mcp add --transport http thaliyola http://localhost:8080/mcp \
 ### Acceptance
 
 [`docs/acceptance.md`](docs/acceptance.md) describes the full acceptance run and its latest results:
-- a sweep of all 40 MCP tools (`pnpm --filter @thaliyola/server acceptance`);
+- a sweep of all 46 MCP tools (`pnpm --filter @thaliyola/server acceptance`);
 - real Claude Code sessions acting as designer, backend developer, frontend developer, on-call engineer, admin and outsider.
 
 ### Behind a reverse proxy

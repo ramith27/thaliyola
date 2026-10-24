@@ -20,6 +20,7 @@ import { eventStream } from "../core/events.js";
 import { agentsMdBlock, claimsFor, docsStatus, resolveClaims, updateDocSettings } from "../core/docs.js";
 import { approveProjectRequest, createOrRequestProject, declineProjectRequest, listProjectRequests } from "../core/project-requests.js";
 import { SOURCE_KINDS } from "../core/connectors.js";
+import { beginDependencyScan, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, securityOverview, updateVulnerability, uploadWithAuth } from "../core/security.js";
 import { createSource, deleteSource, getInboxItem, listInbox, listSources, previewSource, reopenInboxItem, resolveInboxItem, runSourceNow, updateSource } from "../core/sources.js";
 import { deleteItem, deleteProject, emptyItem, emptyProject, listTrash, restoreItem, restoreProject } from "../core/trash.js";
 import { listPurges, purgeItem } from "../core/purge.js";
@@ -78,6 +79,23 @@ const repoUrl = z
   .string()
   .max(500)
   .refine((v) => v === "" || /^([a-z+]+:\/\/)?([^@\s/]+@)?[\w.-]+(:\d+)?[/:][\w./~-]+$/i.test(v.trim()), "not a repository URL");
+
+export const reportSchema = z.object({
+  project: z.string().optional(),
+  component: z.string().optional(),
+  repo: z.string().optional(),
+  title: z.string().min(1).max(300),
+  severity: z.enum(["critical", "high", "medium", "low", "unknown"]).optional(),
+  cvss_vector: z.string().max(200).optional(),
+  details: z.string().min(1).max(20_000),
+  location: z.string().max(500).optional(),
+  cwe: z.string().max(100).optional(),
+  package: z.string().max(300).optional(),
+  version: z.string().max(100).optional(),
+  fixed_versions: z.array(z.string().max(100)).max(20).optional(),
+  advisory_id: z.string().max(100).optional(),
+  references: z.array(z.string().url()).max(20).optional(),
+});
 
 export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: { db: Db; settings: Settings; embedder?: Embedder; onWrite?: () => void; viewerDir?: string }) {
   const router = Router();
@@ -267,6 +285,83 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
     ),
   );
   router.get("/purges", handle("list_purges", async (ctx) => ({ purges: await listPurges(ctx) })));
+  // Vulnerabilities (details for project writers, owners and admins).
+  const SEVERITY = ["critical", "high", "medium", "low", "unknown"] as const;
+  const STATUS = ["open", "acknowledged", "fixed", "accepted", "false_positive"] as const;
+  const statusEnum = z.enum(STATUS);
+  const csvOf = <const T extends readonly [string, ...string[]]>(values: T) =>
+    z.string().transform((v, c) => {
+      const parts = v.split(",").filter(Boolean);
+      const bad = parts.find((p) => !values.includes(p));
+      if (bad) c.addIssue({ code: "custom", message: `unknown value ${bad}` });
+      return parts as T[number][];
+    });
+  router.get("/security", handle("security_overview", (ctx, req) => securityOverview(ctx, z.object({ project: z.string().optional() }).parse(req.query))));
+  router.get(
+    "/vulnerabilities",
+    handle("list_vulnerabilities", (ctx, req) => {
+      const q = z
+        .object({
+          project: z.string().optional(),
+          repository: z.string().optional(),
+          severity: csvOf(SEVERITY).optional(),
+          status: z.union([z.enum(["open", "resolved", "all"]), csvOf(STATUS)]).optional(),
+          kev: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
+          fixable: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
+          q: z.string().max(200).optional(),
+          limit: z.coerce.number().int().optional(),
+          offset: z.coerce.number().int().min(0).optional(),
+        })
+        .parse(req.query);
+      return listVulnerabilities(ctx, q);
+    }),
+  );
+  router.get("/vulnerabilities/:id", handle("get_vulnerability", (ctx, req) => getVulnerability(ctx, uuid.parse(req.params.id))));
+  router.post(
+    "/vulnerabilities",
+    handle("report_vulnerability", (ctx, req) => reportVulnerability(ctx, reportSchema.parse(req.body))),
+  );
+  router.post(
+    "/vulnerabilities/:id/status",
+    handle("update_vulnerability", (ctx, req) =>
+      updateVulnerability(ctx, { id: uuid.parse(req.params.id), ...z.object({ status: statusEnum, note: z.string().max(1000).optional() }).parse(req.body) }),
+    ),
+  );
+  router.post(
+    "/security/reviews",
+    handle("record_security_review", (ctx, req) =>
+      recordSecurityReview(
+        ctx,
+        z
+          .object({
+            project: z.string().optional(),
+            component: z.string().optional(),
+            repo: z.string().optional(),
+            head_sha: z.string().max(64).optional(),
+            summary: z.string().min(1).max(4000),
+            areas: z.array(z.string().max(100)).max(30).optional(),
+            tools: z.array(z.string().max(60)).max(20).optional(),
+            vulnerability_ids: z.array(z.string().uuid()).max(200).optional(),
+          })
+          .parse(req.body),
+      ),
+    ),
+  );
+  router.post(
+    "/dependencies/upload-link",
+    handle("scan_dependencies", (ctx, req) =>
+      beginDependencyScan(ctx, z.object({ project: z.string().optional(), component: z.string().optional(), repo: z.string().optional(), head_sha: z.string().optional() }).parse(req.body)),
+    ),
+  );
+  router.post(
+    "/dependencies",
+    handle("upload_dependencies", (ctx, req) => {
+      if (!Buffer.isBuffer(req.body) || !req.body.length) throw new ValidationError("send a tar.gz of the repository's lockfiles as the request body");
+      const q = z.object({ project: z.string().optional(), component: z.string().optional(), repo: z.string().optional(), sha: z.string().max(64).optional() }).parse(req.query);
+      return uploadWithAuth(ctx, q, req.body);
+    }),
+  );
+
   // Team sources and the inbox.
   const sourceKind = z.enum(SOURCE_KINDS);
   const sourceConfig = z.record(z.string(), z.union([z.string(), z.number()])).default({});

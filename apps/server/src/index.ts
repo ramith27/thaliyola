@@ -3,6 +3,7 @@ import { ensureBaseScopes } from "./core/bootstrap.js";
 import { HashingEmbedder, LocalEmbedder, startIndexer } from "./core/embeddings.js";
 import { startJobs } from "./core/freshness.js";
 import { startSourceJobs } from "./core/sources.js";
+import { startSecurityJobs } from "./core/security.js";
 import { loadConfig, settingsFrom } from "./config.js";
 import { migrate } from "./db/migrate.js";
 import { createPool } from "./db/pool.js";
@@ -42,6 +43,7 @@ const jobs = startJobs(
 );
 
 const sources = startSourceJobs(db, settingsFrom(config), (msg) => console.log(`[sources] ${msg}`));
+const security = startSecurityJobs(db, settingsFrom(config), (msg) => console.log(`[security] ${msg}`));
 
 const server = createApp({
   db,
@@ -59,6 +61,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     indexer?.stop();
     jobs.stop();
     sources.stop();
+    security.stop();
     server.close(() => void db.end().then(() => process.exit(0)));
   });
 }

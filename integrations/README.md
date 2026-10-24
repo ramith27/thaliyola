@@ -14,6 +14,7 @@ Thaliyola pays off when the tools people already use read from it first and writ
 | `curate` | Work through the curation tasks the server hands out (misfiled entries, duplicates, stale facts) |
 | `document-repo` | Write grounded documentation for the repository you're in (first run) |
 | `update-docs` | Refresh only the pages and facts that changed since the last documented commit |
+| `security-check` | Scan the repository you're in and publish to its project: dependencies (default) or `full` (also reviews the code); `fix: yes` also upgrades vulnerable packages |
 | `triage-inbox` | File what team sources brought in (feeds, pages, Slack, Notion, searches) as knowledge, dismiss the rest |
 
 ## Claude Code
@@ -86,7 +87,7 @@ Most of these read `AGENTS.md` (Gemini CLI reads `GEMINI.md`, Kiro reads `.kiro/
 
 ## Keep repository docs current in CI
 
-After the first `/mcp__thaliyola__document-repo`, a CI job keeps the docs in step with the code: Claude Code runs headless, sends the changed files, and rewrites only the pages whose facts changed (nothing at all when nothing relevant changed).
+After the first `/mcp__thaliyola__document-repo`, a CI job keeps the docs in step with the code, and its first step uploads the lockfiles so the security dashboard stays current (that step needs only `THALIYOLA_TOKEN`): Claude Code runs headless, sends the changed files, and rewrites only the pages whose facts changed (nothing at all when nothing relevant changed).
 
 - [`ci/github-actions.yml`](ci/github-actions.yml), [`ci/gitlab-ci.yml`](ci/gitlab-ci.yml), [`ci/bitbucket-pipelines.yml`](ci/bitbucket-pipelines.yml)
 - Secrets: `ANTHROPIC_API_KEY` and `THALIYOLA_TOKEN`. Use a bot token that owns the project so pages publish directly (`sudo thaliyola-admin create-token --service docs-bot --name "CI docs" --owner-of <project>`); with a writer role they go to review.
