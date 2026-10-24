@@ -85,7 +85,7 @@ try {
 
   // ---- Discovery and prompts
   const { tools } = await designer.client.listTools();
-  check("46 tools listed", tools.length === 46, tools.map((t) => t.name));
+  check("49 tools listed", tools.length === 49, tools.map((t) => t.name));
   const { prompts } = await designer.client.listPrompts();
   check("4 prompts listed", prompts.length === 4);
   for (const p of prompts) {

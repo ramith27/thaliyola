@@ -95,6 +95,53 @@ function useAction(onDone?: () => void) {
 
 // ---- General ---------------------------------------------------------------------
 
+/** What the project runs on, so new critical vulnerabilities (e.g. in PHP or nginx) reach the right teams. */
+function Technologies({ slug }: { slug: string }) {
+  const { data, reload } = useApi<{ own: string[]; effective: string[]; labels: Record<string, string>; known: Record<string, string> }>(`/projects/${slug}/technologies`);
+  const [text, setText] = useState<string | null>(null);
+  const { act, error, saved } = useAction();
+  if (!data) return null;
+  const value = text ?? data.own.map((t) => data.labels[t] ?? data.known[t] ?? t).join(", ");
+  const detected = data.effective.filter((t) => !data.own.includes(t));
+  return (
+    <div className="tech-settings">
+      <h2>Technologies</h2>
+      <p className="muted small">
+        Runtimes, servers, databases and platforms this project runs on. New critical vulnerabilities in them (from NVD, GitHub and CISA) are shown on the Security page and
+        sent to the project's writers and owners.
+      </p>
+      <input value={value} onChange={(e) => setText(e.target.value)} placeholder="e.g. PHP, nginx, PostgreSQL, Redis, Docker, Kubernetes" aria-label="Technologies" list="known-tech" />
+      <datalist id="known-tech">
+        {Object.values(data.known).map((l) => (
+          <option key={l} value={l} />
+        ))}
+      </datalist>
+      {detected.length > 0 && (
+        <p className="muted small">
+          Also detected from dependencies and security reviews: {detected.map((t) => data.labels[t] ?? t).join(", ")}
+        </p>
+      )}
+      <ErrorBox error={error} />
+      {saved && <Notice kind="ok">{saved}</Notice>}
+      <div className="actions">
+        <button
+          className="btn"
+          disabled={text === null}
+          onClick={() =>
+            act("Saved.", async () => {
+              await api(`/projects/${slug}/technologies`, { method: "PUT", body: { technologies: value.split(",").map((t) => t.trim()).filter(Boolean) } });
+              setText(null);
+              reload();
+            })
+          }
+        >
+          Save technologies
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function General({ scope }: { scope: ScopeInfo }) {
   const [name, setName] = useState(scope.name);
   const [description, setDescription] = useState(scope.description);
@@ -151,6 +198,7 @@ function General({ scope }: { scope: ScopeInfo }) {
         </button>
       </div>
       {project && <p className="muted small">The short name ({scope.slug}) is used in links and by Claude, so it stays fixed.</p>}
+      {project && <Technologies slug={scope.slug} />}
       <h2>Data</h2>
       <div className="actions">
         <ExportButton scope={scope.slug} label={`Export ${scope.name} as Markdown`} />

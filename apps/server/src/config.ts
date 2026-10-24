@@ -77,6 +77,12 @@ const Env = z
     VULN_SCAN: z.enum(["on", "off"]).default("on"),
     OSV_API_URL: z.string().url().default("https://api.osv.dev"),
     KEV_URL: z.string().url().default("https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"),
+    // Latest critical vulnerabilities worldwide (NVD, GitHub advisories, CISA KEV), every 6 hours; keys only raise rate limits
+    ADVISORY_FEED: z.enum(["on", "off"]).default("on"),
+    NVD_API_URL: z.string().url().default("https://services.nvd.nist.gov/rest/json/cves/2.0"),
+    NVD_API_KEY: z.string().optional(),
+    GITHUB_API_URL: z.string().url().default("https://api.github.com"),
+    GITHUB_TOKEN: z.string().optional(),
   })
   .superRefine((env, ctx) => {
     if (env.AUTH_MODE === "dev" && !env.DEV_TOKENS.trim()) {
@@ -134,7 +140,16 @@ export function settingsFrom(config: Config): Settings {
       tavilyKey: config.TAVILY_API_KEY || undefined,
       allowPrivate: config.SOURCES_ALLOW_PRIVATE === "true",
     },
-    security: { enabled: config.VULN_SCAN === "on", osvUrl: config.OSV_API_URL, kevUrl: config.KEV_URL },
+    security: {
+      enabled: config.VULN_SCAN === "on",
+      osvUrl: config.OSV_API_URL,
+      kevUrl: config.KEV_URL,
+      feed: config.ADVISORY_FEED === "on",
+      nvdUrl: config.NVD_API_URL,
+      nvdKey: config.NVD_API_KEY || undefined,
+      githubUrl: config.GITHUB_API_URL,
+      githubToken: config.GITHUB_TOKEN || undefined,
+    },
   };
 }
 
@@ -142,7 +157,17 @@ export interface Settings {
   /** Team sources; absent in tests that don't use them. */
   sources?: { enabled: boolean; slackToken?: string; notionToken?: string; tavilyKey?: string; allowPrivate: boolean };
   /** Vulnerability matching; `fetch` is injected in tests. */
-  security?: { enabled: boolean; osvUrl: string; kevUrl: string; fetch?: typeof fetch };
+  security?: {
+    enabled: boolean;
+    osvUrl: string;
+    kevUrl: string;
+    feed?: boolean;
+    nvdUrl?: string;
+    nvdKey?: string;
+    githubUrl?: string;
+    githubToken?: string;
+    fetch?: typeof fetch;
+  };
   adminEmails: string[];
   duplicateThreshold: number;
   authMode: "local" | "cloudflare" | "dev";

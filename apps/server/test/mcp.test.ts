@@ -50,8 +50,8 @@ describe("MCP over streamable HTTP", () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
       "ack_notice", "add_source", "add_source_link", "browse_kb", "complete_task", "create_article", "create_project", "docs_begin", "docs_finish", "docs_inspect_claims", "docs_next_page", "docs_skip_page", "docs_submit_page", "docs_submit_plan", "get_agents_md_block", "get_article", "get_article_template", "get_asset", "get_finding", "get_inbox_item",
-      "get_project_context", "get_tasks", "get_vulnerability", "link_entries", "list_impact_notices", "list_inbox", "list_projects", "list_review_queue", "list_stale_entries", "list_suggestions", "list_vulnerabilities",
-      "move_entry", "promote_finding", "propose_article_edit", "propose_finding", "record_security_review", "report_vulnerability", "resolve_claims", "resolve_inbox_item", "scan_dependencies", "search_knowledge", "share_to_library",
+      "get_project_context", "get_tasks", "get_vulnerability", "latest_advisories", "link_entries", "list_impact_notices", "list_inbox", "list_projects", "list_review_queue", "list_stale_entries", "list_suggestions", "list_vulnerabilities",
+      "move_entry", "promote_finding", "propose_article_edit", "propose_finding", "publish_advisory", "record_security_review", "report_vulnerability", "resolve_claims", "resolve_inbox_item", "scan_dependencies", "search_knowledge", "set_advisory_response", "share_to_library",
       "update_finding", "update_vulnerability", "upload_asset", "verify_entry",
     ]);
     const readOnly = tools.filter((t) => t.annotations?.readOnlyHint).map((t) => t.name);

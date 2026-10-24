@@ -20,6 +20,8 @@ import { eventStream } from "../core/events.js";
 import { agentsMdBlock, claimsFor, docsStatus, resolveClaims, updateDocSettings } from "../core/docs.js";
 import { approveProjectRequest, createOrRequestProject, declineProjectRequest, listProjectRequests } from "../core/project-requests.js";
 import { SOURCE_KINDS } from "../core/connectors.js";
+import { getReadableScope } from "../core/scopes.js";
+import { hideAdvisory, latestAdvisories, publishAdvisory, setAdvisoryResponse, setProjectTechnologies, stackOf, TECHNOLOGIES } from "../core/advisories.js";
 import { beginDependencyScan, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, securityOverview, updateVulnerability, uploadWithAuth } from "../core/security.js";
 import { createSource, deleteSource, getInboxItem, listInbox, listSources, previewSource, reopenInboxItem, resolveInboxItem, runSourceNow, updateSource } from "../core/sources.js";
 import { deleteItem, deleteProject, emptyItem, emptyProject, listTrash, restoreItem, restoreProject } from "../core/trash.js";
@@ -95,6 +97,18 @@ export const reportSchema = z.object({
   fixed_versions: z.array(z.string().max(100)).max(20).optional(),
   advisory_id: z.string().max(100).optional(),
   references: z.array(z.string().url()).max(20).optional(),
+});
+
+export const publishSchema = z.object({
+  name: z.string().max(80).optional(),
+  title: z.string().min(1).max(300),
+  summary: z.string().max(8000).default(""),
+  cve_ids: z.array(z.string().max(30)).max(30).optional(),
+  severity: z.enum(["critical", "high", "medium", "low", "unknown"]).optional(),
+  cvss_score: z.number().min(0).max(10).optional(),
+  technologies: z.array(z.string().max(40)).max(20).optional(),
+  packages: z.array(z.object({ ecosystem: z.string().max(30), name: z.string().max(200) })).max(30).optional(),
+  url: z.string().url().optional(),
 });
 
 export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: { db: Db; settings: Settings; embedder?: Embedder; onWrite?: () => void; viewerDir?: string }) {
@@ -327,6 +341,46 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
       updateVulnerability(ctx, { id: uuid.parse(req.params.id), ...z.object({ status: statusEnum, note: z.string().max(1000).optional() }).parse(req.body) }),
     ),
   );
+  router.get(
+    "/advisories",
+    handle("latest_advisories", (ctx, req) =>
+      latestAdvisories(
+        ctx,
+        z
+          .object({
+            days: z.coerce.number().int().optional(),
+            project: z.string().optional(),
+            technology: z.string().optional(),
+            affecting: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
+            limit: z.coerce.number().int().optional(),
+            include_hidden: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
+          })
+          .parse(req.query),
+      ),
+    ),
+  );
+  router.post("/advisories", handle("publish_advisory", (ctx, req) => publishAdvisory(ctx, publishSchema.parse(req.body))));
+  router.post("/advisories/:id/hide", handle("hide_advisory", (ctx, req) => hideAdvisory(ctx, uuid.parse(req.params.id), z.object({ hidden: z.boolean().default(true) }).parse(req.body ?? {}).hidden)));
+  router.post(
+    "/advisories/:id/responses",
+    handle("advisory_response", (ctx, req) =>
+      setAdvisoryResponse(ctx, {
+        advisory_id: uuid.parse(req.params.id),
+        ...z.object({ project: z.string(), status: z.enum(["investigating", "affected", "not_affected", "patched"]), note: z.string().max(1000).optional() }).parse(req.body),
+      }),
+    ),
+  );
+  router.get(
+    "/projects/:slug/technologies",
+    handle("project_technologies", async (ctx, req) => {
+      const scope = await getReadableScope(ctx, String(req.params.slug));
+      return { project: scope.slug, ...(await stackOf(ctx, scope.id)), known: TECHNOLOGIES };
+    }),
+  );
+  router.put(
+    "/projects/:slug/technologies",
+    handle("set_project_technologies", (ctx, req) => setProjectTechnologies(ctx, String(req.params.slug), z.object({ technologies: z.array(z.string().max(40)).max(40) }).parse(req.body).technologies)),
+  );
   router.post(
     "/security/reviews",
     handle("record_security_review", (ctx, req) =>
@@ -342,6 +396,7 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
             areas: z.array(z.string().max(100)).max(30).optional(),
             tools: z.array(z.string().max(60)).max(20).optional(),
             vulnerability_ids: z.array(z.string().uuid()).max(200).optional(),
+            technologies: z.array(z.string().max(40)).max(40).optional(),
           })
           .parse(req.body),
       ),

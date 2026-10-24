@@ -134,7 +134,7 @@ export function App() {
       page = <TrashPage />;
       break;
     case "security":
-      page = id ? <VulnerabilityPage id={id} /> : <SecurityPage route={route} scopes={boot.scopes} />;
+      page = id ? <VulnerabilityPage id={id} /> : <SecurityPage route={route} scopes={boot.scopes} isAdmin={boot.me.admin} />;
       break;
     case "inbox":
       page = <InboxPage route={route} scopes={boot.scopes} />;

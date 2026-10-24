@@ -23,6 +23,7 @@ import {
 } from "./osv.js";
 import { canManage, isAdmin, readableScopes, roleIn } from "./permissions.js";
 import { adminAddComponent } from "./admin.js";
+import { addComponentTechnologies, refreshAdvisories } from "./advisories.js";
 import { redact } from "./redaction.js";
 import { getComponent, getReadableScope, resolveProject, resolveRepo } from "./scopes.js";
 
@@ -367,7 +368,7 @@ export async function runSecurityChecks(db: Db, settings: Settings, log: (msg: s
 }
 
 export function startSecurityJobs(db: Db, settings: Settings, log: (msg: string) => void) {
-  if (!settings.security?.enabled) return { stop() {} };
+  if (!settings.security?.enabled && !settings.security?.feed) return { stop() {} };
   const LOCK = 7_402_214;
   async function tick() {
     const client = await db.connect();
@@ -376,8 +377,10 @@ export function startSecurityJobs(db: Db, settings: Settings, log: (msg: string)
       if (!rows[0]?.locked) return;
       try {
         const last = await db.query<{ due: boolean }>("SELECT last_run < now() - interval '23 hours' AS due FROM job_runs WHERE name = 'security'");
-        if (last.rows[0]?.due === false) return;
-        await runSecurityChecks(db, settings, log);
+        if (settings.security?.enabled && last.rows[0]?.due !== false) await runSecurityChecks(db, settings, log);
+        // The worldwide feed of critical vulnerabilities, every 6 hours.
+        const feed = await db.query<{ due: boolean }>("SELECT last_run < now() - interval '6 hours' AS due FROM job_runs WHERE name = 'advisories'");
+        if (settings.security?.feed && feed.rows[0]?.due !== false) await refreshAdvisories(db, settings, log);
       } finally {
         await client.query("SELECT pg_advisory_unlock($1)", [LOCK]);
       }
@@ -503,10 +506,11 @@ export async function reportVulnerability(ctx: RequestContext, input: ReportInpu
 /** A security review an agent finished: what it covered, which tools it ran, and the vulnerabilities it reported. */
 export async function recordSecurityReview(
   ctx: RequestContext,
-  input: { project?: string; component?: string; repo?: string; head_sha?: string; summary: string; areas?: string[]; tools?: string[]; vulnerability_ids?: string[] },
+  input: { project?: string; component?: string; repo?: string; head_sha?: string; summary: string; areas?: string[]; tools?: string[]; vulnerability_ids?: string[]; technologies?: string[] },
 ) {
   const { scope, component } = await target(ctx, input);
   await assertCanSeeVulns(ctx, scope.id);
+  if (input.technologies?.length) await addComponentTechnologies(ctx.db, scope.id, component, input.technologies);
   const summary = redact(input.summary ?? "").text.trim().slice(0, 4000);
   if (!summary) throw new ValidationError("summary is required: what you reviewed and what you found (or that you found nothing)");
   const ids = [...new Set(input.vulnerability_ids ?? [])];

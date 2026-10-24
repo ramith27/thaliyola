@@ -106,7 +106,7 @@ const shortDay = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(und
 
 // ---- Dashboard -------------------------------------------------------------------------------------------------
 
-export function SecurityPage({ route, scopes }: { route: Route; scopes: ScopeInfo[] }) {
+export function SecurityPage({ route, scopes, isAdmin = false }: { route: Route; scopes: ScopeInfo[]; isAdmin?: boolean }) {
   const project = route.query.get("project") ?? "";
   const { data, error, reload } = useApi<Overview>(`/security${project ? `?project=${encodeURIComponent(project)}` : ""}`);
   useLiveRefresh(reload);
@@ -124,8 +124,8 @@ export function SecurityPage({ route, scopes }: { route: Route; scopes: ScopeInf
         <div>
           <h1>Security</h1>
           <p className="lead">
-            Vulnerabilities in your projects' dependencies (matched against OSV.dev and re-checked daily) and those reported by agents and people. Critical and actively
-            exploited ones are announced to the project's writers and owners.
+            The latest critical vulnerabilities worldwide and which of your projects they may affect, plus the vulnerabilities in your projects' own dependencies (matched
+            against OSV.dev daily) and code (reported by agents and people). Critical and actively exploited ones are announced to each project's writers and owners.
           </p>
         </div>
         <select value={project} onChange={(e) => navigate("/security", { project: e.target.value })} aria-label="Project">
@@ -138,6 +138,9 @@ export function SecurityPage({ route, scopes }: { route: Route; scopes: ScopeInf
         </select>
       </div>
 
+      <LatestCritical project={project} isAdmin={isAdmin} />
+
+      <h2 className="section-title">In your dependencies and code</h2>
       <div className="tiles">
         <StatTile label="Critical" value={t.critical ?? 0} icon="alert" tone={t.critical ? "warn" : undefined} note={t.oldest_critical_days != null ? `oldest open ${t.oldest_critical_days} days` : "none open"} href={href("/security", { project, severity: "critical" })} />
         <StatTile label="High" value={t.high ?? 0} icon="shield" note={`${t.medium ?? 0} medium · ${t.low ?? 0} low`} href={href("/security", { project, severity: "high" })} />
@@ -323,6 +326,7 @@ export function ProjectSecurity({ project, component }: { project: string; compo
           {hidden ? " · details for writers and owners" : ""}
         </span>
       </div>
+      <LatestCritical project={project} isAdmin={false} compact />
       <p className="muted small">
         To scan: open the repository in Claude Code and run <code>{CLAUDE_FULL}</code> (or without <code>full</code> for dependencies only).
       </p>
@@ -807,5 +811,340 @@ export function VulnerabilityPage({ id }: { id: string }) {
         </aside>
       </div>
     </div>
+  );
+}
+
+// ---- Latest critical vulnerabilities worldwide ------------------------------------------------------------------
+
+type AdvisoryResponse = "investigating" | "affected" | "not_affected" | "patched";
+const RESPONSE_TEXT: Record<AdvisoryResponse, string> = { investigating: "Investigating", affected: "Affected", not_affected: "Not affected", patched: "Patched" };
+
+interface Advisory {
+  id: string;
+  name: string | null;
+  title: string;
+  summary: string;
+  severity: Severity;
+  cvss_score: number | null;
+  kev: boolean;
+  kev_due: string | null;
+  cve_ids: string[];
+  ghsa_ids: string[];
+  technologies: { id: string; label: string }[];
+  packages: { ecosystem: string; name: string; fixed?: string | null }[];
+  sources: string[];
+  published_at: string;
+  refs: { url: string; type?: string }[];
+  manual: boolean;
+  affects: { project: string; name: string; because: string[]; can_respond: boolean; response: { status: AdvisoryResponse; note: string | null; updated_at: string } | null }[];
+}
+
+interface Feed {
+  total: number;
+  affecting_your_projects: number;
+  last_refresh: string | null;
+  advisories: Advisory[];
+}
+
+const hostOf = (url: string) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+};
+
+const SOURCE_TEXT: Record<string, string> = { nvd: "NVD", ghsa: "GitHub", kev: "CISA KEV", manual: "Team alert" };
+
+export function LatestCritical({ project, isAdmin, compact = false }: { project?: string; isAdmin: boolean; compact?: boolean }) {
+  const [scope, setScope] = useState<"affecting" | "all">("affecting");
+  const [days, setDays] = useState(30);
+  const [limit, setLimit] = useState(compact ? 5 : 12);
+  const [publishing, setPublishing] = useState(false);
+  const q = new URLSearchParams({ days: String(days), limit: String(limit) });
+  if (project) q.set("project", project);
+  else if (scope === "affecting") q.set("affecting", "true");
+  const { data, error, reload } = useApi<Feed>(`/advisories?${q}`);
+  useLiveRefresh(reload);
+  const all = useApi<Feed>(project || compact ? null : `/advisories?days=${days}&limit=1`);
+
+  if (compact) {
+    if (!data || !data.advisories.length) return null;
+    return (
+      <div className="advisory-compact">
+        <h4>Recent critical vulnerabilities that may affect this project</h4>
+        <ul className="plain">
+          {data.advisories.map((a) => (
+            <li key={a.id}>
+              <SeverityBadge severity={a.severity} score={a.cvss_score?.toFixed(1)} /> {a.kev && <KevBadge due={a.kev_due} />}
+              <a href={href("/security", { project: project ?? "" })}>{a.name ? `${a.name}: ` : ""}{a.title}</a>
+              <span className="muted small">
+                {" "}
+                · {a.affects[0]?.because.join(", ")} · {a.affects[0]?.response ? RESPONSE_TEXT[a.affects[0].response.status] : "no response yet"}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  return (
+    <section className="latest-critical">
+      <div className="latest-head">
+        <div>
+          <h2>Latest critical vulnerabilities</h2>
+          <p className="muted small">
+            New critical CVEs from NVD, GitHub advisories and CISA's known-exploited list, checked every 6 hours
+            {data?.last_refresh ? ` (last ${formatDate(data.last_refresh)})` : ""}, matched to the projects that use the technology or package.
+          </p>
+        </div>
+        <div className="latest-controls">
+          {!project && (
+            <div className="chips" role="tablist" aria-label="Which vulnerabilities">
+              <button role="tab" aria-selected={scope === "affecting"} className={`chip ${scope === "affecting" ? "active" : ""}`} onClick={() => setScope("affecting")}>
+                Affecting our projects{scope === "affecting" && data ? ` (${data.total})` : ""}
+              </button>
+              <button role="tab" aria-selected={scope === "all"} className={`chip ${scope === "all" ? "active" : ""}`} onClick={() => setScope("all")}>
+                All critical{all.data ? ` (${all.data.total})` : ""}
+              </button>
+            </div>
+          )}
+          <select value={days} onChange={(e) => setDays(Number(e.target.value))} aria-label="Period">
+            <option value={7}>Last 7 days</option>
+            <option value={30}>Last 30 days</option>
+            <option value={90}>Last 90 days</option>
+          </select>
+          {isAdmin && (
+            <button className="btn btn-small" onClick={() => setPublishing((p) => !p)}>
+              <I name="alert" size={14} /> Publish an alert
+            </button>
+          )}
+        </div>
+      </div>
+      {publishing && <PublishAlert onDone={() => (setPublishing(false), reload())} onCancel={() => setPublishing(false)} />}
+      <ErrorBox error={error} />
+      {!data ? (
+        <Loading />
+      ) : !data.advisories.length ? (
+        <p className="muted">
+          {scope === "affecting" && !project
+            ? "Nothing in this period touches your projects' technologies or packages. Make sure each project lists what it runs on (settings → General → Technologies), or switch to All critical."
+            : "No critical vulnerabilities in this period."}
+        </p>
+      ) : (
+        <>
+          <ul className="plain advisory-list">
+            {data.advisories.map((a) => (
+              <AdvisoryCard key={a.id} a={a} isAdmin={isAdmin} onChange={reload} />
+            ))}
+          </ul>
+          {data.total > data.advisories.length && (
+            <button className="btn btn-small" onClick={() => setLimit((l) => l + 20)}>
+              Show more ({data.total - data.advisories.length})
+            </button>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function AdvisoryCard({ a, isAdmin, onChange }: { a: Advisory; isAdmin: boolean; onChange: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  const [editing, setEditing] = useState<{ project: string; status: AdvisoryResponse; note: string } | null>(null);
+  async function save() {
+    if (!editing) return;
+    setError(null);
+    try {
+      await api(`/advisories/${a.id}/responses`, { method: "POST", body: { project: editing.project, status: editing.status, note: editing.note || undefined } });
+      setEditing(null);
+      onChange();
+    } catch (e) {
+      setError(e as Error);
+    }
+  }
+  return (
+    <li className={`card advisory ${a.affects.length ? "is-affecting" : ""}`}>
+      <div className="advisory-meta">
+        <SeverityBadge severity={a.severity} score={a.cvss_score?.toFixed(1)} />
+        {a.kev && <KevBadge due={a.kev_due} />}
+        {a.name && <span className="badge badge-name">{a.name}</span>}
+        <span className="muted small">
+          {formatDate(a.published_at)} · {a.sources.map((src) => SOURCE_TEXT[src] ?? src).join(", ")}
+        </span>
+      </div>
+      <h3 className="advisory-title">{a.title}</h3>
+      <div className="advisory-tags">
+        {a.cve_ids.map((c) => (
+          <a key={c} className="chip-static" href={`https://nvd.nist.gov/vuln/detail/${c}`} target="_blank" rel="noopener noreferrer">
+            {c}
+          </a>
+        ))}
+        {a.technologies.map((t) => (
+          <span key={t.id} className="chip-static tech">
+            {t.label}
+          </span>
+        ))}
+        {a.packages.slice(0, 6).map((p) => (
+          <span key={`${p.ecosystem}/${p.name}`} className="chip-static">
+            <code>{p.name}</code> {p.fixed ? `→ ${p.fixed}` : ""}
+          </span>
+        ))}
+      </div>
+      {a.affects.length > 0 ? (
+        <ul className="plain advisory-affects">
+          {a.affects.map((x) => (
+            <li key={x.project}>
+              <a href={href(`/project/${x.project}`)}>
+                <strong>{x.name}</strong>
+              </a>{" "}
+              <span className="muted small">{x.because.join(", ")}</span>{" "}
+              {x.response ? (
+                <span className={`badge resp-${x.response.status}`} title={x.response.note ?? undefined}>
+                  {RESPONSE_TEXT[x.response.status]}
+                </span>
+              ) : (
+                <span className="badge badge-pending">No response yet</span>
+              )}
+              {x.response?.note && <span className="muted small"> {x.response.note}</span>}
+              {x.can_respond && editing?.project !== x.project && (
+                <button className="link-btn small" onClick={() => setEditing({ project: x.project, status: x.response?.status ?? "investigating", note: x.response?.note ?? "" })}>
+                  {x.response ? "Update" : "Respond"}
+                </button>
+              )}
+              {editing?.project === x.project && (
+                <div className="inline-form advisory-respond">
+                  <select value={editing.status} onChange={(e) => setEditing({ ...editing, status: e.target.value as AdvisoryResponse })} aria-label="Response">
+                    {(Object.keys(RESPONSE_TEXT) as AdvisoryResponse[]).map((r) => (
+                      <option key={r} value={r}>
+                        {RESPONSE_TEXT[r]}
+                      </option>
+                    ))}
+                  </select>
+                  <input value={editing.note} onChange={(e) => setEditing({ ...editing, note: e.target.value })} placeholder="Note, e.g. runs PHP 8.4.14 (fixed)" aria-label="Note" />
+                  <button className="btn btn-small btn-primary" onClick={save}>
+                    Save
+                  </button>
+                  <button className="btn btn-small" onClick={() => setEditing(null)}>
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted small">No project lists this technology or depends on these packages.</p>
+      )}
+      <ErrorBox error={error} />
+      <div className="advisory-foot">
+        <button className="link-btn small" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          {open ? "Hide details" : "Details"}
+        </button>
+        {a.refs.slice(0, 4).map((r) => (
+          <a key={r.url} className="small" href={r.url} target="_blank" rel="noopener noreferrer nofollow" title={r.type}>
+            {hostOf(r.url)}
+          </a>
+        ))}
+        {isAdmin && (
+          <button
+            className="link-btn small danger"
+            onClick={() => {
+              if (confirm("Hide this from everyone's feed?")) void api(`/advisories/${a.id}/hide`, { method: "POST", body: { hidden: true } }).then(onChange, setError);
+            }}
+          >
+            Hide
+          </button>
+        )}
+      </div>
+      {open && (
+        <div className="advisory-details">
+          <Markdown text={a.summary || "_No description yet._"} />
+        </div>
+      )}
+    </li>
+  );
+}
+
+function PublishAlert({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
+  const [form, setForm] = useState({ name: "", title: "", summary: "", cves: "", technologies: "", severity: "critical", url: "" });
+  const [error, setError] = useState<Error | null>(null);
+  const [busy, setBusy] = useState(false);
+  const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
+  return (
+    <form
+      className="card publish-alert editor"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        setError(null);
+        try {
+          await api("/advisories", {
+            method: "POST",
+            body: {
+              name: form.name || undefined,
+              title: form.title,
+              summary: form.summary,
+              cve_ids: form.cves.split(/[\s,]+/).filter(Boolean),
+              technologies: form.technologies.split(",").map((t) => t.trim()).filter(Boolean),
+              severity: form.severity,
+              url: form.url || undefined,
+            },
+          });
+          onDone();
+        } catch (err) {
+          setError(err as Error);
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <h3>Publish an alert</h3>
+      <p className="muted small">For breaking news before NVD has it, or to give several CVEs one name. Projects that use the technologies are notified; matching NVD and GitHub entries are folded under it.</p>
+      <div className="form-row">
+        <div>
+          <label htmlFor="al-name">
+            Name <span className="muted small">(optional)</span>
+          </label>
+          <input id="al-name" value={form.name} onChange={set("name")} placeholder="e.g. PHP2Shell" />
+        </div>
+        <div>
+          <label htmlFor="al-sev">Severity</label>
+          <select id="al-sev" value={form.severity} onChange={set("severity")}>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+      </div>
+      <label htmlFor="al-title">Title</label>
+      <input id="al-title" value={form.title} onChange={set("title")} required placeholder="Unauthenticated remote code execution in core PHP" />
+      <div className="form-row">
+        <div>
+          <label htmlFor="al-cves">CVE ids</label>
+          <input id="al-cves" value={form.cves} onChange={set("cves")} placeholder="CVE-2026-109618, CVE-2026-109619" />
+        </div>
+        <div>
+          <label htmlFor="al-tech">Affected technologies</label>
+          <input id="al-tech" value={form.technologies} onChange={set("technologies")} required placeholder="php" />
+        </div>
+      </div>
+      <label htmlFor="al-summary">What happened and what to do</label>
+      <textarea id="al-summary" rows={4} value={form.summary} onChange={set("summary")} />
+      <label htmlFor="al-url">
+        Announcement link <span className="muted small">(optional)</span>
+      </label>
+      <input id="al-url" value={form.url} onChange={set("url")} placeholder="https://" />
+      <ErrorBox error={error} />
+      <div className="actions">
+        <button className="btn btn-primary" disabled={busy}>
+          Publish
+        </button>
+        <button type="button" className="btn" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
