@@ -95,7 +95,14 @@ async function detectOne(settings: Settings, repoUrl: string): Promise<Detected 
   }
   // Anything else is tried as GitLab (gitlab.com or self-hosted).
   const headers: Record<string, string> = s?.gitlabToken ? { "PRIVATE-TOKEN": s.gitlabToken } : {};
-  const langs = (await get(`https://${repo.host}/api/v4/projects/${encodeURIComponent(repo.path)}/languages`, headers).catch(() => null)) as Record<string, number> | null;
+  let langs: Record<string, number> | null;
+  try {
+    langs = (await get(`https://${repo.host}/api/v4/projects/${encodeURIComponent(repo.path)}/languages`, headers)) as Record<string, number> | null;
+  } catch (err) {
+    // A token can't help when the host doesn't answer (private network, firewall, VPN-only).
+    const unreachable = (err as Error).name === "TimeoutError" || (err as Error).name === "TypeError" || /fetch failed|ECONN|ENOTFOUND|EAI_AGAIN/.test((err as Error).message);
+    return { technologies: [], packages: [], host: repo.host, error: unreachable ? `couldn't reach ${repo.host} from the server` : (err as Error).message.slice(0, 200) };
+  }
   if (!langs) return { technologies: [], packages: [], host: repo.host, error: s?.gitlabToken ? "not found or no access" : "private or not found (set GITLAB_TOKEN)" };
   return { technologies: languagesToTech(langs), packages: [], host: repo.host };
 }

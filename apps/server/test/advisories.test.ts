@@ -240,6 +240,7 @@ describe("major issues and automatic stack detection", () => {
     await adminAddComponent(a, "portal", { slug: "site", kind: "backend", repo_url: "https://github.com/acme/portal-site" });
     await adminAddComponent(a, "portal", { slug: "worker", kind: "backend", repo_url: "git@git.example.co:team/portal/worker.git" });
     await adminAddComponent(a, "portal", { slug: "secret", kind: "backend", repo_url: "https://github.com/acme/private-thing" });
+    await adminAddComponent(a, "portal", { slug: "internal", kind: "backend", repo_url: "git@vpn-only.example:team/internal.git" });
     const calls: string[] = [];
     const fetchStub = (async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input instanceof Request ? input.url : input);
@@ -248,6 +249,7 @@ describe("major issues and automatic stack detection", () => {
       if (url === "https://gh.test/repos/acme/portal-site/dependency-graph/sbom")
         return Response.json({ sbom: { packages: [{ externalRefs: [{ referenceType: "purl", referenceLocator: "pkg:composer/guzzlehttp/guzzle@7.4.0" }] }] } });
       if (url === "https://git.example.co/api/v4/projects/team%2Fportal%2Fworker/languages") return Response.json({ Python: 95.5, Shell: 4.5 });
+      if (url.startsWith("https://vpn-only.example/")) throw new TypeError("fetch failed");
       return new Response("{}", { status: 404 });
     }) as typeof fetch;
     const settings: Settings = { ...SETTINGS, security: { ...SETTINGS.security!, fetch: fetchStub, gitlabToken: "glpat-x" } };
@@ -255,6 +257,7 @@ describe("major issues and automatic stack detection", () => {
     const ingested: { component: string; n: number }[] = [];
     const found = await detectRepos(db, settings, async (_s, component, packages) => void ingested.push({ component, n: packages.length }), { scopeId: portal });
     expect(found).toEqual([
+      { repository: "internal", host: "vpn-only.example", technologies: [], packages: 0, error: "couldn't reach vpn-only.example from the server" },
       { repository: "secret", host: "github.com", technologies: [], packages: 0, error: "private or not found (set GITHUB_TOKEN)" },
       { repository: "site", host: "github.com", technologies: ["php", "docker"], packages: 1 },
       { repository: "worker", host: "git.example.co", technologies: ["python"], packages: 0 },
