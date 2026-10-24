@@ -939,3 +939,4 @@ pre.diff { overflow-x: auto; max-width: 100%; }
   .vuln-grid { grid-template-columns: minmax(0, 1fr); }
 }
 .tech-settings input { width: 100%; max-width: 760px; }
+.detect-list li { padding: 0.2rem 0; }

@@ -701,6 +701,7 @@ export function buildMcpServer(ctx: RequestContext): McpServer {
         project: projectArg,
         technology: z.string().optional(),
         affecting: z.boolean().optional(),
+        view: z.enum(["major", "affecting", "all"]).optional().describe("major: affecting your projects, actively exploited, or in widely used technologies (default all)"),
         days: z.number().int().min(1).max(365).optional().describe("Default 30"),
         limit: z.number().int().min(1).max(100).optional(),
       },

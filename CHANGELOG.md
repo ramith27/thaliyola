@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Security feed opens on Major: critical issues in widely used technologies, actively exploited ones, and anything affecting your projects (`view=major`). Repositories' languages are read daily from GitHub or GitLab (`GITHUB_TOKEN` / `GITLAB_TOKEN` for private ones), and GitHub's dependency graph feeds OSV matching, so projects are matched without manual tagging (`POST /api/projects/:slug/technologies/detect`)
+
 - Latest critical vulnerabilities worldwide on the Security page: NVD, GitHub advisories and CISA known-exploited additions every 6 hours, merged by CVE, releases grouped by product, and matched to projects by technology (dependencies, project settings → Technologies, stacks detected in reviews) or package. Affected projects are notified and record a response. Admins publish named alerts (e.g. PHP2Shell) that fold matching CVEs under them. `latest_advisories`, `set_advisory_response`, `publish_advisory`, `/api/advisories`, `/api/projects/:slug/technologies`; recent unsettled advisories in `get_project_context` and on project pages
 
 - Scan any project from Claude Code: `/mcp__thaliyola__security-check full` scans dependencies and reviews the code with whatever audit tools are installed, then publishes findings and a review record to the project. An owner's first scan adds an unregistered repository to the project. `record_security_review` logs what each review covered. Repeat findings keep one entry. Project pages get a Security card, and the dashboard shows recent scans and reviews and the last code review per repository

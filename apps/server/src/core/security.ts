@@ -5,6 +5,7 @@ import { audit } from "./audit.js";
 import { ForbiddenError, NotFoundError, ValidationError, type RequestContext } from "./context.js";
 import { emitChanged } from "./events.js";
 import { LOCKFILE_GLOBS, packagesFrom, readTar, type Package } from "./lockfiles.js";
+import { detectRepos } from "./repo-detect.js";
 import { notify, reviewersFor, slack } from "./notify.js";
 import {
   advisorySeverity,
@@ -167,8 +168,19 @@ async function ingest(db: Db, settings: Settings, input: { scopeId: string; comp
   const files = readTar(input.body);
   if (!files.length) throw new ValidationError("no lockfiles in the upload (package-lock.json, pnpm-lock.yaml, yarn.lock, poetry.lock, requirements*.txt, go.mod, Cargo.lock, …)");
   const packages = packagesFrom(files);
-  await replaceDependencies(db, input.scopeId, input.component, packages, input.headSha);
   await audit(db, input.actorId, "upload_dependencies", null);
+  const r = await ingestPackages(db, settings, { ...input, packages, summary: `${packages.length} packages in ${files.length} lockfile${files.length === 1 ? "" : "s"}`, tools: ["OSV.dev"] });
+  return { lockfiles: files.map((f) => f.path), ...r };
+}
+
+/** Store a repository's packages, match them against OSV, announce, and record the scan. */
+export async function ingestPackages(
+  db: Db,
+  settings: Settings,
+  input: { scopeId: string; component: string; headSha: string | null; actorId: string | null; packages: Package[]; summary: string; tools: string[] },
+) {
+  const packages = input.packages;
+  await replaceDependencies(db, input.scopeId, input.component, packages, input.headSha);
   let result: Awaited<ReturnType<typeof matchScope>>;
   let osvError: string | undefined;
   try {
@@ -180,12 +192,11 @@ async function ingest(db: Db, settings: Settings, input: { scopeId: string; comp
   await announce(db, settings);
   const counts = await openCounts(db, input.scopeId, input.component);
   await db.query(
-    `INSERT INTO security_reviews (scope_id, component, kind, head_sha, summary, tools, counts, created_by) VALUES ($1, $2, 'dependencies', $3, $4, '{OSV.dev}', $5, $6)`,
-    [input.scopeId, input.component, input.headSha, `${packages.length} packages in ${files.length} lockfile${files.length === 1 ? "" : "s"}; ${result.added} new, ${result.resolved} resolved`, counts, input.actorId],
+    `INSERT INTO security_reviews (scope_id, component, kind, head_sha, summary, tools, counts, created_by) VALUES ($1, $2, 'dependencies', $3, $4, $5, $6, $7)`,
+    [input.scopeId, input.component, input.headSha, `${input.summary}; ${result.added} new, ${result.resolved} resolved`, input.tools, counts, input.actorId],
   );
   emitChanged();
   return {
-    lockfiles: files.map((f) => f.path),
     packages: packages.length,
     new_vulnerabilities: result.added,
     resolved: result.resolved,
@@ -357,6 +368,13 @@ export async function runSecurityChecks(db: Db, settings: Settings, log: (msg: s
     log(`KEV refresh failed: ${(err as Error).message}`);
   }
   try {
+    const found = await detectRepos(db, settings, (scopeId, component, packages) => ingestFromGraph(db, settings, scopeId, component, packages));
+    const errors = found.filter((f) => f.error);
+    if (found.length) log(`stack detection: ${found.length - errors.length} of ${found.length} repositories${errors.length ? ` (${errors.map((e) => `${e.repository}: ${e.error}`).join("; ")})` : ""}`);
+  } catch (err) {
+    log(`stack detection failed: ${(err as Error).message}`);
+  }
+  try {
     const r = await matchScope(db, settings, null, null, null);
     if (r.added || r.resolved) log(`OSV re-check: ${r.added} new, ${r.resolved} resolved`);
   } catch (err) {
@@ -365,6 +383,18 @@ export async function runSecurityChecks(db: Db, settings: Settings, log: (msg: s
   await announce(db, settings);
   await db.query("DELETE FROM dependency_uploads WHERE expires_at < now() - interval '1 day'");
   await db.query("INSERT INTO job_runs (name, last_run) VALUES ('security', now()) ON CONFLICT (name) DO UPDATE SET last_run = now()");
+}
+
+function ingestFromGraph(db: Db, settings: Settings, scopeId: string, component: string, packages: Package[]) {
+  return ingestPackages(db, settings, { scopeId, component, headSha: null, actorId: null, packages, summary: `${packages.length} packages from the GitHub dependency graph`, tools: ["GitHub dependency graph", "OSV.dev"] });
+}
+
+/** Read one project's repositories from GitHub/GitLab now (writers and above). */
+export async function detectProjectStack(ctx: RequestContext, project: string) {
+  const scope = await getReadableScope(ctx, project);
+  await assertCanSeeVulns(ctx, scope.id);
+  const repositories = await detectRepos(ctx.db, ctx.settings, (scopeId, component, packages) => ingestFromGraph(ctx.db, ctx.settings, scopeId, component, packages), { scopeId: scope.id });
+  return { project: scope.slug, repositories };
 }
 
 export function startSecurityJobs(db: Db, settings: Settings, log: (msg: string) => void) {

@@ -83,6 +83,8 @@ const Env = z
     NVD_API_KEY: z.string().optional(),
     GITHUB_API_URL: z.string().url().default("https://api.github.com"),
     GITHUB_TOKEN: z.string().optional(),
+    // Read private repositories' languages on GitLab (gitlab.com or self-hosted): a token with read_api
+    GITLAB_TOKEN: z.string().optional(),
   })
   .superRefine((env, ctx) => {
     if (env.AUTH_MODE === "dev" && !env.DEV_TOKENS.trim()) {
@@ -149,6 +151,7 @@ export function settingsFrom(config: Config): Settings {
       nvdKey: config.NVD_API_KEY || undefined,
       githubUrl: config.GITHUB_API_URL,
       githubToken: config.GITHUB_TOKEN || undefined,
+      gitlabToken: config.GITLAB_TOKEN || undefined,
     },
   };
 }
@@ -166,6 +169,7 @@ export interface Settings {
     nvdKey?: string;
     githubUrl?: string;
     githubToken?: string;
+    gitlabToken?: string;
     fetch?: typeof fetch;
   };
   adminEmails: string[];

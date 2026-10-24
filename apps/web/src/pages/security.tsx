@@ -840,6 +840,8 @@ interface Advisory {
 }
 
 interface Feed {
+  view: "major" | "affecting" | "all";
+  counts: { major: number; affecting: number; all: number };
   total: number;
   affecting_your_projects: number;
   last_refresh: string | null;
@@ -857,16 +859,15 @@ const hostOf = (url: string) => {
 const SOURCE_TEXT: Record<string, string> = { nvd: "NVD", ghsa: "GitHub", kev: "CISA KEV", manual: "Team alert" };
 
 export function LatestCritical({ project, isAdmin, compact = false }: { project?: string; isAdmin: boolean; compact?: boolean }) {
-  const [scope, setScope] = useState<"affecting" | "all">("affecting");
+  const [scope, setScope] = useState<"major" | "affecting" | "all">("major");
   const [days, setDays] = useState(30);
   const [limit, setLimit] = useState(compact ? 5 : 12);
   const [publishing, setPublishing] = useState(false);
   const q = new URLSearchParams({ days: String(days), limit: String(limit) });
   if (project) q.set("project", project);
-  else if (scope === "affecting") q.set("affecting", "true");
+  else q.set("view", scope);
   const { data, error, reload } = useApi<Feed>(`/advisories?${q}`);
   useLiveRefresh(reload);
-  const all = useApi<Feed>(project || compact ? null : `/advisories?days=${days}&limit=1`);
 
   if (compact) {
     if (!data || !data.advisories.length) return null;
@@ -896,18 +897,25 @@ export function LatestCritical({ project, isAdmin, compact = false }: { project?
           <h2>Latest critical vulnerabilities</h2>
           <p className="muted small">
             New critical CVEs from NVD, GitHub advisories and CISA's known-exploited list, checked every 6 hours
-            {data?.last_refresh ? ` (last ${formatDate(data.last_refresh)})` : ""}, matched to the projects that use the technology or package.
+            {data?.last_refresh ? ` (last ${formatDate(data.last_refresh)})` : ""}. Major ones (core technologies like PHP, Node.js, OpenSSL or nginx, and anything actively
+            exploited) always show; each is matched to the projects that use the technology or package.
           </p>
         </div>
         <div className="latest-controls">
           {!project && (
             <div className="chips" role="tablist" aria-label="Which vulnerabilities">
-              <button role="tab" aria-selected={scope === "affecting"} className={`chip ${scope === "affecting" ? "active" : ""}`} onClick={() => setScope("affecting")}>
-                Affecting our projects{scope === "affecting" && data ? ` (${data.total})` : ""}
-              </button>
-              <button role="tab" aria-selected={scope === "all"} className={`chip ${scope === "all" ? "active" : ""}`} onClick={() => setScope("all")}>
-                All critical{all.data ? ` (${all.data.total})` : ""}
-              </button>
+              {(
+                [
+                  ["major", "Major", "Affecting your projects, actively exploited, or in widely used technologies like PHP, OpenSSL or nginx"],
+                  ["affecting", "Affecting our projects", "Matched to a technology or package your projects use"],
+                  ["all", "All critical", "Every critical CVE in the period"],
+                ] as const
+              ).map(([key, text, title]) => (
+                <button key={key} role="tab" title={title} aria-selected={scope === key} className={`chip ${scope === key ? "active" : ""}`} onClick={() => setScope(key)}>
+                  {text}
+                  {data ? ` (${data.counts[key]})` : ""}
+                </button>
+              ))}
             </div>
           )}
           <select value={days} onChange={(e) => setDays(Number(e.target.value))} aria-label="Period">
@@ -929,8 +937,10 @@ export function LatestCritical({ project, isAdmin, compact = false }: { project?
       ) : !data.advisories.length ? (
         <p className="muted">
           {scope === "affecting" && !project
-            ? "Nothing in this period touches your projects' technologies or packages. Make sure each project lists what it runs on (settings → General → Technologies), or switch to All critical."
-            : "No critical vulnerabilities in this period."}
+            ? "Nothing in this period touches your projects' technologies or packages. Thaliyola reads each repository's languages from GitHub/GitLab daily; you can also list what a project runs on in settings → General → Technologies."
+            : scope === "major"
+              ? "No major critical vulnerabilities in this period. See All critical for everything."
+              : "No critical vulnerabilities in this period."}
         </p>
       ) : (
         <>
@@ -970,7 +980,7 @@ function AdvisoryCard({ a, isAdmin, onChange }: { a: Advisory; isAdmin: boolean;
       <div className="advisory-meta">
         <SeverityBadge severity={a.severity} score={a.cvss_score?.toFixed(1)} />
         {a.kev && <KevBadge due={a.kev_due} />}
-        {a.name && <span className="badge badge-name">{a.name}</span>}
+        {a.name && a.name !== a.title && <span className="badge badge-name">{a.name}</span>}
         <span className="muted small">
           {formatDate(a.published_at)} · {a.sources.map((src) => SOURCE_TEXT[src] ?? src).join(", ")}
         </span>

@@ -97,7 +97,13 @@ function useAction(onDone?: () => void) {
 
 /** What the project runs on, so new critical vulnerabilities (e.g. in PHP or nginx) reach the right teams. */
 function Technologies({ slug }: { slug: string }) {
-  const { data, reload } = useApi<{ own: string[]; effective: string[]; labels: Record<string, string>; known: Record<string, string> }>(`/projects/${slug}/technologies`);
+  const { data, reload } = useApi<{
+    own: string[];
+    effective: string[];
+    labels: Record<string, string>;
+    known: Record<string, string>;
+    repositories: { slug: string; repo_url: string | null; technologies: string[]; detected_at: string | null; detect_error: string | null }[];
+  }>(`/projects/${slug}/technologies`);
   const [text, setText] = useState<string | null>(null);
   const { act, error, saved } = useAction();
   if (!data) return null;
@@ -107,8 +113,9 @@ function Technologies({ slug }: { slug: string }) {
     <div className="tech-settings">
       <h2>Technologies</h2>
       <p className="muted small">
-        Runtimes, servers, databases and platforms this project runs on. New critical vulnerabilities in them (from NVD, GitHub and CISA) are shown on the Security page and
-        sent to the project's writers and owners.
+        Runtimes, servers, databases and platforms this project runs on. Thaliyola reads each repository's languages from GitHub or GitLab daily (private repositories
+        need GITHUB_TOKEN or GITLAB_TOKEN on the server); add anything else here, like nginx, MySQL or Redis. New critical vulnerabilities in these go to the project's writers
+        and owners.
       </p>
       <input value={value} onChange={(e) => setText(e.target.value)} placeholder="e.g. PHP, nginx, PostgreSQL, Redis, Docker, Kubernetes" aria-label="Technologies" list="known-tech" />
       <datalist id="known-tech">
@@ -118,8 +125,28 @@ function Technologies({ slug }: { slug: string }) {
       </datalist>
       {detected.length > 0 && (
         <p className="muted small">
-          Also detected from dependencies and security reviews: {detected.map((t) => data.labels[t] ?? t).join(", ")}
+          Also detected from repositories, dependencies and security reviews: {detected.map((t) => data.labels[t] ?? t).join(", ")}
         </p>
+      )}
+      {data.repositories.some((r) => r.repo_url) && (
+        <ul className="plain small detect-list">
+          {data.repositories
+            .filter((r) => r.repo_url)
+            .map((r) => (
+              <li key={r.slug}>
+                <strong>{r.slug}</strong>{" "}
+                {r.detect_error ? (
+                  <span className="warn">couldn't read it: {r.detect_error}</span>
+                ) : r.detected_at ? (
+                  <span className="muted">
+                    {r.technologies.length ? r.technologies.map((t) => data.labels[t] ?? data.known[t] ?? t).join(", ") : "nothing detected"} · read {new Date(r.detected_at).toLocaleDateString()}
+                  </span>
+                ) : (
+                  <span className="muted">not read yet (daily, or Detect now)</span>
+                )}
+              </li>
+            ))}
+        </ul>
       )}
       <ErrorBox error={error} />
       {saved && <Notice kind="ok">{saved}</Notice>}
@@ -136,6 +163,17 @@ function Technologies({ slug }: { slug: string }) {
           }
         >
           Save technologies
+        </button>
+        <button
+          className="btn"
+          onClick={() =>
+            act("Read the repositories.", async () => {
+              await api(`/projects/${slug}/technologies/detect`, { method: "POST" });
+              reload();
+            })
+          }
+        >
+          Detect now
         </button>
       </div>
     </div>

@@ -22,7 +22,7 @@ import { approveProjectRequest, createOrRequestProject, declineProjectRequest, l
 import { SOURCE_KINDS } from "../core/connectors.js";
 import { getReadableScope } from "../core/scopes.js";
 import { hideAdvisory, latestAdvisories, publishAdvisory, setAdvisoryResponse, setProjectTechnologies, stackOf, TECHNOLOGIES } from "../core/advisories.js";
-import { beginDependencyScan, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, securityOverview, updateVulnerability, uploadWithAuth } from "../core/security.js";
+import { beginDependencyScan, detectProjectStack, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, securityOverview, updateVulnerability, uploadWithAuth } from "../core/security.js";
 import { createSource, deleteSource, getInboxItem, listInbox, listSources, previewSource, reopenInboxItem, resolveInboxItem, runSourceNow, updateSource } from "../core/sources.js";
 import { deleteItem, deleteProject, emptyItem, emptyProject, listTrash, restoreItem, restoreProject } from "../core/trash.js";
 import { listPurges, purgeItem } from "../core/purge.js";
@@ -352,6 +352,7 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
             project: z.string().optional(),
             technology: z.string().optional(),
             affecting: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
+            view: z.enum(["major", "affecting", "all"]).optional(),
             limit: z.coerce.number().int().optional(),
             include_hidden: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
           })
@@ -377,6 +378,7 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
       return { project: scope.slug, ...(await stackOf(ctx, scope.id)), known: TECHNOLOGIES };
     }),
   );
+  router.post("/projects/:slug/technologies/detect", handle("detect_project_stack", (ctx, req) => detectProjectStack(ctx, String(req.params.slug))));
   router.put(
     "/projects/:slug/technologies",
     handle("set_project_technologies", (ctx, req) => setProjectTechnologies(ctx, String(req.params.slug), z.object({ technologies: z.array(z.string().max(40)).max(40) }).parse(req.body).technologies)),

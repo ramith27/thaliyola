@@ -205,3 +205,67 @@ describe("the latest critical vulnerabilities", () => {
     expect(r2.notified_projects).toBe(1);
   });
 });
+
+describe("major issues and automatic stack detection", () => {
+  it("shows critical issues in widely used technologies by default, even when no project is tagged", async () => {
+    const feed = await latestAdvisories(await ctx("viewer@example.com"), { view: "major" });
+    const titles = feed.advisories.map((a) => a.title);
+    expect(titles.some((t) => t.includes("PHP") || t.includes("Unauthenticated remote code execution"))).toBe(true);
+    // An obscure plugin isn't major; it's still in "all".
+    expect(titles.some((t) => t.includes("WordPress plugin"))).toBe(false);
+    expect(feed.counts.all).toBeGreaterThan(feed.counts.major);
+    expect((await latestAdvisories(await ctx("viewer@example.com"), { view: "all" })).advisories.some((a) => a.title.includes("WordPress plugin"))).toBe(true);
+  });
+
+  it("reads languages from GitHub and GitLab and dependencies from GitHub's dependency graph", async () => {
+    const { parseRepoUrl, languagesToTech, sbomPackages, detectRepos } = await import("../src/core/repo-detect.js");
+    expect(parseRepoUrl("git@git.example.co:team/platform/api.git")).toEqual({ host: "git.example.co", path: "team/platform/api" });
+    expect(parseRepoUrl("https://github.com/acme/shop/")).toEqual({ host: "github.com", path: "acme/shop" });
+    expect(languagesToTech({ PHP: 900, Blade: 300, JavaScript: 10, Dockerfile: 60 }).sort()).toEqual(["docker", "laravel", "php"]);
+    expect(
+      sbomPackages({
+        sbom: {
+          packages: [
+            { externalRefs: [{ referenceType: "purl", referenceLocator: "pkg:npm/%40laravel/multiplex@0.4.1" }] },
+            { externalRefs: [{ referenceType: "purl", referenceLocator: "pkg:npm/vite@%5E8.0.0" }] },
+            { externalRefs: [{ referenceType: "purl", referenceLocator: "pkg:composer/laravel/framework@11.2.0" }] },
+            { externalRefs: [{ referenceType: "purl", referenceLocator: "pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1" }] },
+          ],
+        },
+      }).map((p) => `${p.ecosystem}:${p.name}@${p.version}`),
+    ).toEqual(["npm:@laravel/multiplex@0.4.1", "Packagist:laravel/framework@11.2.0", "Maven:org.apache.logging.log4j:log4j-core@2.14.1"]);
+
+    const a = await ctx("admin@example.com");
+    await adminCreateProject(a, { slug: "portal", name: "Portal" });
+    await adminAddComponent(a, "portal", { slug: "site", kind: "backend", repo_url: "https://github.com/acme/portal-site" });
+    await adminAddComponent(a, "portal", { slug: "worker", kind: "backend", repo_url: "git@git.example.co:team/portal/worker.git" });
+    await adminAddComponent(a, "portal", { slug: "secret", kind: "backend", repo_url: "https://github.com/acme/private-thing" });
+    const calls: string[] = [];
+    const fetchStub = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      calls.push(`${url} ${JSON.stringify(init?.headers ?? {})}`);
+      if (url === "https://gh.test/repos/acme/portal-site/languages") return Response.json({ PHP: 800, Dockerfile: 100 });
+      if (url === "https://gh.test/repos/acme/portal-site/dependency-graph/sbom")
+        return Response.json({ sbom: { packages: [{ externalRefs: [{ referenceType: "purl", referenceLocator: "pkg:composer/guzzlehttp/guzzle@7.4.0" }] }] } });
+      if (url === "https://git.example.co/api/v4/projects/team%2Fportal%2Fworker/languages") return Response.json({ Python: 95.5, Shell: 4.5 });
+      return new Response("{}", { status: 404 });
+    }) as typeof fetch;
+    const settings: Settings = { ...SETTINGS, security: { ...SETTINGS.security!, fetch: fetchStub, gitlabToken: "glpat-x" } };
+    const portal = (await db.query("SELECT id FROM scopes WHERE slug = 'portal'")).rows[0].id;
+    const ingested: { component: string; n: number }[] = [];
+    const found = await detectRepos(db, settings, async (_s, component, packages) => void ingested.push({ component, n: packages.length }), { scopeId: portal });
+    expect(found).toEqual([
+      { repository: "secret", host: "github.com", technologies: [], packages: 0, error: "private or not found (set GITHUB_TOKEN)" },
+      { repository: "site", host: "github.com", technologies: ["php", "docker"], packages: 1 },
+      { repository: "worker", host: "git.example.co", technologies: ["python"], packages: 0 },
+    ]);
+    expect(ingested).toEqual([{ component: "site", n: 1 }]);
+    expect(calls.find((c) => c.includes("git.example.co"))).toContain("glpat-x");
+    const stack = await stackOf(a, portal);
+    expect(stack.effective).toEqual(["docker", "php", "python"]);
+    expect(stack.repositories.find((r) => r.slug === "secret")!.detect_error).toMatch(/GITHUB_TOKEN/);
+    // Now PHP issues reach Portal without anyone tagging it.
+    const feed = await latestAdvisories(a, { project: "portal" });
+    expect(feed.advisories.some((x) => x.cve_ids.includes("CVE-2026-109618"))).toBe(true);
+  });
+});

@@ -694,6 +694,8 @@ export interface FeedItem {
   published_at: string;
   refs: { url: string; type?: string }[];
   manual: boolean;
+  /** Affects one of your projects, is actively exploited, or hits a widely used technology (PHP, OpenSSL, nginx, …). */
+  major: boolean;
   advisory_ids: string[];
   affects: (Match & { response: { status: Response; note: string | null; updated_at: string } | null; can_respond: boolean })[];
 }
@@ -704,7 +706,7 @@ export interface FeedItem {
  */
 export async function latestAdvisories(
   ctx: RequestContext,
-  opts: { days?: number; project?: string; technology?: string; affecting?: boolean; limit?: number; include_hidden?: boolean } = {},
+  opts: { days?: number; project?: string; technology?: string; affecting?: boolean; view?: "major" | "affecting" | "all"; limit?: number; include_hidden?: boolean } = {},
 ) {
   const days = Math.min(Math.max(opts.days ?? 30, 1), 365);
   const projectId = opts.project ? (await getReadableScope(ctx, opts.project)).id : null;
@@ -774,18 +776,24 @@ export async function latestAdvisories(
       published_at: all.map((m) => m.published_at).sort()[0]!,
       refs: [...new Map(all.flatMap((m) => m.refs).map((r) => [r.url, r])).values()].slice(0, 12),
       manual: head.manual,
+      major: affectsMap.size > 0 || all.some((m) => m.kev) || head.manual || techs.some((t) => t in TECHNOLOGIES),
       advisory_ids: all.map((m) => m.id),
       affects: [...affectsMap.values()],
     });
   }
   let out = items.sort((a, b) => b.published_at.localeCompare(a.published_at));
   if (tech) out = out.filter((i) => i.technologies.some((t) => t.id === tech));
-  if (opts.affecting || projectId) out = out.filter((i) => i.affects.length > 0);
+  const view = projectId || opts.affecting ? "affecting" : (opts.view ?? "all");
+  const counts = { major: out.filter((i) => i.major).length, affecting: out.filter((i) => i.affects.length > 0).length, all: out.length };
+  if (view === "affecting") out = out.filter((i) => i.affects.length > 0);
+  if (view === "major") out = out.filter((i) => i.major);
   const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
   const affecting = out.filter((i) => i.affects.length > 0).length;
   return {
     note: UNTRUSTED,
     days,
+    view,
+    counts,
     total: out.length,
     affecting_your_projects: affecting,
     last_refresh: (await ctx.db.query<{ last_run: string }>("SELECT last_run FROM job_runs WHERE name = 'advisories'")).rows[0]?.last_run ?? null,
@@ -880,7 +888,13 @@ export async function setProjectTechnologies(ctx: RequestContext, project: strin
 export async function stackOf(ctx: RequestContext, scopeId: string) {
   const [s] = await projectStacks(ctx.db, [scopeId]);
   const own = (await ctx.db.query<{ technologies: string[] }>("SELECT technologies FROM scopes WHERE id = $1", [scopeId])).rows[0]?.technologies ?? [];
-  return { own, effective: s?.technologies ?? own, labels: Object.fromEntries((s?.technologies ?? own).map((t) => [t, label(t)])) };
+  const repositories = (
+    await ctx.db.query<{ slug: string; repo_url: string | null; technologies: string[]; detected_at: string | null; detect_error: string | null }>(
+      "SELECT slug, repo_url, technologies, detected_at, detect_error FROM components WHERE scope_id = $1 ORDER BY slug",
+      [scopeId],
+    )
+  ).rows;
+  return { own, effective: s?.technologies ?? own, labels: Object.fromEntries((s?.technologies ?? own).map((t) => [t, label(t)])), repositories };
 }
 
 /** Technologies a review detected for one repository (merged into what it had). */
