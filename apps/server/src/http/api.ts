@@ -20,6 +20,7 @@ import { eventStream } from "../core/events.js";
 import { agentsMdBlock, claimsFor, docsStatus, resolveClaims, updateDocSettings } from "../core/docs.js";
 import { approveProjectRequest, createOrRequestProject, declineProjectRequest, listProjectRequests } from "../core/project-requests.js";
 import { SOURCE_KINDS } from "../core/connectors.js";
+import { designVersions, exportTokens, getDesignSystem, listDesignSystems, recordDesignDecision, restoreDesignVersion, updateDesignSystem } from "../core/design.js";
 import {
   answerQuestion,
   askSession,
@@ -312,6 +313,57 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
     ),
   );
   router.get("/purges", handle("list_purges", async (ctx) => ({ purges: await listPurges(ctx) })));
+  // Design systems.
+  router.get("/design-systems", handle("list_design_systems", (ctx) => listDesignSystems(ctx)));
+  router.get("/scopes/:slug/design", handle("get_design_system", (ctx, req) => getDesignSystem(ctx, String(req.params.slug))));
+  router.put(
+    "/scopes/:slug/design",
+    handle("update_design_system", (ctx, req) =>
+      updateDesignSystem(
+        ctx,
+        String(req.params.slug),
+        z
+          .object({
+            tokens: z.unknown().optional(),
+            replace: z.boolean().optional(),
+            remove: z.record(z.string(), z.array(z.string())).optional(),
+            principles: z.string().max(20_000).optional(),
+            based_on: z.string().nullable().optional(),
+            source: z.string().max(300).optional(),
+            note: z.string().max(300).optional(),
+          })
+          .parse(req.body),
+      ),
+    ),
+  );
+  router.get("/scopes/:slug/design/versions", handle("design_versions", (ctx, req) => designVersions(ctx, String(req.params.slug))));
+  router.post(
+    "/scopes/:slug/design/restore",
+    handle("restore_design_version", (ctx, req) => restoreDesignVersion(ctx, String(req.params.slug), z.object({ version: z.number().int().min(1) }).parse(req.body).version)),
+  );
+  router.post(
+    "/scopes/:slug/design/decisions",
+    handle("record_design_decision", (ctx, req) =>
+      recordDesignDecision(ctx, {
+        project: String(req.params.slug),
+        ...z
+          .object({ title: z.string().min(1).max(200), context: z.string().min(1).max(8000), options: z.string().max(8000).optional(), choice: z.string().min(1).max(8000), consequences: z.string().max(8000).optional() })
+          .parse(req.body),
+      }),
+    ),
+  );
+  router.get("/scopes/:slug/design/export", async (req, res, next) => {
+    try {
+      const ctx = ctxOf(req, res);
+      const format = z.enum(["css", "tailwind", "json", "w3c"]).parse(req.query.format ?? "css");
+      const d = await getDesignSystem(ctx, String(req.params.slug));
+      const out = exportTokens(d.tokens, format);
+      res.set("Content-Type", `${out.mime}; charset=utf-8`).set("Content-Disposition", `attachment; filename="${d.scope}-design.${out.ext}"`).send(out.text);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // Sessions asking each other. Hooks address their session by the client's own id; long-polls stop when the client goes away.
   const sessionRef = z.object({ session: z.string().optional(), client: z.string().max(40).optional(), client_session_id: z.string().max(200).optional() });
   const abortOnClose = (req: Request) => {

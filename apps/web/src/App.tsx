@@ -15,6 +15,7 @@ import { PasteDraftPage } from "./pages/paste";
 import { InboxPage, SourcesPage } from "./pages/sources";
 import { SecurityPage, VulnerabilityPage } from "./pages/security";
 import { SessionsPage } from "./pages/sessions";
+import { DesignPage } from "./pages/design";
 import { HistoryPage } from "./pages/history";
 import { Layout } from "./components/Layout";
 import { ErrorBox, Loading } from "./components/ui";
@@ -102,7 +103,14 @@ export function App() {
       page = <SearchPage route={route} />;
       break;
     case "scope":
-      page = route.path[2] === "settings" ? <ScopeSettingsPage slug={id!} scopes={boot.scopes} me={boot.me} route={route} /> : <ScopePage slug={id!} scopes={boot.scopes} me={boot.me} />;
+      page =
+        route.path[2] === "settings" ? (
+          <ScopeSettingsPage slug={id!} scopes={boot.scopes} me={boot.me} route={route} />
+        ) : route.path[2] === "design" ? (
+          <DesignPage slug={id!} />
+        ) : (
+          <ScopePage slug={id!} scopes={boot.scopes} me={boot.me} />
+        );
       break;
     case "project":
       page = <ProjectPage slug={id!} route={route} me={boot.me} scopes={boot.scopes} />;

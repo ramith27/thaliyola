@@ -105,6 +105,9 @@ export function ScopePage({ slug, scopes, me }: { slug: string; scopes: ScopeInf
         </a>
         {scope && <WatchButton id={scope.id} />}
         {scope && <FavouriteButton id={scope.id} />}
+        <a className="btn" href={href(`/scope/${slug}/design`)}>
+          Design
+        </a>
         {scope && (
           <a className="btn" href={href(`/scope/${slug}/settings`)}>
             {scope.can_manage ? "Settings" : "Who has access"}
@@ -226,6 +229,9 @@ export function ProjectPage({ slug, route, me, scopes = [] }: { slug: string; ro
       <div className="actions">
         <WatchButton id={data.project.id} />
         <FavouriteButton id={data.project.id} />
+        <a className="btn" href={href(`/scope/${slug}/design`)}>
+          Design
+        </a>
         <a className="btn" href={href(`/scope/${slug}/settings`)}>
           {info?.can_manage || me.admin ? "Settings" : "Members"}
         </a>

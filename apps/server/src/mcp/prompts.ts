@@ -99,6 +99,29 @@ ${text}
   );
 
   server.registerPrompt(
+    "capture-design",
+    {
+      title: "Capture this app's design system",
+      description: "Read the repository's colours, fonts, type scale, spacing, radii, shadows, breakpoints and components and record them in Thaliyola, with the design decisions behind them.",
+      argsSchema: { based_on: z.string().optional().describe("Optional: a scope whose system this builds on, e.g. 'library'") },
+    },
+    ({ based_on }) =>
+      user(`Capture this application's design system into Thaliyola.
+
+1. git remote get-url origin and git rev-parse HEAD; get_project_context with repo to find the project. get_design_system for the project to see what's already recorded${based_on ? ` (it should build on ${based_on})` : ""}.
+2. Find the real values in the code. Read only what defines the design:
+   - CSS custom properties (:root and dark-mode blocks), SCSS/LESS variables
+   - tailwind.config.*, theme files (MUI/Chakra/styled-components/Vuetify themes), design-token JSON
+   - font imports (Google Fonts links, @font-face, next/font), base font sizes and line heights
+   - spacing, radius and shadow scales; responsive breakpoints
+   - the shared UI components folder (names, one line each, path)
+3. Build tokens: colours with a short name, value, dark value if the code has one, a role (primary, secondary, accent, background, surface, text, muted, border, success, warning, danger, info) and when to use it; fonts by role; the type scale; spacing, radii, shadows, breakpoints; components. Take every value from the code and never invent one. Leave out what isn't there.
+4. update_design_system for the project with those tokens${based_on ? `, based_on "${based_on}" (record only what differs)` : ""}, source "<repo>@<sha>:<files>", and principles: a few Markdown bullets of the rules the code follows (how primary vs accent are used, density, corner style, dark mode, icon set, tone of UI copy). Mention any contrast failures it reports.
+5. For design choices the code or docs clearly show (a deliberate palette, a navigation pattern, a component library choice), record_design_decision with the context, the choice and its consequences. Only what you can point to.
+6. Summarise: colours, fonts, components captured, decisions recorded, contrast issues, and anything that looked inconsistent (e.g. hard-coded colours outside the palette, with paths).`),
+  );
+
+  server.registerPrompt(
     "listen",
     {
       title: "Listen for questions from other sessions",

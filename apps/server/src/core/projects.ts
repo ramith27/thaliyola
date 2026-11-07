@@ -4,6 +4,7 @@ import { readableScopes } from "./permissions.js";
 import { projectHint } from "./tasks.js";
 import { projectSecurity } from "./security.js";
 import { projectAdvisories } from "./advisories.js";
+import { designSummary } from "./design.js";
 import { getComponent, getReadableScope, listComponents, resolveProject } from "./scopes.js";
 
 const OVERVIEW_MAX_CHARS = 6000;
@@ -116,6 +117,7 @@ export async function getProjectContext(ctx: RequestContext, projectSlug?: strin
     ...(await projectHint(ctx, project.slug).then((c) => (c ? { curation: c } : {})).catch(() => ({}))),
     open_known_issues: knownIssues.rows,
     ...(await projectSecurity(ctx, project.id, comp?.slug).then((s) => (s ? { security: s } : {})).catch(() => ({}))),
+    ...(await designSummary(ctx, project.slug).then((d) => (d ? { design: d } : {})).catch(() => ({}))),
     ...(await projectAdvisories(ctx, project.slug)
       .then((a) => (a.length ? { security_advisories: { hint: "Recent critical vulnerabilities in technologies or packages this project uses. Check whether they apply, then set_advisory_response.", items: a } } : {}))
       .catch(() => ({}))),

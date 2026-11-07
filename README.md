@@ -228,6 +228,16 @@ Thaliyola can keep a living wiki for every repository, written by your own codin
 - **Reading:** pages render Mermaid diagrams; a Sources panel lists each fact with a link to the exact lines on GitHub, GitLab or Bitbucket and flags stale ones. Pages refresh live while an agent writes (`/api/events`, server-sent events; nginx needs buffering off for it, see `deploy/native/nginx-thaliyola.conf`).
 - **Static site:** project settings → General → Download as a static site gives a zip with a self-contained reader (search, folders, diagrams, sources) to host anywhere (`GET /api/export/site?scope=`). The Markdown export follows the Open Knowledge Format (front matter with `kind` and provenance, `index.md`, `log.md`).
 
+## Design systems
+
+Each project (and Team and Library) can keep its design system as structured tokens, so every session and project builds UI with the same values:
+- **What it holds:** colours (name, value, dark-mode value, role, when to use it), fonts and the type scale, spacing, corner radii, shadows, breakpoints, the shared UI components (name, purpose, path), icon style, voice and accessibility notes, and the design rules in Markdown. Every change keeps a version you can restore.
+- **Shared across projects:** a project can be **based on** another system, usually the Library's, and override only what differs by name (e.g. its own accent colour). The Design page shows what is inherited and which projects use a system.
+- **Design decisions:** decision articles tagged `design` (`record_design_decision`, or *Record a decision* on the page) appear with the system, alongside component, UX pattern, screen and token pages. They publish directly for project owners and go to review for others.
+- **For coding agents:** `get_project_context` includes a short summary (palette, fonts, decisions), and `get_design_system` returns the full system or exports it as CSS custom properties (with dark mode), a Tailwind `theme.extend`, W3C design tokens or JSON. In Claude Code, `/mcp__thaliyola__capture-design` reads the real values from the code (CSS variables, Tailwind config, theme files, fonts, components) and records them with `update_design_system`.
+- **Contrast checks:** text, primary and status colours are checked against the background in light and dark mode (WCAG AA, 4.5:1), on the page and in every update's result.
+- Project writers and owners edit a project's system; Team and Library systems need their owners. API: `/api/scopes/:slug/design` (GET, PUT), `/design/export?format=css|tailwind|w3c|json`, `/design/versions`, `/design/restore`, `/design/decisions`, `/api/design-systems`.
+
 ## Sessions asking each other
 
 A Claude session can ask another session, yours or a teammate's on any machine, and get its answer back. Session 1 asks session 2 about the API it is working on; session 2 answers from its own context and code.
@@ -262,7 +272,7 @@ Thaliyola can watch what the team reads and bring it into an **inbox** (Inbox in
 ## Agent integrations
 
 [`integrations/`](integrations) has everything needed to make agents use Thaliyola by default:
-- **Prompts:** `investigate`, `start-coding`, `capture`, `draft-from-paste`, `curate`, `review-stale`, `document-repo`, `update-docs`, `triage-inbox`, `security-check` and `listen`, served by every Thaliyola server.
+- **Prompts:** `investigate`, `start-coding`, `capture`, `draft-from-paste`, `curate`, `review-stale`, `document-repo`, `update-docs`, `triage-inbox`, `security-check`, `listen` and `capture-design`, served by every Thaliyola server.
 - **Curation by the client's model:** Thaliyola has no LLM, so it hands judgment work to connected agents. `get_tasks` returns tasks with instructions: entries filed in the team space that belong to a project, project pages missing their repository, look-alike findings, recurring problems, empty outline sections, stale entries, projects without an overview, unlinked entries, and (for admins) searches that found nothing. The agent acts through normal tools (`move_entry` proposes moving an entry to a project, folder and/or repository) and reports with `complete_task`; handed-out tasks are reserved for an hour and finished ones stay hidden. `get_project_context` mentions open tasks so agents tidy as they go. Run it with the `curate` prompt (`/mcp__thaliyola__curate` in Claude Code), on demand or on a schedule (e.g. `claude -p "/mcp__thaliyola__curate"` from cron). Review → Suggestions shows the queue and what agents did. (MCP sampling isn't used: the endpoint is stateless and most clients don't support it.)
 - **Every coding agent:** `curl -fsSL https://<server>/connect.sh | sh` adds Thaliyola to Claude Code, Codex, Gemini CLI, Copilot CLI, VS Code, Cursor, Windsurf, OpenCode and Kiro; the Connect page has the manual setup for each.
 - **Claude Code:** a plugin with the `thaliyola` skill, a per-repo `.mcp.json` template, and a CLAUDE.md snippet.
@@ -324,7 +334,7 @@ claude mcp add --transport http thaliyola http://localhost:8080/mcp \
 ### Acceptance
 
 [`docs/acceptance.md`](docs/acceptance.md) describes the full acceptance run and its latest results:
-- a sweep of all 56 MCP tools (`pnpm --filter @thaliyola/server acceptance`);
+- a sweep of all 59 MCP tools (`pnpm --filter @thaliyola/server acceptance`);
 - real Claude Code sessions acting as designer, backend developer, frontend developer, on-call engineer, admin and outsider.
 
 ### Behind a reverse proxy

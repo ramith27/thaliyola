@@ -970,3 +970,31 @@ pre.diff { overflow-x: auto; max-width: 100%; }
 .answer-form textarea { width: 100%; }
 .answer-form .inline-form { margin-top: 0.4rem; align-items: center; }
 .answer-form select { width: auto; }
+
+/* Design systems */
+.design-page section { margin-top: 1.6rem; }
+.design-page .section-head { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; justify-content: space-between; }
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.7rem; }
+.swatch { display: flex; gap: 0.7rem; padding: 0.7rem; align-items: flex-start; }
+.swatch-chips { display: flex; flex-direction: column; gap: 4px; flex: none; }
+.swatch-chip { width: 44px; height: 44px; border-radius: 8px; border: 1px solid var(--border); }
+.swatch-chips .swatch-chip + .swatch-chip { height: 20px; }
+.swatch-body { min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; overflow-wrap: anywhere; }
+.contrast { display: inline-block; margin-right: 0.5rem; padding: 0 0.35rem; border-radius: 4px; font-size: 0.75rem; }
+.contrast.ok { background: var(--ok-soft); color: var(--ok); }
+.contrast.low { background: var(--warn-soft); color: var(--warn); }
+.font-row { display: flex; flex-wrap: wrap; gap: 0.7rem; align-items: baseline; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+.font-sample { font-size: 1.25rem; flex: 1; min-width: 14rem; }
+.type-scale td { vertical-align: middle; }
+.type-sample { display: block; overflow-wrap: anywhere; }
+.scale-list li { display: flex; align-items: center; gap: 0.6rem; padding: 0.2rem 0; }
+.scale-name { width: 4rem; font-size: 0.85rem; }
+.space-bar { height: 12px; background: var(--series-1); border-radius: 3px; min-width: 2px; }
+.shape-list { display: flex; flex-wrap: wrap; gap: 1rem; }
+.shape-list li { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; }
+.shape { width: 64px; height: 48px; border: 1px solid var(--border); background: var(--surface); }
+.decision-list li { padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+.decision-form, .design-editor { padding: 1rem 1.1rem; margin-top: 0.8rem; max-width: 820px; }
+.design-editor textarea, .decision-form textarea, .decision-form input, .design-editor input, .design-editor select { width: 100%; }
+.version-list li { padding: 0.2rem 0; }
+@media (max-width: 860px) { .swatches { grid-template-columns: minmax(0, 1fr); } }

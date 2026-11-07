@@ -15,6 +15,7 @@ Thaliyola pays off when the tools people already use read from it first and writ
 | `document-repo` | Write grounded documentation for the repository you're in (first run) |
 | `update-docs` | Refresh only the pages and facts that changed since the last documented commit |
 | `security-check` | Scan the repository you're in and publish to its project: dependencies (default) or `full` (also reviews the code); `fix: yes` also upgrades vulnerable packages |
+| `capture-design` | Read this app's colours, fonts, spacing and components from the code and record them as its design system |
 | `listen` | Answer questions other sessions send this one until you stop it |
 | `triage-inbox` | File what team sources brought in (feeds, pages, Slack, Notion, searches) as knowledge, dismiss the rest |
 
