@@ -20,6 +20,19 @@ import { eventStream } from "../core/events.js";
 import { agentsMdBlock, claimsFor, docsStatus, resolveClaims, updateDocSettings } from "../core/docs.js";
 import { approveProjectRequest, createOrRequestProject, declineProjectRequest, listProjectRequests } from "../core/project-requests.js";
 import { SOURCE_KINDS } from "../core/connectors.js";
+import {
+  answerQuestion,
+  askSession,
+  cancelQuestion,
+  declineQuestion,
+  endSession,
+  getAnswer,
+  hookCheck,
+  listQuestions,
+  listSessions,
+  registerSession,
+  setListening,
+} from "../core/sessions.js";
 import { getReadableScope } from "../core/scopes.js";
 import { hideAdvisory, latestAdvisories, publishAdvisory, setAdvisoryResponse, setProjectTechnologies, stackOf, TECHNOLOGIES } from "../core/advisories.js";
 import { beginDependencyScan, detectProjectStack, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, securityOverview, updateVulnerability, uploadWithAuth } from "../core/security.js";
@@ -299,6 +312,115 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
     ),
   );
   router.get("/purges", handle("list_purges", async (ctx) => ({ purges: await listPurges(ctx) })));
+  // Sessions asking each other. Hooks address their session by the client's own id; long-polls stop when the client goes away.
+  const sessionRef = z.object({ session: z.string().optional(), client: z.string().max(40).optional(), client_session_id: z.string().max(200).optional() });
+  const abortOnClose = (req: Request) => {
+    const ac = new AbortController();
+    req.res?.on("close", () => ac.abort());
+    return ac.signal;
+  };
+  router.get(
+    "/agent-sessions",
+    handle("list_sessions", (ctx, req) =>
+      listSessions(ctx, z.object({ project: z.string().optional(), include_offline: z.enum(["true", "false"]).transform((v) => v === "true").optional() }).parse(req.query)),
+    ),
+  );
+  router.post(
+    "/agent-sessions",
+    handle("register_session", (ctx, req) =>
+      registerSession(
+        ctx,
+        z
+          .object({
+            session: z.string().max(120).optional(),
+            name: z.string().max(60).optional(),
+            repo: z.string().max(500).optional(),
+            project: z.string().optional(),
+            component: z.string().optional(),
+            description: z.string().max(500).optional(),
+            visibility: z.enum(["project", "private"]).optional(),
+            listening: z.boolean().optional(),
+            client: z.string().max(40).optional(),
+            client_session_id: z.string().max(200).optional(),
+          })
+          .parse(req.body),
+      ),
+    ),
+  );
+  router.post("/agent-sessions/listening", handle("set_listening", (ctx, req) => {
+    const b = sessionRef.extend({ listening: z.boolean() }).parse(req.body);
+    return setListening(ctx, b, b.listening);
+  }));
+  router.post("/agent-sessions/end", handle("end_session", (ctx, req) => endSession(ctx, sessionRef.parse(req.body))));
+  router.get(
+    "/agent-sessions/check",
+    handle("session_check", (ctx, req) =>
+      hookCheck(
+        ctx,
+        sessionRef
+          .extend({
+            wait_seconds: z.coerce.number().int().min(0).max(100).optional(),
+            claim: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
+            answers: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
+          })
+          .parse(req.query),
+        abortOnClose(req),
+      ),
+    ),
+  );
+  router.get(
+    "/questions",
+    handle("list_questions", (ctx, req) =>
+      listQuestions(ctx, z.object({ status: z.enum(["open", "closed", "all"]).optional(), limit: z.coerce.number().int().optional() }).parse(req.query)),
+    ),
+  );
+  router.post(
+    "/questions",
+    handle("ask_session", (ctx, req) =>
+      askSession(
+        ctx,
+        z
+          .object({
+            session: z.string().optional(),
+            to: z.string().min(1).max(200),
+            question: z.string().min(1).max(8000),
+            context: z.string().max(8000).optional(),
+            wait_seconds: z.number().int().min(0).max(45).optional(),
+            expires_minutes: z.number().int().min(1).max(240).optional(),
+          })
+          .parse(req.body),
+        { signal: abortOnClose(req) },
+      ),
+    ),
+  );
+  router.get(
+    "/questions/:id/answer",
+    handle("get_answer", (ctx, req) =>
+      getAnswer(ctx, { id: uuid.parse(req.params.id), ...z.object({ session: z.string().optional(), wait_seconds: z.coerce.number().int().min(0).max(45).optional() }).parse(req.query) }, { signal: abortOnClose(req) }),
+    ),
+  );
+  router.post(
+    "/questions/:id/answer",
+    handle("answer_question", (ctx, req) =>
+      answerQuestion(ctx, {
+        id: uuid.parse(req.params.id),
+        ...z
+          .object({
+            session: z.string().optional(),
+            answer: z.string().min(1).max(8000),
+            save_as: z.enum(["known_issue", "rca", "data_gotcha", "query_recipe", "incident"]).optional(),
+            save_to: z.string().optional(),
+          })
+          .parse(req.body),
+      }),
+    ),
+  );
+  router.post(
+    "/questions/:id/decline",
+    handle("decline_question", (ctx, req) => declineQuestion(ctx, { id: uuid.parse(req.params.id), ...z.object({ session: z.string().optional(), reason: z.string().min(1).max(1000) }).parse(req.body) })),
+  );
+  router.post("/questions/:id/cancel", handle("cancel_question", (ctx, req) => cancelQuestion(ctx, uuid.parse(req.params.id))));
+
   // Vulnerabilities (details for project writers, owners and admins).
   const SEVERITY = ["critical", "high", "medium", "low", "unknown"] as const;
   const STATUS = ["open", "acknowledged", "fixed", "accepted", "false_positive"] as const;

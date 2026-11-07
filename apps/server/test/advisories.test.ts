@@ -20,11 +20,13 @@ import { ctxFor, freshDb, TEST_SETTINGS } from "./helpers.js";
 let db: Db;
 
 // Modelled on NVD's records for the two PHP CVEs (same issuer and hour; one is critical only by CVSS 4.0).
+// Published 2.5 days ago: outside a first run's 2-day notification window, inside later runs' 3 days.
+const PUBLISHED = new Date(Date.now() - 2.5 * 864e5).toISOString().slice(0, 23);
 const nvd = (id: string, desc: string, v31: [number, string], v40?: [number, string], cpe = "cpe:2.3:a:php:php:*:*:*:*:*:*:*:*") => ({
   cve: {
     id,
     sourceIdentifier: "security@php.net",
-    published: "2026-10-21T14:17:09.357",
+    published: PUBLISHED,
     lastModified: "2026-10-23T16:26:54.713",
     vulnStatus: "Analyzed",
     descriptions: [{ lang: "en", value: desc }],
@@ -54,7 +56,7 @@ const GHSA = [
     vulnerabilities: [{ package: { ecosystem: "npm", name: "next" }, first_patched_version: "15.2.3" }],
   },
   // GitHub also knows one of the PHP CVEs: it merges with NVD's entry.
-  { ghsa_id: "GHSA-php-0618", cve_id: "CVE-2026-109618", summary: "PHP OOM longjmp leaves request memory uninitialized", severity: "critical", published_at: "2026-10-21T15:00:00Z", html_url: "https://github.com/advisories/GHSA-php-0618", vulnerabilities: [] },
+  { ghsa_id: "GHSA-php-0618", cve_id: "CVE-2026-109618", summary: "PHP OOM longjmp leaves request memory uninitialized", severity: "critical", published_at: `${PUBLISHED}Z`, html_url: "https://github.com/advisories/GHSA-php-0618", vulnerabilities: [] },
 ];
 
 let nvdCalls: string[] = [];
@@ -101,7 +103,7 @@ describe("technologies", () => {
 
   it("reads NVD records: worst of CVSS 3.1 and 4.0, products from CPEs", () => {
     const a = fromNvd(PHP_619.cve as never);
-    expect(a).toMatchObject({ key: "CVE-2026-109619", severity: "critical", cvss_score: 8.1, technologies: ["php"], source_org: "security@php.net", published_at: "2026-10-21T14:17:09.357Z" });
+    expect(a).toMatchObject({ key: "CVE-2026-109619", severity: "critical", cvss_score: 8.1, technologies: ["php"], source_org: "security@php.net", published_at: `${PUBLISHED}Z` });
     expect(a.products).toEqual(["php:php", "siemens:ruggedcom_ape1808_firmware"]);
     // The issuer's own product is the subject, even when a vendor that bundles it lists more versions.
     const bundled = fromNvd({ ...PHP_619.cve, configurations: [{ nodes: [{ cpeMatch: [

@@ -14,6 +14,7 @@ export function Layout({ me, scopes, route, children }: { me: Me; scopes: ScopeI
   const pending = useApi<{ revisions: unknown[] }>("/revisions?state=pending&limit=200");
   const inbox = useApi<{ counts: Record<string, number> }>("/inbox?limit=1");
   const critical = useApi<{ total: number }>("/vulnerabilities?severity=critical&limit=1");
+  const openQuestions = useApi<{ questions: { for_me: boolean }[] }>("/questions?status=open&limit=100");
   const favourites = useFavourites();
   const recent = useRecent();
 
@@ -54,6 +55,7 @@ export function Layout({ me, scopes, route, children }: { me: Me; scopes: ScopeI
           <NavLink to="/graph" icon="graph" label="Knowledge graph" active={section === "graph"} />
           <NavLink to="/review" icon="review" label="Review" active={section === "review"} count={pendingCount} />
           <NavLink to="/inbox" icon="inbox" label="Inbox" active={section === "inbox" || section === "sources"} count={inbox.data?.counts.new ?? 0} />
+          <NavLink to="/sessions" icon="chat" label="Sessions" active={section === "sessions"} count={openQuestions.data?.questions.filter((q) => q.for_me).length ?? 0} />
           <NavLink to="/security" icon="shield" label="Security" active={section === "security"} count={critical.data?.total ?? 0} />
           <NavLink to="/metrics" icon="chart" label="Metrics" active={section === "metrics"} />
           <NavLink to="/connect" icon="plug" label="Connect" active={section === "connect"} />

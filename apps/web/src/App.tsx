@@ -14,6 +14,7 @@ import { ImportPage, NewProjectPage } from "./pages/setup";
 import { PasteDraftPage } from "./pages/paste";
 import { InboxPage, SourcesPage } from "./pages/sources";
 import { SecurityPage, VulnerabilityPage } from "./pages/security";
+import { SessionsPage } from "./pages/sessions";
 import { HistoryPage } from "./pages/history";
 import { Layout } from "./components/Layout";
 import { ErrorBox, Loading } from "./components/ui";
@@ -132,6 +133,9 @@ export function App() {
       break;
     case "trash":
       page = <TrashPage />;
+      break;
+    case "sessions":
+      page = <SessionsPage route={route} scopes={boot.scopes} />;
       break;
     case "security":
       page = id ? <VulnerabilityPage id={id} /> : <SecurityPage route={route} scopes={boot.scopes} isAdmin={boot.me.admin} />;

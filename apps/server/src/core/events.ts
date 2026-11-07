@@ -35,3 +35,34 @@ export function eventStream(req: Request, res: Response) {
     bus.off("changed", onChange);
   });
 }
+
+/**
+ * Keyed wake-ups for long-polls (a session waiting for an answer, a listener waiting for a question).
+ * Waiters still re-check the database when woken or when their wait ends, so a missed event only
+ * delays an answer until the next check. One process; several instances would relay keys over
+ * Postgres LISTEN/NOTIFY.
+ */
+const keyed = new EventEmitter();
+keyed.setMaxListeners(0);
+
+export function wake(keys: (string | null | undefined)[]) {
+  for (const k of keys) if (k) keyed.emit(k);
+}
+
+/** Resolves true when any key fires, false when `ms` passes (or the signal aborts). */
+export function waitFor(keys: string[], ms: number, signal?: AbortSignal): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (ms <= 0 || signal?.aborted) return resolve(false);
+    const done = (fired: boolean) => {
+      clearTimeout(timer);
+      for (const k of keys) keyed.off(k, onFire);
+      signal?.removeEventListener("abort", onAbort);
+      resolve(fired);
+    };
+    const onFire = () => done(true);
+    const onAbort = () => done(false);
+    const timer = setTimeout(() => done(false), ms);
+    for (const k of keys) keyed.on(k, onFire);
+    signal?.addEventListener("abort", onAbort);
+  });
+}

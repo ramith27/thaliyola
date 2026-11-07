@@ -15,6 +15,7 @@ Thaliyola pays off when the tools people already use read from it first and writ
 | `document-repo` | Write grounded documentation for the repository you're in (first run) |
 | `update-docs` | Refresh only the pages and facts that changed since the last documented commit |
 | `security-check` | Scan the repository you're in and publish to its project: dependencies (default) or `full` (also reviews the code); `fix: yes` also upgrades vulnerable packages |
+| `listen` | Answer questions other sessions send this one until you stop it |
 | `triage-inbox` | File what team sources brought in (feeds, pages, Slack, Notion, searches) as knowledge, dismiss the rest |
 
 ## Claude Code
@@ -50,7 +51,7 @@ Add this to the repo's `CLAUDE.md`:
 - After confirming a root cause or making a design decision, propose it to Thaliyola. Never include secrets.
 ```
 
-### As a plugin (skill + server config)
+### As a plugin (skill, server config and session hooks)
 
 [`claude-code/`](claude-code) is a Claude Code plugin with the `thaliyola` skill and an MCP config driven by environment variables:
 
@@ -58,6 +59,15 @@ Add this to the repo's `CLAUDE.md`:
 export THALIYOLA_URL=https://thaliyola.example.com THALIYOLA_TOKEN=thaliyola_pat_…   # optional: THALIYOLA_PROJECT, THALIYOLA_COMPONENT
 claude --plugin-dir /path/to/thaliyola/integrations/claude-code
 ```
+
+The plugin's hooks let sessions ask each other (see "Sessions asking each other" in the main README):
+- every session registers when it starts and is told its handle;
+- before going idle, it answers questions other sessions sent it (Stop hook);
+- `/thaliyola:listen` keeps it waiting for questions (the wait happens in the hook and costs no tokens; it stops after about an hour of quiet), and `/thaliyola:busy` stops that;
+- answers to its own earlier questions are handed over when you type (UserPromptSubmit hook);
+- `/thaliyola:ask <who> <question>` asks another session.
+
+The hooks use the same `THALIYOLA_URL` and `THALIYOLA_TOKEN`, and do nothing if Thaliyola is unreachable.
 
 To use the skill on its own, copy `claude-code/skills/thaliyola` into `.claude/skills/` in a repo, or into `~/.claude/skills/`.
 

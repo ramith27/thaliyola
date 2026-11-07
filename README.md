@@ -228,6 +228,15 @@ Thaliyola can keep a living wiki for every repository, written by your own codin
 - **Reading:** pages render Mermaid diagrams; a Sources panel lists each fact with a link to the exact lines on GitHub, GitLab or Bitbucket and flags stale ones. Pages refresh live while an agent writes (`/api/events`, server-sent events; nginx needs buffering off for it, see `deploy/native/nginx-thaliyola.conf`).
 - **Static site:** project settings → General → Download as a static site gives a zip with a self-contained reader (search, folders, diagrams, sources) to host anywhere (`GET /api/export/site?scope=`). The Markdown export follows the Open Knowledge Format (front matter with `kind` and provenance, `index.md`, `log.md`).
 
+## Sessions asking each other
+
+A Claude session can ask another session, yours or a teammate's on any machine, and get its answer back. Session 1 asks session 2 about the API it is working on; session 2 answers from its own context and code.
+- **Joining:** with the Claude Code plugin, every session joins automatically when it starts. It gets a handle like `ramith/leadtransit-api`, and its git remote finds its project. Other agents call `register_session`, or run `/mcp__thaliyola__listen`.
+- **Asking:** `ask_session` (or `/thaliyola:ask <who> <question>`) goes to a session handle, a person's email (any of their sessions) or a project or project/repository (whoever works there). It waits up to 45 seconds for the answer; otherwise it returns a ticket, and the answer is handed over on the asker's next prompt (plugin) or with `get_answer`.
+- **Answering:** the server can't push to a session, so sessions pull. A **listening** session (`/mcp__thaliyola__listen`, or `/thaliyola:listen` with the plugin) answers within seconds; with the plugin the wait happens in a hook and costs no tokens. A **busy** session is handed waiting questions by its Stop hook when it finishes its task. A **person** can answer, decline or ask on the **Sessions** page. Answers can be saved as findings for review.
+- **Safety:** you can ask only sessions in projects you can read; `private` sessions take questions from their owner's own sessions only. Questions and answers are redacted, treated as data rather than instructions, limited to 8,000 characters and 30 questions an hour per session, and expire after 30 minutes by default. Owners are notified when a question waits more than 2 minutes or nobody is online to take it.
+- MCP tools: `register_session`, `list_sessions`, `ask_session`, `get_answer`, `wait_for_questions`, `answer_question`, `decline_question`; the `listen` prompt. API: `/api/agent-sessions`, `/api/agent-sessions/check` (for hooks), `/api/questions`.
+
 ## Security: vulnerabilities
 
 Every project gets a vulnerability register and a **Security** dashboard, available to agents over MCP as well. There's still no scanner or model on the server:
@@ -253,7 +262,7 @@ Thaliyola can watch what the team reads and bring it into an **inbox** (Inbox in
 ## Agent integrations
 
 [`integrations/`](integrations) has everything needed to make agents use Thaliyola by default:
-- **Prompts:** `investigate`, `start-coding`, `capture`, `draft-from-paste`, `curate`, `review-stale`, `document-repo`, `update-docs`, `triage-inbox` and `security-check`, served by every Thaliyola server.
+- **Prompts:** `investigate`, `start-coding`, `capture`, `draft-from-paste`, `curate`, `review-stale`, `document-repo`, `update-docs`, `triage-inbox`, `security-check` and `listen`, served by every Thaliyola server.
 - **Curation by the client's model:** Thaliyola has no LLM, so it hands judgment work to connected agents. `get_tasks` returns tasks with instructions: entries filed in the team space that belong to a project, project pages missing their repository, look-alike findings, recurring problems, empty outline sections, stale entries, projects without an overview, unlinked entries, and (for admins) searches that found nothing. The agent acts through normal tools (`move_entry` proposes moving an entry to a project, folder and/or repository) and reports with `complete_task`; handed-out tasks are reserved for an hour and finished ones stay hidden. `get_project_context` mentions open tasks so agents tidy as they go. Run it with the `curate` prompt (`/mcp__thaliyola__curate` in Claude Code), on demand or on a schedule (e.g. `claude -p "/mcp__thaliyola__curate"` from cron). Review → Suggestions shows the queue and what agents did. (MCP sampling isn't used: the endpoint is stateless and most clients don't support it.)
 - **Every coding agent:** `curl -fsSL https://<server>/connect.sh | sh` adds Thaliyola to Claude Code, Codex, Gemini CLI, Copilot CLI, VS Code, Cursor, Windsurf, OpenCode and Kiro; the Connect page has the manual setup for each.
 - **Claude Code:** a plugin with the `thaliyola` skill, a per-repo `.mcp.json` template, and a CLAUDE.md snippet.
@@ -315,7 +324,7 @@ claude mcp add --transport http thaliyola http://localhost:8080/mcp \
 ### Acceptance
 
 [`docs/acceptance.md`](docs/acceptance.md) describes the full acceptance run and its latest results:
-- a sweep of all 49 MCP tools (`pnpm --filter @thaliyola/server acceptance`);
+- a sweep of all 56 MCP tools (`pnpm --filter @thaliyola/server acceptance`);
 - real Claude Code sessions acting as designer, backend developer, frontend developer, on-call engineer, admin and outsider.
 
 ### Behind a reverse proxy

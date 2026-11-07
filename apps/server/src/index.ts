@@ -4,6 +4,7 @@ import { HashingEmbedder, LocalEmbedder, startIndexer } from "./core/embeddings.
 import { startJobs } from "./core/freshness.js";
 import { startSourceJobs } from "./core/sources.js";
 import { startSecurityJobs } from "./core/security.js";
+import { startSessionJobs } from "./core/sessions.js";
 import { loadConfig, settingsFrom } from "./config.js";
 import { migrate } from "./db/migrate.js";
 import { createPool } from "./db/pool.js";
@@ -44,6 +45,7 @@ const jobs = startJobs(
 
 const sources = startSourceJobs(db, settingsFrom(config), (msg) => console.log(`[sources] ${msg}`));
 const security = startSecurityJobs(db, settingsFrom(config), (msg) => console.log(`[security] ${msg}`));
+const sessionJobs = startSessionJobs(db, settingsFrom(config), (msg) => console.log(`[sessions] ${msg}`));
 
 const server = createApp({
   db,
@@ -62,6 +64,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     jobs.stop();
     sources.stop();
     security.stop();
+    sessionJobs.stop();
     server.close(() => void db.end().then(() => process.exit(0)));
   });
 }

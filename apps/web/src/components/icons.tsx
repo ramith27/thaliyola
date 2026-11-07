@@ -96,6 +96,12 @@ export const icons = {
       <path d="M4 13h4.5l1 2h5l1-2H20" />
     </Icon>
   ),
+  chat: (p: SVGProps<SVGSVGElement>) => (
+    <Icon {...p}>
+      <path d="M4 5.5h16v10H9l-5 4v-14Z" />
+      <path d="M8 9.5h8M8 12.5h5" />
+    </Icon>
+  ),
   shield: (p: SVGProps<SVGSVGElement>) => (
     <Icon {...p}>
       <path d="M12 3 5 6v5.5c0 4.3 2.9 8 7 9.5 4.1-1.5 7-5.2 7-9.5V6l-7-3Z" />
