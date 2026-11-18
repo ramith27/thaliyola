@@ -222,9 +222,9 @@ describe("names wherever people are listed", () => {
       root_cause: "No names",
       force_new: true,
     });
-    await setAssignee(await as("admin"), res.revision_id, await idOf("rita"));
+    await setAssignee(await as("admin"), (res as { revision_id: string }).revision_id, await idOf("rita"));
     await flushDeliveries();
-    const row = (await listReviewQueue(admin, { scope: "order-service" })).find((r) => r.id === res.revision_id);
+    const row = (await listReviewQueue(admin, { scope: "order-service" })).find((r) => r.id === (res as { revision_id: string }).revision_id);
     expect(row).toMatchObject({
       summary: "New root cause analysis: Names in the queue",
       author: "author@example.com",
@@ -242,8 +242,8 @@ describe("names wherever people are listed", () => {
       ]),
     );
     await setMyName(admin, "Ada Admin");
-    await setAssignee(await as("admin"), res.revision_id, null);
-    await setAssignee(await as("admin"), res.revision_id, await idOf("rita"));
+    await setAssignee(await as("admin"), (res as { revision_id: string }).revision_id, null);
+    await setAssignee(await as("admin"), (res as { revision_id: string }).revision_id, await idOf("rita"));
     await flushDeliveries();
     expect((await ritaNotes()).map((n) => n.body)).toContain("Ada Admin asked you to review this.");
     await setMyName(await as("admin"), null);
@@ -283,8 +283,8 @@ describe("proposal summaries", () => {
     const article = await createArticle(ctx, { type: "api_contract", title: "Orders API", body_md: "## Interface\n\nGET /orders" });
     const finding = await proposeFinding(ctx, { type: "known_issue", title: "Coupon spaces", symptoms: "x", root_cause: "y", force_new: true });
     const queue = await listReviewQueue(await as("admin"), { scope: "order-service" });
-    expect(queue.find((r) => r.id === article.revision_id)?.summary).toBe("New API contract: Orders API");
-    expect(queue.find((r) => r.id === finding.revision_id)?.summary).toBe("New known issue: Coupon spaces");
+    expect(queue.find((r) => r.id === (article as { revision_id: string }).revision_id)?.summary).toBe("New API contract: Orders API");
+    expect(queue.find((r) => r.id === (finding as { revision_id: string }).revision_id)?.summary).toBe("New known issue: Coupon spaces");
   });
 });
 

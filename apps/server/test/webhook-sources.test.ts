@@ -5,7 +5,7 @@ import type { Db } from "../src/db/pool.js";
 import { ctxFor, freshDb, TEST_SETTINGS } from "./helpers.js";
 
 let db: Db;
-const settings = { ...TEST_SETTINGS, publicUrl: "https://kb.example.com", sources: { ...(TEST_SETTINGS.sources ?? {}), enabled: true } };
+const settings: typeof TEST_SETTINGS = { ...TEST_SETTINGS, publicUrl: "https://kb.example.com", sources: { allowPrivate: false, ...TEST_SETTINGS.sources, enabled: true } };
 const admin = async () => ({ ...(await ctxFor(db, { email: "admin@example.com" })), settings });
 const split = (url: string) => {
   const m = /\/hooks\/sources\/([0-9a-f-]{36})\/([\w-]+)$/.exec(url)!;

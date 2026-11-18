@@ -118,14 +118,14 @@ describe("asking everyone", () => {
     const asked = askSession(alice, { session: "alice/shop-api", to: "shop", question: "Who changed the tax rounding?", everyone: true, wait_seconds: 10 });
     const bobGot = await waitForQuestions(bob, { session: "bob/shop-api", wait_seconds: 5 });
     await answerQuestion(bob, { session: "bob/shop-api", id: bobGot.questions[0].id, answer: "Not me." });
-    const first = (await asked) as { id: string; asked: string[]; answers: { answer: string }[]; status: string };
+    const first = (await asked) as unknown as { id: string; asked: string[]; answers: { answer: string }[]; status: string };
     expect(first.asked.sort()).toEqual(["bob/shop-api", "dave/dave-two"]);
     expect(first.status).toBe("answered");
     expect(first.answers.map((a) => a.answer)).toEqual(["Not me."]);
     // Dave answers later; get_answer with the group id collects it.
     const daveGot = await waitForQuestions(dave, { session: "dave/dave-two", wait_seconds: 0 });
     await answerQuestion(dave, { session: "dave/dave-two", id: daveGot.questions[0].id, answer: "I did, in #412." });
-    const all = (await getAnswer(alice, { session: "alice/shop-api", id: first.id })) as { answers: { answer: string }[]; still_waiting: number };
+    const all = (await getAnswer(alice, { session: "alice/shop-api", id: first.id })) as unknown as { answers: { answer: string }[]; still_waiting: number };
     expect(all.answers.map((a) => a.answer).sort()).toEqual(["I did, in #412.", "Not me."]);
     expect(all.still_waiting).toBe(0);
     const n = (await db.query("SELECT count(DISTINCT coalesce(group_id, id))::int AS n FROM session_questions WHERE group_id = $1", [first.id])).rows[0].n;

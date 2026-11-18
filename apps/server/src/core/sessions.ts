@@ -427,7 +427,8 @@ export async function getAnswer(ctx: RequestContext, input: { session?: string; 
       const answers = await waitForGroup(ctx.db, input.id, clampWait(input.wait_seconds, limits.maxWaitMs ?? MAX_WAIT_MCP_MS), limits.signal);
       const open = (await ctx.db.query<{ n: number }>("SELECT count(*)::int AS n FROM session_questions WHERE group_id = $1 AND status IN ('pending', 'claimed')", [input.id])).rows[0]!.n;
       const others = await undeliveredAnswers(ctx.db, s?.id ?? null, ctx.actor.id, input.id, input.id);
-      return { note: UNTRUSTED, id: input.id, answers, still_waiting: open, other_answers: others };
+      // The same shape as a single question's result (no `answer`), so callers needn't tell them apart.
+      return { note: UNTRUSTED, id: input.id, answers, still_waiting: open, other_answers: others, answer: undefined as (Record<string, unknown> & { status: string }) | undefined };
     }
     ticket = (await waitForAnswer(ctx.db, input.id, clampWait(input.wait_seconds, limits.maxWaitMs ?? MAX_WAIT_MCP_MS), limits.signal)) ?? { ...(await questionView(ctx.db, input.id)), status: "waiting" };
   }

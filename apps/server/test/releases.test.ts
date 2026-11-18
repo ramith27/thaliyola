@@ -566,7 +566,7 @@ describe("over MCP", () => {
     const client = await mcp("admin");
     const { tools } = await client.listTools();
     // Publishing a written release is a decision Claude may make (publish_release); writing one isn't.
-    expect(tools.filter((t) => /release|feature|whats_new/.test(t.name)).map((t) => t.name).sort()).toEqual(["list_features", "publish_release", "unpublish_release", "whats_new"]);
+    expect(tools.filter((t) => /release(?!_work)|feature|whats_new/.test(t.name)).map((t) => t.name).sort()).toEqual(["list_features", "publish_release", "unpublish_release", "whats_new"]);
     const feature = (await call("admin", "GET", "/releases/1.0.0")).body.features[0];
     const png = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex").toString("base64");
     const res = await client.callTool({ name: "upload_asset", arguments: { target_id: feature.id, filename: "x.png", mime_type: "image/png", data_base64: png } });

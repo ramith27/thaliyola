@@ -483,10 +483,10 @@ describe("project digests", () => {
     await db.query("UPDATE revisions SET state = 'rejected' WHERE scope_id = $1 AND state = 'pending'", [shop]);
     const w = await writer();
     const pending = await proposeFinding({ ...w, project: "shop" }, { type: "rca", title: "Checkout times out under load", symptoms: "504s", root_cause: "Pool too small", force_new: true });
-    await db.query("UPDATE revisions SET created_at = $2 WHERE id = $1", [pending.revision_id, new Date(NOW.getTime() - 3 * 86_400_000 - 3600_000)]);
+    await db.query("UPDATE revisions SET created_at = $2 WHERE id = $1", [(pending as { revision_id: string }).revision_id, new Date(NOW.getTime() - 3 * 86_400_000 - 3600_000)]);
     const published = await proposeFinding({ ...(await owner()), project: "shop" }, { type: "rca", title: "Coupons applied twice", symptoms: "Double discount", root_cause: "Race", force_new: true });
     expect(published.status).toBe("published");
-    await db.query("UPDATE revisions SET decided_at = $2 WHERE id = $1", [published.revision_id, new Date(NOW.getTime() - 2 * 3600_000)]);
+    await db.query("UPDATE revisions SET decided_at = $2 WHERE id = $1", [(published as { revision_id: string }).revision_id, new Date(NOW.getTime() - 2 * 3600_000)]);
     await db.query(
       "INSERT INTO articles (scope_id, type, title, body_md, status, last_verified_at) VALUES ($1, 'runbook', 'Refund runbook', 'Steps', 'possibly_stale', $2)",
       [shop, new Date(NOW.getTime() - 200 * 86_400_000)],

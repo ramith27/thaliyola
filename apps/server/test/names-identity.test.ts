@@ -226,16 +226,16 @@ describe("what reviewers see", () => {
     });
     await flushDeliveries();
     const note = (
-      await db.query("SELECT n.body FROM notifications n JOIN users u ON u.id = n.user_id WHERE u.email = 'admin@example.com' AND n.target_id = $1", [res.revision_id])
+      await db.query("SELECT n.body FROM notifications n JOIN users u ON u.id = n.user_id WHERE u.email = 'admin@example.com' AND n.target_id = $1", [(res as { revision_id: string }).revision_id])
     ).rows[0];
     expect(note.body).toBe("Arun Author (author@example.com) proposed a change in Order service v2.");
 
-    const token = await createActionToken(db, admin.actor.id, res.revision_id);
+    const token = await createActionToken(db, admin.actor.id, (res as { revision_id: string }).revision_id);
     const page = await (await fetch(`${base}/actions/${token}`)).text();
     expect(page).toContain("Proposed by Arun Author (author@example.com) in");
 
-    await addComment(await as("author@example.com"), res.revision_id, "Please look");
-    expect((await listComments(admin, res.revision_id))[0]).toMatchObject({ author: "Arun Author", author_name: "Arun Author", author_email: "author@example.com" });
+    await addComment(await as("author@example.com"), (res as { revision_id: string }).revision_id, "Please look");
+    expect((await listComments(admin, (res as { revision_id: string }).revision_id))[0]).toMatchObject({ author: "Arun Author", author_name: "Arun Author", author_email: "author@example.com" });
   });
 });
 

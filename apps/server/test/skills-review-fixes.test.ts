@@ -243,7 +243,7 @@ describe("re-imports", () => {
     expect(r.status, JSON.stringify(r.body)).toBe(200);
     const by = Object.fromEntries((r.body.report.collections as { slug: string; created: boolean; not_imported?: boolean }[]).map((c) => [c.slug, c]));
     expect(by.keep).toMatchObject({ created: true });
-    expect(by.keep.not_imported).toBeUndefined();
+    expect(by.keep!.not_imported).toBeUndefined();
     expect(by.skip).toMatchObject({ created: false, not_imported: true });
     expect(by.broken).toMatchObject({ created: false, not_imported: true });
     expect((await db.query("SELECT slug FROM skill_collections WHERE slug IN ('keep', 'skip', 'broken')")).rows).toEqual([{ slug: "keep" }]);

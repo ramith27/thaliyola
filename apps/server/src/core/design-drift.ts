@@ -119,12 +119,12 @@ export function compareDesign(stored: Tokens, input: DriftInput) {
       ? "not a colour that can be compared"
       : n.distance === 0
         ? `use the ${n.name} token (var(--color-${tokenKey(n.name)}))`
-        : n.distance <= 24
+        : n.distance <= 40
           ? `probably meant ${n.name} (${n.value}${n.mode === "dark" ? ", dark" : ""}); use the token`
           : "not in the palette: add it to the design system or use an existing colour";
     return { ...h, nearest: n, suggestion };
   });
-  const offPalette = hardcoded.filter((h) => h.nearest && h.nearest.distance > 24).length;
+  const offPalette = hardcoded.filter((h) => h.nearest && h.nearest.distance > 40).length;
   return {
     changed,
     missing_in_code: missing,

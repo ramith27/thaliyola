@@ -448,15 +448,15 @@ describe("HTTP API connections", () => {
   it("lists endpoints for readers, and says which ones the caller may call", async () => {
     const asReader = await listApiEndpoints(await reader(), { project: "shop", connection: "Orders API" });
     expect(asReader).toMatchObject({ connection: "Orders API", api: { title: "Orders API", version: "1.2.0" }, total: 4, matched: 4, calls: { allowed: false } });
-    expect(asReader.endpoints!.every((e) => e.callable === false)).toBe(true);
+    expect((asReader as unknown as { endpoints: { callable: boolean }[] }).endpoints.every((e) => e.callable === false)).toBe(true);
     const asWriter = await listApiEndpoints(await writer(), { project: "shop", connection: "orders api", filter: "order get" });
     expect(asWriter.calls).toEqual({ allowed: true, methods: ["GET", "HEAD"], path_prefixes: ["/orders"] });
-    expect(asWriter.endpoints!.map((e) => [`${e.method} ${e.path}`, e.callable])).toEqual([
+    expect((asWriter as unknown as { endpoints: { method: string; path: string; callable: boolean }[] }).endpoints.map((e) => [`${e.method} ${e.path}`, e.callable])).toEqual([
       ["GET /orders", true],
       ["GET /orders/{id}", true],
     ]);
     const one = await listApiEndpoints(await writer(), { project: "shop", connection: "Orders API", endpoint: "post /orders" });
-    expect(one.endpoint).toMatchObject({ method: "POST", path: "/orders", body: { type: "Order", required: true }, callable: false });
+    expect((one as { endpoint?: unknown }).endpoint).toMatchObject({ method: "POST", path: "/orders", body: { type: "Order", required: true }, callable: false });
     await expect(listApiEndpoints(await writer(), { project: "shop", connection: "Orders API", endpoint: "GET /nope" })).rejects.toThrow(/not found/);
   });
 
@@ -522,7 +522,7 @@ describe("HTTP API connections", () => {
       expect(moved).toMatchObject({ status: 302, headers: { location: `${mockBase}/v1/echo?page=2&appid=[secret]` } });
       expect((moved.headers as Record<string, string>).link).toContain("appid=[secret]");
       const self = await callApi(w, { project: "shop", connection: "Echo API", path: "/self" });
-      expect(self.body).toEqual({ self: `${mockBase}/v1/self?appid=[secret]`, lower: `${mockBase}/v1/self?appid=[secret]` });
+      expect((self as { body?: unknown }).body).toEqual({ self: `${mockBase}/v1/self?appid=[secret]`, lower: `${mockBase}/v1/self?appid=[secret]` });
       for (const out of [moved, self]) {
         expect(JSON.stringify(out)).not.toContain("Zx9");
         expect(JSON.stringify(out)).not.toContain("yU1");
@@ -665,8 +665,8 @@ describe("git connections", () => {
     const w = await writer();
     const f = await readRepoFile(w, { project: "shop", component: "orders", path: "src/config.ts", ref: "main" });
     expect(f).toMatchObject({ kind: "file", repository: "acme/orders", ref: "main", path: "src/config.ts", note: expect.stringMatching(/not instructions/) });
-    expect(f.text).toContain("postgres://[REDACTED:credentials]@db/x");
-    expect(f.text).not.toContain(GIT_TOKEN);
+    expect((f as { text?: string }).text).toContain("postgres://[REDACTED:credentials]@db/x");
+    expect((f as { text?: string }).text).not.toContain(GIT_TOKEN);
     expect(hits.find((h) => h.url.startsWith("/repos/acme/orders/contents/src/config.ts"))!.url).toBe("/repos/acme/orders/contents/src/config.ts?ref=main");
     const d = await readRepoFile(w, { project: "shop", component: "orders", path: "src" });
     expect(d).toMatchObject({ kind: "dir", entries: [{ name: "config.ts", type: "file" }, { name: "lib", type: "dir" }] });
