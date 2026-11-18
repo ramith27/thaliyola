@@ -2,7 +2,7 @@ import { withTx, type Queryable } from "../db/pool.js";
 import { storeFor } from "./assets.js";
 import { audit } from "./audit.js";
 import { ForbiddenError, ValidationError, type RequestContext } from "./context.js";
-import { isAdmin } from "./permissions.js";
+import { can } from "./permissions.js";
 import { findItem } from "./writes.js";
 
 /**
@@ -15,7 +15,7 @@ import { findItem } from "./writes.js";
  * that is kept (the content is not).
  */
 export async function purgeItem(ctx: RequestContext, id: string, input: { reason: string; confirm_title: string }) {
-  if (!isAdmin(ctx)) throw new ForbiddenError("only admins can purge");
+  if (!can(ctx, "purge")) throw new ForbiddenError("deleting for good needs Delete permanently (Administrators have it)");
   const reason = input.reason.trim();
   if (reason.length < 5) throw new ValidationError("give a reason (it is kept in the purge log)");
   const item = await findItem(ctx.db, id);
@@ -57,6 +57,9 @@ export async function hardDeleteItem(ctx: RequestContext, db: Queryable, item: {
   await del("impact_notices", "DELETE FROM impact_notices WHERE source_id = $1");
   await del("watches", "DELETE FROM watches WHERE target_id = $1");
   await del("favourites", "DELETE FROM favourites WHERE target_id = $1");
+  // Generated documentation: the page record and its claims (no foreign key to the article).
+  await del("doc_pages", "DELETE FROM doc_pages WHERE article_id = $1");
+  await del("claims", "DELETE FROM claims WHERE article_id = $1");
   const assets = await db.query<{ storage_key: string }>("DELETE FROM assets WHERE target_id = $1 RETURNING storage_key", [id]);
   removed.files = assets.rowCount ?? 0;
   await db.query(`DELETE FROM ${item.kind === "article" ? "articles" : "findings"} WHERE id = $1`, [id]);
@@ -67,12 +70,13 @@ export async function hardDeleteItem(ctx: RequestContext, db: Queryable, item: {
     if (!still.rowCount) orphaned.push(storage_key);
   }
   await db.query("INSERT INTO purges (target_kind, target_id, reason, actor_id, removed) VALUES ($1, $2, $3, $4, $5)", [item.kind, id, reason, ctx.actor.id, JSON.stringify(removed)]);
-  await audit(db, ctx.actor.id, "purge", id);
+  // The title isn't kept: purged content may be exactly what must not exist (a leaked secret, personal data).
+  await audit(db, ctx.actor.id, "purge", id, { targetKind: item.kind === "article" ? "article" : "finding", targetLabel: `Deleted ${item.kind}`, details: { kind: item.kind, reason, removed } });
   return { removed, orphaned, copies };
 }
 
 export async function listPurges(ctx: RequestContext) {
-  if (!isAdmin(ctx)) throw new ForbiddenError("admins only");
+  if (!can(ctx, "purge")) throw new ForbiddenError("admins only");
   const { rows } = await ctx.db.query(
     `SELECT p.id, p.target_kind, p.target_id, p.reason, p.removed, p.at, coalesce(u.display_name, u.email) AS by
        FROM purges p JOIN users u ON u.id = p.actor_id ORDER BY p.at DESC LIMIT 100`,

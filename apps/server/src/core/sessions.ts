@@ -296,7 +296,7 @@ export async function askSession(
   ).rows[0]!;
   wake([target.to_session_id && `s:${target.to_session_id}`, target.to_user_id && `u:${target.to_user_id}`, target.to_scope_id && `p:${target.to_scope_id}`]);
   emitChanged();
-  // Nobody online to pick it up: tell the person (or project owners) now rather than in two minutes.
+  // Nobody online to pick it up: tell the person (or the project's reviewers) now rather than in two minutes.
   if (!target.online) await notifyWaiting(ctx.db, ctx.settings, q.id, target.owners);
 
   const waitMs = clampWait(input.wait_seconds ?? 45, limits.maxWaitMs ?? MAX_WAIT_MCP_MS);
@@ -567,15 +567,19 @@ async function notifyWaiting(db: Db, settings: Settings, id: string, recipients:
     )
   ).rows[0];
   if (!q) return;
-  await notify(db, settings, recipients, { kind: "question", title: `${q.from} asks ${q.asked}: ${q.question.split("\n")[0]!.slice(0, 120)}`, body: q.question.slice(0, 600), link: "#/sessions", targetId: id });
+  await notify(db, settings, recipients, { kind: "question", title: `${q.from} asks ${q.asked}: ${q.question.split("\n")[0]!.slice(0, 120)}`, body: q.question.slice(0, 600), link: "#/sessions", targetId: id, route: false });
   await db.query("UPDATE session_questions SET notified_at = now() WHERE id = $1", [id]);
 }
 
 /** Every minute: expire old questions; tell people about questions nobody picked up within two minutes. */
 export function startSessionJobs(db: Db, settings: Settings, log: (msg: string) => void) {
-  const LOCK = 7_402_215;
+  // Its own lock: 7_402_215 is the token checks', 7_402_230 the skill imports'.
+  const LOCK = 7_402_240;
+  let current: Promise<void> | null = null;
   async function tick() {
-    const client = await db.connect();
+    // Database unreachable: log and try again next tick instead of an unhandled rejection that ends the process.
+    const client = await db.connect().catch((err: Error) => void log(`session jobs failed: ${err.message}`));
+    if (!client) return;
     try {
       const { rows } = await client.query<{ locked: boolean }>("SELECT pg_try_advisory_lock($1) AS locked", [LOCK]);
       if (!rows[0]?.locked) return;
@@ -601,7 +605,17 @@ export function startSessionJobs(db: Db, settings: Settings, log: (msg: string) 
       client.release();
     }
   }
-  const timer = setInterval(tick, 60_000);
+  const start = () => {
+    if (current) return;
+    current = tick().finally(() => (current = null));
+  };
+  const timer = setInterval(start, 60_000);
   timer.unref();
-  return { stop: () => clearInterval(timer) };
+  return {
+    /** Starts no more runs; resolves when the one in progress (if any) has finished. */
+    async stop() {
+      clearInterval(timer);
+      await current;
+    },
+  };
 }

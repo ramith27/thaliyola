@@ -1,0 +1,65 @@
+/* Browse: search, spaces, projects, folders, topics (pages/browse.tsx, entity.tsx). Prefix: br-. Tokens only. */
+
+/* ============================================================ Shared arrangement */
+.br-stack { display: flex; flex-direction: column; gap: var(--space-8); min-width: 0; }
+.br-stack > .section, .br-grid-2 > .section { margin-top: 0; }
+.br-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.br-inline-field { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; max-width: 100%; }
+.br-inline-label { flex: none; color: var(--text-2); font-size: var(--fs-sm); line-height: var(--lh-sm); font-weight: var(--fw-medium); }
+.br-inline-field > .select { min-width: 0; max-width: 22rem; }
+.br-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-8); align-items: start; }
+.br-mono { font-family: var(--mono); font-size: var(--fs-xs); }
+
+
+/* ============================================================ Search */
+.br-search-field { margin: 0 0 var(--space-3); }
+.br-results { display: flex; flex-direction: column; gap: var(--space-8); margin-top: var(--space-4); min-width: 0; }
+.br-results > .section { margin-top: 0; }
+.br-shown-above { margin: var(--space-1) 0 0; }
+/* AnswerCard sits in a layout-neutral slot so the page can read which item it shows; empty when there's no answer. */
+.br-answer-slot { display: contents; }
+.br-answer-slot:not(:empty) + .async-block, .br-answer-slot:not(:empty) + .error-state, .br-answer-slot:not(:empty) + .empty-state { margin-top: var(--space-6); }
+.br-tips p { margin: 0 0 var(--space-2); }
+.br-tip-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-2); }
+.br-start { display: flex; flex-direction: column; gap: var(--space-5); }
+.br-start p { margin: 0; }
+.br-start-group { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); }
+.br-start-label { color: var(--muted); font-size: var(--fs-sm); line-height: var(--lh-sm); font-weight: var(--fw-medium); }
+.br-start-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2); }
+
+/* ============================================================ Folder tree (spaces, project Pages) */
+.br-filter { max-width: 28rem; margin: 0 0 var(--space-4); }
+.br-tree { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.br-folder { margin-left: calc(var(--br-depth, 0) * var(--space-5)); min-width: 0; scroll-margin-top: calc(var(--topbar-h) + var(--space-4)); }
+/* The folder a ?folder= link points at. */
+.br-folder[data-focus] { padding-left: var(--space-2); border-left: 2px solid var(--accent); }
+.br-folder-body { display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-2); min-width: 0; }
+
+/* ============================================================ Project page */
+.br-notice-icon { display: inline-flex; color: var(--warn); }
+.br-meta { display: inline; }
+.br-repo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); gap: var(--space-4); align-items: start; }
+.br-page-list { list-style: none; margin: 0; padding: 0; }
+.br-page-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-2); padding: var(--space-2) 0; border-top: 1px solid var(--border); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.br-page-list li:first-child { border-top: 0; padding-top: 0; }
+.br-page-list a { font-weight: var(--fw-medium); overflow-wrap: anywhere; }
+.br-page-meta { color: var(--muted); font-size: var(--fs-xs); line-height: var(--lh-xs); }
+.br-show-all { margin-top: var(--space-2); }
+.br-sub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: var(--space-3); }
+.br-sub-desc { display: block; }
+.br-sub-meta { display: block; margin-top: var(--space-1); color: var(--muted); font-size: var(--fs-xs); line-height: var(--lh-xs); }
+
+/* ============================================================ Topic page */
+.br-topic-links { list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: 0; }
+
+/* ============================================================ Responsive */
+@media (max-width: 860px) {
+  .br-grid-2 { grid-template-columns: minmax(0, 1fr); gap: var(--space-8); }
+  .br-folder { margin-left: calc(var(--br-depth, 0) * var(--space-3)); }
+  .br-inline-field { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-1); }
+  .br-inline-field > .select { max-width: none; }
+}
+@media (max-width: 640px) {
+  .br-stack { gap: var(--space-6); }
+  .br-repo-grid, .br-sub-grid { grid-template-columns: minmax(0, 1fr); }
+}

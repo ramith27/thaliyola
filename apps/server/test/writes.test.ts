@@ -238,7 +238,7 @@ describe("permissions", () => {
   it("restricts proposals once a scope lists writers", async () => {
     await adminSetMember(await admin(), "team", "writer@example.com", "writer");
     const outsider = await ctxFor(db, { email: "outsider@example.com" });
-    await expect(proposeFinding(outsider, { scope: "team", type: "rca", title: "t", symptoms: "s", root_cause: "r", force_new: true })).rejects.toThrow(/not a writer/);
+    await expect(proposeFinding(outsider, { scope: "team", type: "rca", title: "t", symptoms: "s", root_cause: "r", force_new: true })).rejects.toThrow(/none of your roles here include/);
     const writer = await ctxFor(db, { email: "writer@example.com" });
     expect((await proposeFinding(writer, { scope: "team", type: "rca", title: "t", symptoms: "s", root_cause: "r", force_new: true })).status).toBe("pending_review");
   });

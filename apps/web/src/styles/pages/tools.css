@@ -1,0 +1,120 @@
+/* Metrics, Connect, Trash, What's new and hosts (pages/metrics.tsx, connect.tsx, trash.tsx, whats-new.tsx, components/hosts.tsx,
+   about.tsx). Prefix: tl-. */
+
+/* ============================================================ Shared */
+.tl-stack { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.tl-stack-lg { display: flex; flex-direction: column; gap: var(--space-6); min-width: 0; }
+.tl-stack > *, .tl-stack-lg > * { margin-top: 0; margin-bottom: 0; }
+.tl-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.tl-row-actions { display: inline-flex; flex-wrap: nowrap; justify-content: flex-end; gap: var(--space-1); }
+/* Row buttons in ListRow's always-visible trailing slot, raised above the row's stretched title link. */
+.tl-row-buttons { position: relative; z-index: var(--z-raised); display: inline-flex; flex-wrap: nowrap; align-items: center; gap: var(--space-1); color: var(--text); }
+.tl-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }
+.tl-subhead { margin: var(--space-2) 0 0; font-size: var(--fs-md); line-height: var(--lh-md); font-weight: var(--fw-semibold); color: var(--text); }
+.tl-list { margin: 0; padding-left: var(--space-5); display: flex; flex-direction: column; gap: var(--space-1); }
+.tl-ordered { list-style: decimal; }
+.tl-break { overflow-wrap: anywhere; }
+.tl-query { overflow-wrap: break-word; }
+.tl-tabpanel { min-width: 0; }
+.tl-tabpanel:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-sm); }
+
+/* ============================================================ Metrics */
+.tl-period { margin-bottom: var(--space-4); }
+.tl-anchor { scroll-margin-top: calc(var(--topbar-h) + var(--space-4)); min-width: 0; }
+
+/* ============================================================ Connect */
+.tl-connect { display: flex; flex-direction: column; gap: var(--space-8); min-width: 0; }
+.tl-token-form { display: flex; flex-direction: column; gap: var(--space-3); }
+.tl-token-field { max-width: 320px; }
+/* Short tab rows (Connect step 3, Needs attention): they wrap only while there's room for a few per row; on very narrow
+   phones they scroll sideways like the kit's Tabs, because wrapped tabs read as a vertical list. */
+.tl-wrap-tabs .tabs-scroll { flex-wrap: wrap; overflow-x: visible; }
+.tl-wrap-tabs .tabs { margin-top: 0; }
+.tl-host-field { max-width: 320px; }
+.tl-done-line { margin: 0; }
+.tl-pin { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-4); }
+.tl-pin > * { flex: 1 1 220px; max-width: 320px; margin: 0; }
+.tl-more { display: flex; flex-direction: column; gap: var(--space-2); }
+.tl-prompts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); gap: var(--space-3); }
+.tl-access { margin: 0; display: flex; flex-direction: column; gap: var(--space-4); }
+.tl-access-row { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.tl-access dt { font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--muted); }
+.tl-access dd { margin: 0; min-width: 0; }
+.tl-signed-in { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.tl-names { display: block; margin-top: var(--space-1); }
+.tl-role-line { margin: 0 0 var(--space-1); }
+.tl-role-list { margin-bottom: var(--space-2); }
+
+/* ============================================================ Trash */
+.tl-meta { display: inline-flex; align-items: center; gap: var(--space-2); }
+.tl-where { min-width: 180px; width: auto; }
+.tl-section-gap { margin-top: var(--space-10); }
+
+/* ============================================================ What's new */
+/* The Help button's dot (a release this person hasn't seen). */
+.tl-help { position: relative; display: inline-flex; }
+.tl-help-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--accent); box-shadow: 0 0 0 2px var(--bg); pointer-events: none; }
+.tl-wn-meta { color: var(--muted); }
+.tl-wn-release { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
+.tl-wn-release-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+.tl-wn-release-title { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.tl-wn-h { margin: 0; font-size: var(--fs-xl); line-height: var(--lh-xl); font-weight: var(--fw-semibold); color: var(--text); overflow-wrap: anywhere; }
+.tl-wn-release-meta { font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--muted); }
+.tl-wn-summary { max-width: var(--w-reading); color: var(--text-2); }
+.tl-wn-area { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.tl-wn-area-title { margin: 0; display: flex; align-items: baseline; gap: var(--space-2); font-size: var(--fs-md); line-height: var(--lh-md); font-weight: var(--fw-semibold); color: var(--text); }
+.tl-wn-area-title-lg { font-size: var(--fs-lg); line-height: var(--lh-lg); }
+.tl-wn-count { font-size: var(--fs-sm); font-weight: var(--fw-regular); color: var(--muted); }
+.tl-wn-features { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+.tl-wn-feature { min-width: 0; }
+.tl-wn-feature .card-body { display: flex; flex-direction: column; gap: var(--space-3); }
+.tl-wn-feature-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-2); }
+.tl-wn-feature-title { margin: 0; font-size: var(--fs-md); line-height: var(--lh-md); font-weight: var(--fw-semibold); color: var(--text); overflow-wrap: anywhere; }
+.tl-wn-badges { gap: var(--space-2); }
+.tl-wn-added { text-decoration: none; border-radius: var(--radius-full); }
+.tl-wn-added:hover { text-decoration: underline; }
+.tl-wn-added:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.tl-wn-text { min-width: 0; overflow-wrap: break-word; color: var(--text-2); }
+.tl-wn-text .markdown > :first-child { margin-top: 0; }
+.tl-wn-text .markdown > :last-child { margin-bottom: 0; }
+.tl-wn-howto { min-width: 0; }
+.tl-wn-links { gap: var(--space-2); }
+.tl-wn-shots { margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); gap: var(--space-3); }
+.tl-wn-shot { position: relative; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface-2); }
+.tl-wn-shot img { display: block; width: 100%; height: auto; }
+.tl-wn-shot .icon-button, .tl-wn-shot button { position: absolute; top: var(--space-1); right: var(--space-1); background: var(--surface); }
+.tl-wn-back { align-self: flex-start; font-size: var(--fs-sm); }
+.tl-wn-editor { min-width: 0; }
+.tl-wn-form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: var(--space-3); align-items: start; }
+.tl-wn-form-actions { justify-content: flex-end; }
+.tl-wn-md { position: relative; display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.tl-wn-md-switch { position: absolute; top: -8px; right: 0; z-index: var(--z-raised); }
+.tl-wn-preview { min-height: 96px; padding: var(--space-3); border: 1px dashed var(--border-strong); border-radius: var(--radius); background: var(--surface-2); overflow-wrap: break-word; }
+.tl-wn-preview-label { display: block; margin-bottom: var(--space-2); font-size: var(--fs-sm); line-height: var(--lh-sm); font-weight: var(--fw-semibold); color: var(--text); }
+.tl-wn-error { margin: 0; color: var(--danger); font-size: var(--fs-sm); }
+/* All releases: a vertical timeline, newest on top. */
+.tl-wn-timeline { margin: 0; display: flex; flex-direction: column; gap: var(--space-4); position: relative; padding-left: var(--space-6); }
+.tl-wn-timeline::before { content: ""; position: absolute; top: var(--space-2); bottom: var(--space-2); left: 7px; width: 2px; background: var(--border); border-radius: var(--radius-full); }
+.tl-wn-step { position: relative; min-width: 0; }
+.tl-wn-node { position: absolute; left: calc(-1 * var(--space-6) + 2px); top: var(--space-5); width: 12px; height: 12px; border-radius: var(--radius-full); background: var(--accent); box-shadow: 0 0 0 3px var(--bg); }
+.tl-wn-step[data-draft] .tl-wn-node { background: var(--surface); border: 2px dashed var(--warn); }
+.tl-wn-step-card { min-width: 0; }
+.tl-wn-step-card .card-body { display: flex; flex-direction: column; gap: var(--space-2); }
+.tl-wn-step-summary { margin: 0; color: var(--text-2); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+
+/* ============================================================ Responsive */
+@media (max-width: 1100px) {
+  .tl-grid-2 { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 860px) {
+}
+@media (max-width: 640px) {
+  .tl-pin > * { max-width: none; }
+  .tl-wn-timeline { padding-left: var(--space-5); }
+  .tl-wn-node { left: calc(-1 * var(--space-5) + 2px); }
+  .tl-wn-md-switch { position: static; align-self: flex-end; }
+  .tl-token-field { max-width: none; }
+  .tl-host-field { max-width: none; }
+  .tl-wrap-tabs .tab { padding: 0 var(--space-2); }
+  .tl-wrap-tabs .tabs-scroll { flex-wrap: nowrap; overflow-x: auto; }
+}

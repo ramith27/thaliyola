@@ -1,0 +1,114 @@
+/* Skills for Claude (pages/skills.tsx, pages/skill-detail.tsx). Prefix: sk-. Tokens only. */
+
+.sk-stack { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.sk-badges { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); }
+.sk-break { overflow-wrap: anywhere; word-break: break-word; }
+.sk-url { overflow-wrap: anywhere; }
+.sk-clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.sk-clamp-3 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.sk-connectors { margin: 0; color: var(--text-2); line-height: var(--lh-sm); }
+.sk-subhead { margin: 0 0 var(--space-2); font-size: var(--fs-md); font-weight: var(--fw-semibold); }
+.sk-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.sk-plain-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.sk-plain-list > li { overflow-wrap: anywhere; }
+.sk-steps { margin: 0 0 var(--space-3); padding-left: var(--space-5); display: flex; flex-direction: column; gap: var(--space-1); line-height: var(--lh-sm); }
+
+/* ---- My skills ----------------------------------------------------------------------------------------------- */
+.sk-mine { display: flex; flex-direction: column; gap: var(--space-4); }
+.sk-mine-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 18rem); gap: var(--space-4); align-items: start; }
+.sk-cards { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.sk-card .sk-desc { margin: 0 0 var(--space-2); line-height: var(--lh-sm); }
+.sk-card-meta { color: var(--text-2); font-size: var(--fs-sm); }
+.sk-card-foot { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.sk-how-list { margin: 0 0 var(--space-3); padding-left: var(--space-5); display: flex; flex-direction: column; gap: var(--space-2); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+
+/* ---- Catalogue ----------------------------------------------------------------------------------------------- */
+.sk-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.sk-filters > :first-child { flex: 1 1 16rem; min-width: 0; }
+.sk-name-cell { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.sk-collections { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr)); gap: var(--space-3); }
+.sk-collection p { margin: 0 0 var(--space-2); }
+.sk-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: var(--space-3); }
+
+/* ---- Forms --------------------------------------------------------------------------------------------------- */
+.sk-form { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.sk-form-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.sk-editor { font-family: var(--mono); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.sk-fieldset { margin: 0 0 var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius); display: flex; flex-direction: column; gap: var(--space-2); }
+.sk-fieldset legend { padding: 0 var(--space-1); font-weight: var(--fw-medium); }
+.sk-preview { display: flex; flex-direction: column; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border); }
+
+/* ---- Import report ---------------------------------------------------------------------------------------------- */
+.sk-report { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.sk-counts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 7.5rem), 1fr)); gap: var(--space-2); }
+.sk-count { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.sk-count[data-zero] { color: var(--muted); background: var(--surface-2); }
+.sk-count-n { font-size: var(--fs-xl); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
+.sk-count-label { font-size: var(--fs-sm); color: var(--text-2); }
+.sk-reasons { margin: var(--space-1) 0 0; padding-left: var(--space-5); color: var(--text-2); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+
+/* ---- Review ---------------------------------------------------------------------------------------------------- */
+.sk-review-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.sk-review-row { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--space-3); padding: var(--space-3); min-width: 0; }
+.sk-review-row + .sk-review-row { border-top: 1px solid var(--border); }
+.sk-review-main { display: flex; flex-direction: column; gap: var(--space-1); flex: 1 1 20rem; min-width: 0; }
+.sk-review-title { font-weight: var(--fw-semibold); }
+.sk-review-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.sk-feedback-body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: var(--lh-sm); }
+.sk-flags { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-1); }
+.sk-flags li { overflow-wrap: anywhere; }
+.sk-change-connectors { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: 0; }
+.sk-change-connectors dt { color: var(--text-2); }
+.sk-change-connectors dd { margin: 0; overflow-wrap: anywhere; font-family: var(--mono); }
+
+/* ---- Skill detail ------------------------------------------------------------------------------------------------ */
+.sk-head-meta { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); color: var(--text-2); font-size: var(--fs-sm); }
+.sk-rendered { padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); overflow-wrap: anywhere; }
+.sk-files { display: grid; grid-template-columns: minmax(0, 16rem) minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+.sk-tree { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: var(--space-2); max-height: 40rem; overflow: auto; }
+.sk-tree ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-1); }
+.sk-tree li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); min-width: 0; }
+.sk-tree-folder { color: var(--text-2); font-family: var(--mono); font-size: var(--fs-sm); }
+.sk-tree-file { padding: var(--space-1); border: 0; border-radius: var(--radius-sm); background: none; color: var(--accent-text); font-family: var(--mono); font-size: var(--fs-sm); text-align: start; overflow-wrap: anywhere; cursor: pointer; }
+.sk-tree-file:hover { background: var(--surface-2); }
+.sk-tree-file[aria-current="true"] { background: var(--accent-soft); color: var(--text); font-weight: var(--fw-medium); }
+.sk-tree-tags { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); }
+.sk-viewer { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.sk-diff { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.sk-diff-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+
+/* ---- Connect ----------------------------------------------------------------------------------------------------- */
+.sk-routes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.sk-route { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.sk-route p { margin: 0; line-height: var(--lh-sm); }
+
+@media (max-width: 860px) {
+  .sk-mine-grid, .sk-files, .sk-routes, .sk-form-row { grid-template-columns: minmax(0, 1fr); }
+  /* On a phone, how to set Claude up comes before a long list of skill cards. */
+  .sk-mine-grid .sk-side { order: -1; }
+  .sk-tree { max-height: 16rem; }
+}
+
+/* ---- New skill -------------------------------------------------------------------------------------------------- */
+.sk-fm-help { margin: 0; padding-left: var(--space-5); display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.sk-files-edit { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.sk-file-edit { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); min-width: 0; }
+.sk-file-edit-head { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.sk-file-edit-head > :first-child { flex: 1 1 auto; min-width: 0; }
+
+/* ---- Next steps (a skill waiting for its first review) --------------------------------------------------------- */
+.sk-next { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-3); counter-reset: sk-next; }
+.sk-next > li { display: grid; grid-template-columns: var(--space-6) minmax(0, 1fr); gap: var(--space-2); align-items: start; counter-increment: sk-next; }
+.sk-next > li::before { content: counter(sk-next); display: inline-flex; align-items: center; justify-content: center; width: var(--space-6); height: var(--space-6); border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--text-2); }
+.sk-next > li[data-state="done"]::before { content: "✓"; color: var(--ok); border-color: var(--ok-border); background: var(--ok-soft); }
+.sk-next-body { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.sk-next-body p { margin: 0; line-height: var(--lh-sm); }
+.sk-next-title { font-weight: var(--fw-semibold); }
+
+/* My skills' side column: the connectors your skills use, then how skills reach Claude. */
+.sk-side { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.sk-uses-list { list-style: none; margin: 0 0 var(--space-2); padding: 0; display: flex; flex-direction: column; gap: var(--space-2); font-size: var(--fs-sm); }
+.sk-uses-list li { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sk-uses-url { display: flex; align-items: center; gap: var(--space-1); min-width: 0; color: var(--muted); }
+.sk-webhook-actions { display: inline-flex; gap: var(--space-2); flex-wrap: wrap; }
+.sk-webhook-url { display: inline-flex; align-items: center; gap: var(--space-1); min-width: 0; flex-wrap: wrap; }

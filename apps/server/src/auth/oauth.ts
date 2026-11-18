@@ -347,7 +347,11 @@ function consentRouter(db: Db, settings: Settings) {
          VALUES ($1, $2, $3, $4, $5, $6, $7, now() + make_interval(secs => $8))`,
         [sha256(code), pending.client_id, rows[0]!.id, params.redirect_uri, params.code_challenge, params.scopes, params.resource, CODE_TTL_S],
       );
-      await audit(db, rows[0]!.id, `oauth_authorize:${pending.info.client_name ?? pending.client_id}`.slice(0, 200), null);
+      await audit(db, rows[0]!.id, "oauth_authorize", null, {
+        targetKind: "app",
+        targetLabel: pending.info.client_name ?? pending.client_id,
+        details: { client_name: pending.info.client_name ?? null, client_id: pending.client_id },
+      });
       redirectWith(res, params.redirect_uri, { code, state: params.state });
     } catch (err) {
       next(err);

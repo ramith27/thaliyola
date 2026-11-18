@@ -1,4 +1,5 @@
-# bitbucket-pipelines.yml. Secured repository variables: ANTHROPIC_API_KEY, THALIYOLA_TOKEN.
+# bitbucket-pipelines.yml. Secured repository variables: ANTHROPIC_API_KEY, THALIYOLA_TOKEN (a bot account with access to the project,
+# made with --owner-of <project>; its pages go to review, where a Reviewer or Project admin approves them).
 pipelines:
   branches:
     main:

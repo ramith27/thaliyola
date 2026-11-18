@@ -21,6 +21,9 @@ export async function freshDb() {
 
 export const TEST_SETTINGS: Settings = {
   adminEmails: ["admin@example.com"],
+  requireApproval: false,
+  directPublish: true,
+  defaultProjectVisibility: "team",
   duplicateThreshold: 0.6,
   authMode: "dev",
   mailTransport: "off",

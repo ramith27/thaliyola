@@ -4,7 +4,7 @@ import { unzipSync } from "fflate";
 import TurndownService from "turndown";
 import { uploadAsset } from "./assets.js";
 import { reindexArticle } from "./chunking.js";
-import { ValidationError, type RequestContext } from "./context.js";
+import { nameOf, ValidationError, type RequestContext } from "./context.js";
 import { settleProposal } from "./direct.js";
 import { notify, reviewersFor, track } from "./notify.js";
 import { canApprove } from "./permissions.js";
@@ -276,8 +276,9 @@ export async function importDocs(
           notify(ctx.db, ctx.settings, ids, {
             kind: "review",
             title: `Review: ${waiting} imported article${waiting > 1 ? "s" : ""} from ${input.filename}`,
-            body: `${ctx.actor.email ?? "Someone"} imported ${waiting} page${waiting > 1 ? "s" : ""} into ${input.scope}.`,
+            body: `${nameOf(ctx.actor)} imported ${waiting} page${waiting > 1 ? "s" : ""} into ${input.scope}.`,
             link: "#/review",
+            scopeId,
           }, { exclude: ctx.actor.id }),
         )
         .catch((err) => console.error(`[notify] ${(err as Error).message}`)),

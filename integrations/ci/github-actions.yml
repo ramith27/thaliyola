@@ -1,6 +1,7 @@
 # .github/workflows/thaliyola-docs.yml: keep this repository's Thaliyola docs and security dashboard current on every merge.
 # The first step only needs THALIYOLA_TOKEN; keep just that step for vulnerability checks without docs.
-# Secrets: ANTHROPIC_API_KEY, THALIYOLA_TOKEN (a bot account that owns the project, so pages publish directly).
+# Secrets: ANTHROPIC_API_KEY, THALIYOLA_TOKEN (a bot account with access to the project, made with --owner-of <project>;
+# its pages go to review, where a Reviewer or Project admin approves them).
 name: Update docs (Thaliyola)
 on:
   push:

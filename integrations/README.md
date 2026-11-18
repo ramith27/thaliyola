@@ -101,7 +101,7 @@ Most of these read `AGENTS.md` (Gemini CLI reads `GEMINI.md`, Kiro reads `.kiro/
 After the first `/mcp__thaliyola__document-repo`, a CI job keeps the docs in step with the code, and its first step uploads the lockfiles so the security dashboard stays current (that step needs only `THALIYOLA_TOKEN`): Claude Code runs headless, sends the changed files, and rewrites only the pages whose facts changed (nothing at all when nothing relevant changed).
 
 - [`ci/github-actions.yml`](ci/github-actions.yml), [`ci/gitlab-ci.yml`](ci/gitlab-ci.yml), [`ci/bitbucket-pipelines.yml`](ci/bitbucket-pipelines.yml)
-- Secrets: `ANTHROPIC_API_KEY` and `THALIYOLA_TOKEN`. Use a bot token that owns the project so pages publish directly (`sudo thaliyola-admin create-token --service docs-bot --name "CI docs" --owner-of <project>`); with a writer role they go to review.
+- Secrets: `ANTHROPIC_API_KEY` and `THALIYOLA_TOKEN`. Use a bot account with access to the project (`sudo thaliyola-admin create-token --service docs-bot --name "CI docs" --owner-of <project>`). Its pages go to review, where a Reviewer or Project admin approves them: service accounts never publish or approve.
 - The full git history is fetched so the job can diff against the last documented commit. Tools are limited to Thaliyola, reading files and read-only git commands.
 - Credentials that CI systems put in the remote URL are dropped before Thaliyola stores or shows it.
 

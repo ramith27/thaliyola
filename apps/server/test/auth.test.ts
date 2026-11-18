@@ -51,6 +51,23 @@ describe("cloudflareAuthenticator", () => {
     });
   });
 
+  it("passes on a user's name from the claims, and nothing when there is none", async () => {
+    const auth = cloudflareAuthenticator(issuer, AUD);
+    expect(await auth(req({ "cf-access-jwt-assertion": await sign({ email: "ada@example.com", name: " Ada  Lovelace " }) }))).toEqual({
+      subject: "cf:ada@example.com",
+      email: "ada@example.com",
+      kind: "human",
+      name: "Ada Lovelace",
+    });
+    expect(await auth(req({ "cf-access-jwt-assertion": await sign({ email: "ada@example.com", given_name: "Ada", family_name: "Lovelace" }) }))).toMatchObject({
+      name: "Ada Lovelace",
+    });
+    expect(await auth(req({ "cf-access-jwt-assertion": await sign({ email: "ada@example.com", common_name: "Ada L" }) }))).toMatchObject({ name: "Ada L" });
+    expect(await auth(req({ "cf-access-jwt-assertion": await sign({ email: "ada@example.com", name: "ada@example.com" }) }))).not.toHaveProperty("name");
+    // A service token's common_name is its client id, not a name.
+    expect(await auth(req({ "cf-access-jwt-assertion": await sign({ common_name: "abc.access" }) }))).not.toHaveProperty("name");
+  });
+
   it("maps a service token to a service identity", async () => {
     const auth = cloudflareAuthenticator(issuer, AUD);
     const token = await sign({ common_name: "abc.access", sub: "" });

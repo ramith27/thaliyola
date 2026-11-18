@@ -57,10 +57,10 @@ describe("notifications", () => {
     });
     await flushDeliveries();
     const admin = await notes("admin@example.com");
-    expect(admin).toEqual([expect.objectContaining({ kind: "review", title: "Review: New rca: Refund webhook processed twice" })]);
+    expect(admin).toEqual([expect.objectContaining({ kind: "review", title: "Review: New root cause analysis: Refund webhook processed twice" })]);
     expect(await notes("author@example.com")).toEqual([]);
     const mail = outbox.find((m) => m.to === "admin@example.com")!;
-    expect(mail.subject).toBe("Review: New rca: Refund webhook processed twice");
+    expect(mail.subject).toBe("Review: New root cause analysis: Refund webhook processed twice");
     expect(mail.html).toMatch(new RegExp(`${base}/actions/[\\w-]+`));
     expect(slackOutbox).toEqual([expect.objectContaining({ text: expect.stringContaining("Refund webhook processed twice") })]);
     expect(res.status).toBe("pending_review");

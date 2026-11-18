@@ -69,7 +69,7 @@ describe("design systems", () => {
     // Muted grey on white fails AA, and this blue just misses it (4.42:1).
     expect(r).toMatchObject({ version: 1, colors: 4 });
     expect(r.contrast_failures.map((c) => `${c.name}:${c.ratio}`)).toEqual(["primary:4.42", "muted:1.58"]);
-    await expect(updateDesignSystem(await as("viewer@example.com"), "shop", { tokens: { colors: [] } })).rejects.toThrow(/writers, owners and admins/);
+    await expect(updateDesignSystem(await as("viewer@example.com"), "shop", { tokens: { colors: [] } })).rejects.toThrow(/include Propose/);
     await expect(updateDesignSystem(await as("dev@example.com"), "shop", { tokens: { colors: [{ name: "primary", value: "blue-ish" }] } })).rejects.toThrow(/colors\.0\.value/);
     await expect(updateDesignSystem(await as("dev@example.com"), "shop", { tokens: { spacing: [{ name: "x", value: "16 pixels" }] } })).rejects.toThrow(/a size is/);
   });

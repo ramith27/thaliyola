@@ -1,6 +1,6 @@
 import { splitSections } from "./chunking.js";
 import { NotFoundError, ValidationError, type RequestContext } from "./context.js";
-import { isAdmin, readableScopes } from "./permissions.js";
+import { can, readableScopes } from "./permissions.js";
 import { getReadableScope } from "./scopes.js";
 import { inboxCandidates } from "./sources.js";
 import { listSuggestions } from "./suggestions.js";
@@ -348,7 +348,7 @@ async function candidates(ctx: RequestContext, opts: { kind?: TaskKind; kinds?: 
   }
 
   // Search gaps show what people looked for, so only admins' agents get them.
-  if (want("answer_gap") && isAdmin(ctx) && !projectId) {
+  if (want("answer_gap") && can(ctx, "view_metrics") && !projectId) {
     const { rows } = await db.query<{ query: string; n: number }>(
       `SELECT lower(query) AS query, count(*)::int AS n FROM search_log
         WHERE query IS NOT NULL AND at > now() - interval '30 days' GROUP BY 1 HAVING count(*) >= 1 ORDER BY n DESC LIMIT 15`,

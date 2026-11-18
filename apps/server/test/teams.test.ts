@@ -54,7 +54,7 @@ describe("teams", () => {
     expect(slugs).toEqual(expect.arrayContaining(["billing", "payouts"]));
     // Writer through the team on billing, reader on payouts.
     await expect(createArticle(pat, { scope: "billing", type: "design_doc", title: "Invoice numbering", body_md: "## Context\n\nSequential." })).resolves.toBeTruthy();
-    await expect(createArticle(await person("pat@example.com"), { scope: "payouts", type: "design_doc", title: "Nope", body_md: "x" })).rejects.toThrow(/not a writer/);
+    await expect(createArticle(await person("pat@example.com"), { scope: "payouts", type: "design_doc", title: "Nope", body_md: "x" })).rejects.toThrow(/none of your roles here include/);
     // An outsider sees neither.
     const outsider = await readableScopes(await person("outsider@example.com"));
     expect((await db.query("SELECT slug FROM scopes WHERE id = ANY($1)", [outsider])).rows.map((r) => r.slug)).not.toContain("billing");
@@ -69,7 +69,7 @@ describe("teams", () => {
   });
 
   it("only admins create teams", async () => {
-    await expect(createTeam(await person("pat@example.com"), { slug: "x", name: "X" })).rejects.toThrow(/admin only/);
+    await expect(createTeam(await person("pat@example.com"), { slug: "x", name: "X" })).rejects.toThrow(/only admins and team managers/);
   });
 
   it("lets team leads manage members and create projects that belong to the team", async () => {
@@ -79,7 +79,7 @@ describe("teams", () => {
     const lena = await person("lena@example.com");
     // A lead assigns members; a plain member can't.
     await setTeamMember(lena, "growth", "mo@example.com", true);
-    await expect(setTeamMember(await person("mo@example.com"), "growth", "x@example.com", true)).rejects.toThrow(/leads and admins/);
+    await expect(setTeamMember(await person("mo@example.com"), "growth", "x@example.com", true)).rejects.toThrow(/leads, team managers and admins/);
     const team = await getTeam(lena, "growth");
     expect(team.can_manage).toBe(true);
     expect(team.members.map((m: { email: string; role: string }) => [m.email, m.role])).toEqual([
@@ -99,7 +99,7 @@ describe("teams", () => {
     ]);
     expect((await getTeam(await person("lena@example.com"), "growth")).projects).toEqual([expect.objectContaining({ slug: "referrals", role: "writer" })]);
     // Members (not leads) can't create projects for the team.
-    await expect(createTeamProject(await person("mo@example.com"), "growth", { slug: "nope", name: "Nope" })).rejects.toThrow(/leads and admins/);
+    await expect(createTeamProject(await person("mo@example.com"), "growth", { slug: "nope", name: "Nope" })).rejects.toThrow(/leads, team managers and admins/);
     await expect(createTeamProject(lena, "growth", { slug: "referrals", name: "Again" })).rejects.toThrow(/already taken/);
   });
 });
@@ -122,10 +122,10 @@ describe("project owners manage their project", () => {
       ["will@example.com", "writer"],
     ]);
     // A writer can't manage, and can't touch other projects either.
-    await expect(adminSetMember(await person("will@example.com"), "search", "x@example.com", "owner")).rejects.toThrow(/owners and admins/);
+    await expect(adminSetMember(await person("will@example.com"), "search", "x@example.com", "owner")).rejects.toThrow(/needs Manage/);
     await expect(adminUpdateScope(olive, "team", { name: "Org" })).rejects.toThrow(/only admins/);
     // An owner can't leave the project ownerless.
-    await expect(adminSetMember(olive, "search", "olive@example.com", "writer")).rejects.toThrow(/at least one owner/);
+    await expect(adminSetMember(olive, "search", "olive@example.com", "writer")).rejects.toThrow(/at least one Project admin/);
     expect((await listAccess(a, "search")).people[0]).toMatchObject({ email: "olive@example.com", role: "owner" });
   });
 
@@ -186,7 +186,7 @@ describe("moving items into a project", () => {
     expect((await db.query("SELECT DISTINCT s.slug FROM chunks c JOIN scopes s ON s.id = c.scope_id WHERE c.parent_id = $1", [three.article_id])).rows).toEqual([{ slug: "billing" }]);
     expect((await db.query("SELECT s.slug FROM revisions r JOIN scopes s ON s.id = r.scope_id WHERE r.id = $1", [f.revision_id])).rows[0].slug).toBe("billing");
     // Only people who can approve in both scopes may move.
-    await expect(moveItems(await person("will@example.com"), { from: "billing", to: "team", folder: "Domains" })).rejects.toThrow(/owners and admins/);
+    await expect(moveItems(await person("will@example.com"), { from: "billing", to: "team", folder: "Domains" })).rejects.toThrow(/include Review/);
   });
 
   it("moves single items into a project folder or repository, and re-files them inside a project", async () => {

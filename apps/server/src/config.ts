@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { ownDatabaseHosts } from "./core/connections/network.js";
+import { parseKey } from "./core/secrets.js";
 
 const Env = z
   .object({
@@ -14,6 +16,14 @@ const Env = z
     // Requests per user per minute on /api and /mcp (0 disables)
     RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(0).default(600),
     LOG_REQUESTS: z.enum(["true", "false"]).default("true"),
+    // Which proxies' X-Forwarded-For / -Proto to believe (client address for sign-in throttling, https for cookies):
+    // loopback (a proxy on the same machine), a number of hops, "true", or addresses / ranges / loopback, linklocal,
+    // uniquelocal (comma-separated). Behind one cloud load balancer: 1 (the address it appends, which clients can't
+    // forge). Not uniquelocal there: it believes every private-address hop, so such a client could pick its own address
+    TRUST_PROXY: z.string().default("loopback"),
+    // On SIGTERM: how long in-flight requests and background jobs get to finish before the process exits anyway.
+    // Keep it below Kubernetes' terminationGracePeriodSeconds minus the preStop sleep
+    SHUTDOWN_TIMEOUT_SECONDS: z.coerce.number().int().min(1).max(600).default(20),
     SESSION_TTL_HOURS: z.coerce.number().int().positive().default(168),
     // Secure cookies: auto = when the request arrived over https (directly or via a local proxy/tunnel)
     COOKIE_SECURE: z.enum(["auto", "true", "false"]).default("auto"),
@@ -24,6 +34,17 @@ const Env = z
     CF_ACCESS_AUD: z.string().optional(),
     // Emails that may approve anywhere and manage projects and members
     ADMIN_EMAILS: z.string().default(""),
+    // New people who sign in through Cloudflare Access (or a dev token) wait until an admin approves them
+    REQUIRE_APPROVAL: z.enum(["true", "false"]).default("true"),
+    // People who may publish in a project (Project admins, and any role given "publish") publish their own writes,
+    // from Claude as well as the web, without waiting for review
+    DIRECT_PUBLISH: z.enum(["true", "false"]).default("true"),
+    DEFAULT_PROJECT_VISIBILITY: z.enum(["members", "team"]).default("members"),
+    // People with Review approve, reject and publish through Claude (MCP tools, and REST calls with an API or OAuth
+    // token), with the same permissions as in the web app. Off: only a person signed in to the web app decides
+    ALLOW_MCP_APPROVALS: z.enum(["true", "false"]).default("true"),
+    // Reviewers may approve their own article and finding proposals (off: someone else must)
+    REVIEW_SELF_APPROVAL: z.enum(["true", "false"]).default("true"),
     // Share of a proposal's terms an existing finding must contain to count as a near-duplicate
     // Built web UI to serve at / (defaults to apps/web/dist in the repo)
     WEB_DIST: z.string().optional(),
@@ -85,6 +106,36 @@ const Env = z
     GITHUB_TOKEN: z.string().optional(),
     // Read private repositories' languages on GitLab (gitlab.com or self-hosted): a token with read_api
     GITLAB_TOKEN: z.string().optional(),
+    // Connections: a project's databases, APIs, git hosts, Slack and Trello. Secrets are encrypted with CONNECTIONS_KEY
+    // (32 random bytes, base64: openssl rand -base64 32; a Kubernetes Secret in production). To rotate it, set the new
+    // key and keep the old one as CONNECTIONS_KEY_OLD until the server has re-sealed every secret (it does at start-up).
+    CONNECTIONS: z.enum(["on", "off"]).default("on"),
+    CONNECTIONS_KEY: z.string().optional(),
+    CONNECTIONS_KEY_OLD: z.string().optional(),
+    // Let API, Slack, Trello and git connections reach private networks (databases always may; loopback and metadata never)
+    CONNECTIONS_ALLOW_PRIVATE: z.enum(["true", "false"]).default("false"),
+    // Read-only queries through a database connection: rows returned (at most 1000) and time allowed
+    QUERY_MAX_ROWS: z.coerce.number().int().min(1).max(1000).default(200),
+    QUERY_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(15_000),
+    // Skills for Claude: true/on (everyone gets the skills assigned to them), admins (Administrators only, for a
+    // pilot) or false/off (Thaliyola gives Claude no skills). Admins can change it in Admin › System.
+    SKILLS_ENABLED: z
+      .string()
+      .default("on")
+      .transform((v) => v.trim().toLowerCase())
+      .pipe(z.enum(["on", "true", "off", "false", "admins"])),
+    // A skill version needs a second person to approve it unless this is on (small teams only).
+    SKILLS_SELF_APPROVAL: z.enum(["true", "false"]).default("false"),
+    // A Project admin's new skill or edit in their own project publishes at once (unless it has high-risk content),
+    // like their articles. Needs DIRECT_PUBLISH too
+    SKILLS_DIRECT_PUBLISH: z.enum(["true", "false"]).default("true"),
+    // Largest skill import (a .zip or .tar.gz upload, or a repository archive)
+    SKILLS_IMPORT_MAX_BYTES: z.coerce.number().int().positive().default(50 * 1024 * 1024),
+    // How long "who loaded which skill" is kept
+    SKILLS_USAGE_DAYS: z.coerce.number().int().min(1).max(3650).default(365),
+    // Git hosts that skill imports may reach on a private network (exact host names, comma-separated, e.g. a VPN-only
+    // GitLab). CONNECTIONS_ALLOW_PRIVATE doesn't apply to skill imports.
+    SKILLS_GIT_HOSTS: z.string().default(""),
   })
   .superRefine((env, ctx) => {
     if (env.AUTH_MODE === "dev" && !env.DEV_TOKENS.trim()) {
@@ -96,13 +147,36 @@ const Env = z
     if (env.AUTH_MODE === "cloudflare" && (!env.CF_ACCESS_TEAM_DOMAIN || !env.CF_ACCESS_AUD)) {
       ctx.addIssue({ code: "custom", message: "AUTH_MODE=cloudflare requires CF_ACCESS_TEAM_DOMAIN and CF_ACCESS_AUD" });
     }
+    for (const name of ["CONNECTIONS_KEY", "CONNECTIONS_KEY_OLD"] as const) {
+      const value = env[name]?.trim();
+      if (!value) continue;
+      try {
+        parseKey(value, name);
+      } catch (err) {
+        ctx.addIssue({ code: "custom", message: (err as Error).message });
+      }
+    }
+    if (env.CONNECTIONS_KEY_OLD?.trim() && !env.CONNECTIONS_KEY?.trim()) ctx.addIssue({ code: "custom", message: "CONNECTIONS_KEY_OLD needs CONNECTIONS_KEY (the new key)" });
   });
 
 export type Config = z.infer<typeof Env>;
 
+/** TRUST_PROXY as Express takes it: true / false, a hop count, or the list of trusted addresses and ranges. */
+export function trustProxyFrom(value: string): boolean | number | string {
+  const v = value.trim();
+  if (v === "true" || v === "false") return v === "true";
+  if (/^\d+$/.test(v)) return Number(v);
+  return v;
+}
+
 export function settingsFrom(config: Config): Settings {
   return {
     adminEmails: config.ADMIN_EMAILS.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean),
+    requireApproval: config.REQUIRE_APPROVAL === "true",
+    directPublish: config.DIRECT_PUBLISH === "true",
+    mcpApprovals: config.ALLOW_MCP_APPROVALS === "true",
+    reviewSelfApproval: config.REVIEW_SELF_APPROVAL === "true",
+    defaultProjectVisibility: config.DEFAULT_PROJECT_VISIBILITY,
     duplicateThreshold: config.DUPLICATE_THRESHOLD,
     authMode: config.AUTH_MODE,
     mailTransport: config.MAIL_TRANSPORT === "smtp" && !config.SMTP_URL ? "off" : config.MAIL_TRANSPORT,
@@ -153,10 +227,76 @@ export function settingsFrom(config: Config): Settings {
       githubToken: config.GITHUB_TOKEN || undefined,
       gitlabToken: config.GITLAB_TOKEN || undefined,
     },
+    connections: {
+      enabled: config.CONNECTIONS === "on",
+      keys: {
+        key: config.CONNECTIONS_KEY?.trim() ? parseKey(config.CONNECTIONS_KEY) : undefined,
+        oldKey: config.CONNECTIONS_KEY_OLD?.trim() ? parseKey(config.CONNECTIONS_KEY_OLD, "CONNECTIONS_KEY_OLD") : undefined,
+      },
+      allowPrivate: config.CONNECTIONS_ALLOW_PRIVATE === "true",
+      queryMaxRows: config.QUERY_MAX_ROWS,
+      queryTimeoutMs: config.QUERY_TIMEOUT_MS,
+      ownHosts: ownDatabaseHosts(config.DATABASE_URL),
+    },
+    skillsDelivery: config.SKILLS_ENABLED === "true" ? "on" : config.SKILLS_ENABLED === "false" ? "off" : config.SKILLS_ENABLED,
+    skillsSelfApproval: config.SKILLS_SELF_APPROVAL === "true",
+    skillsDirectPublish: config.SKILLS_DIRECT_PUBLISH === "true",
+    skills: {
+      importMaxBytes: config.SKILLS_IMPORT_MAX_BYTES,
+      usageDays: config.SKILLS_USAGE_DAYS,
+      gitHosts: config.SKILLS_GIT_HOSTS.split(",").map((h) => h.trim().toLowerCase()).filter(Boolean),
+    },
   };
 }
 
+/** Skills for Claude (core/skills). */
+export interface SkillSettings {
+  /** Largest import (upload or repository archive), in bytes. */
+  importMaxBytes: number;
+  /** Days of skill usage kept. */
+  usageDays: number;
+  /** Hosts skill imports may reach on a private network (SKILLS_GIT_HOSTS). */
+  gitHosts: string[];
+}
+
+/** Who Thaliyola gives skills to: everyone (assigned skills), Administrators only, or nobody. */
+export type SkillsDelivery = "on" | "admins" | "off";
+
+/** Connections (core/connections). Keys never leave the server and are never logged. */
+export interface ConnectionSettings {
+  enabled: boolean;
+  keys: import("./core/secrets.js").SecretKeys;
+  /** API, Slack, Trello and git connections may reach private networks. */
+  allowPrivate: boolean;
+  queryMaxRows: number;
+  queryTimeoutMs: number;
+  /** Thaliyola's own database host(s): never a connection target. */
+  ownHosts: string[];
+  /** Tests only, never from the environment: loopback and the own database host are allowed (local test servers). */
+  allowLocal?: boolean;
+  /** Tests only: how long call_api waits (20 s otherwise). */
+  callTimeoutMs?: number;
+  /** Tests only: DNS lookups. */
+  lookup?: (host: string) => Promise<{ address: string; family?: number }[]>;
+  /** Tests only: API base URLs (slack, slack_hooks, trello, github, gitlab, bigquery, google_token, snowflake). */
+  endpoints?: Partial<Record<string, string>>;
+}
+
 export interface Settings {
+  /** Approvals from Claude (ALLOW_MCP_APPROVALS; Admin › System). Absent: on. */
+  mcpApprovals?: boolean;
+  /** Reviewers may approve their own article and finding proposals (REVIEW_SELF_APPROVAL; Admin › System). Absent: on. */
+  reviewSelfApproval?: boolean;
+  /** Skills for Claude delivery (SKILLS_ENABLED; Admin › System). Absent: on. */
+  skillsDelivery?: SkillsDelivery;
+  /** Authors may approve their own skill versions (SKILLS_SELF_APPROVAL; Admin › System). Absent: off. */
+  skillsSelfApproval?: boolean;
+  /** Project admins publish their own project's skills without review (SKILLS_DIRECT_PUBLISH; Admin › System). Absent: on. */
+  skillsDirectPublish?: boolean;
+  /** Skill import limits and private git hosts; absent: the defaults. */
+  skills?: SkillSettings;
+  /** Connections; absent in tests that don't use them. */
+  connections?: ConnectionSettings;
   /** Team sources; absent in tests that don't use them. */
   sources?: { enabled: boolean; slackToken?: string; notionToken?: string; tavilyKey?: string; allowPrivate: boolean };
   /** Vulnerability matching; `fetch` is injected in tests. */
@@ -173,6 +313,12 @@ export interface Settings {
     fetch?: typeof fetch;
   };
   adminEmails: string[];
+  /** New people seen through an identity provider need an admin's approval before they can do anything. */
+  requireApproval: boolean;
+  /** Writes by people holding "publish" in a project publish at once (agents' writes included) instead of waiting. */
+  directPublish: boolean;
+  /** Who can read a new project unless its creator chooses: its members only, or everyone signed in. */
+  defaultProjectVisibility: "members" | "team";
   duplicateThreshold: number;
   authMode: "local" | "cloudflare" | "dev";
   mailTransport: "smtp" | "json" | "off";

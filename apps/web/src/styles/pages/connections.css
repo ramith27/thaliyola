@@ -1,0 +1,107 @@
+/* Project settings › Connections (pages/connections.tsx). Prefix: cn-. Tokens only. */
+
+.cn-groups { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.cn-target { font-family: var(--mono); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.cn-error-text { color: var(--danger); font-weight: var(--fw-medium); }
+.cn-error-detail { margin: 0; color: var(--text-2); font-family: var(--mono); font-size: var(--fs-sm); overflow-wrap: anywhere; white-space: pre-wrap; }
+.cn-row-busy { display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--control-sm); color: var(--text-2); font-size: var(--fs-sm); white-space: nowrap; }
+.cn-safety { margin-top: var(--space-4); }
+.cn-notes { margin: 0; padding-left: var(--space-5); display: flex; flex-direction: column; gap: var(--space-1); color: var(--text-2); font-size: var(--fs-sm); line-height: var(--lh-sm); max-width: var(--w-reading); }
+
+/* ---- Add / edit sheet ------------------------------------------------------------------------------------- */
+.cn-form { display: flex; flex-direction: column; gap: var(--space-1); }
+.cn-kind-fixed { display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-4); color: var(--text-2); font-weight: var(--fw-medium); }
+.cn-kind-note { margin: calc(var(--space-2) * -1) 0 var(--space-4); color: var(--muted); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+
+/* A stored secret: never shown, only replaced or removed. */
+.cn-secret { margin: 0 0 var(--space-4); padding: 0; border: 0; min-width: 0; }
+.cn-secret-label { padding: 0; margin-bottom: var(--space-1); color: var(--text); font-size: var(--fs-md); font-weight: var(--fw-medium); }
+.cn-secret-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px dashed var(--border-strong); border-radius: var(--radius); background: var(--surface-2); }
+.cn-secret-value { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--text-2); font-size: var(--fs-sm); }
+.cn-secret-tools { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); }
+
+/* ---- Project › Data (pages/data.tsx): connections → schemas → tables, and one table ------------------------- */
+.cn-data { display: grid; grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr); gap: var(--space-6); align-items: start; min-width: 0; }
+.cn-data-list { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; position: sticky; top: var(--space-4); max-height: calc(100vh - var(--space-16)); overflow-y: auto; padding-right: var(--space-1); }
+.cn-data-conn { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.cn-data-conn-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); padding-bottom: var(--space-2); border-bottom: 1px solid var(--border); }
+.cn-data-conn-name { display: inline-flex; align-items: center; gap: var(--space-2); font-weight: var(--fw-semibold); overflow-wrap: anywhere; }
+.cn-data-conn-head .meta-line { flex-basis: 100%; }
+.cn-data-schema { display: flex; flex-direction: column; gap: var(--space-1); }
+.cn-data-schema-name { margin: var(--space-1) 0 0; color: var(--muted); font-size: var(--fs-xs); line-height: var(--lh-xs); font-weight: var(--fw-semibold); letter-spacing: 0.02em; text-transform: uppercase; }
+.cn-data-tables { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.cn-data-table { display: flex; align-items: center; gap: var(--space-2); min-height: var(--control-sm); padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); color: var(--text-2); text-decoration: none; font-family: var(--mono); font-size: var(--fs-sm); }
+.cn-data-table:hover { background: var(--surface-3); color: var(--text); }
+.cn-data-table[aria-current="true"] { background: var(--accent-soft); color: var(--accent-text); font-weight: var(--fw-medium); }
+.cn-data-table[data-removed] .cn-data-table-name { text-decoration: line-through; color: var(--muted); }
+.cn-data-table-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cn-data-pii { display: inline-flex; color: var(--warn); }
+.cn-data-gone { color: var(--muted); font-family: inherit; font-size: var(--fs-xs); }
+.cn-data-note { margin: 0; color: var(--muted); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+
+.cn-data-detail { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
+.cn-data-detail > .btn { align-self: flex-start; }
+.cn-data-head { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.cn-data-title { display: flex; align-items: center; gap: var(--space-2); margin: 0; font-size: var(--fs-xl); line-height: var(--lh-xl); font-weight: var(--fw-semibold); min-width: 0; }
+.cn-data-key { font-family: var(--mono); overflow-wrap: anywhere; }
+.cn-data-comment { margin: 0; color: var(--text-2); max-width: var(--w-reading); }
+.cn-data-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.cn-col-name { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); }
+.cn-col-name code, .cn-col-type { font-family: var(--mono); font-size: var(--fs-sm); overflow-wrap: break-word; }
+.cn-col-type { color: var(--text-2); }
+.cn-col-about { display: flex; flex-direction: column; gap: var(--space-1); max-width: var(--w-reading); }
+.cn-col-fk { color: var(--muted); font-family: var(--mono); font-size: var(--fs-xs); overflow-wrap: break-word; }
+.cn-data-history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.cn-data-history li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); font-size: var(--fs-sm); }
+.cn-data-history-text { font-family: var(--mono); color: var(--text); overflow-wrap: anywhere; }
+.cn-data-history time { color: var(--muted); }
+
+@media (max-width: 900px) {
+  .cn-data { grid-template-columns: minmax(0, 1fr); }
+  .cn-data-list { position: static; max-height: none; overflow: visible; padding-right: 0; }
+}
+
+/* Database options in the add / edit sheet. */
+.cn-options { margin: 0 0 var(--space-4); padding: 0; border: 0; min-width: 0; display: flex; flex-direction: column; gap: var(--space-3); }
+.cn-options .field { margin-bottom: 0; }
+
+/* API options in the add / edit sheet. */
+.cn-spec-note { margin: 0; }
+.cn-methods { margin: 0; padding: 0; border: 0; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.cn-methods-label { padding: 0; color: var(--text); font-size: var(--fs-sm); font-weight: var(--fw-medium); }
+.cn-methods-list { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); }
+
+/* ---- Project › Data: one API and its endpoints -------------------------------------------------------------------- */
+.cn-data-api { font-family: inherit; }
+.cn-data-count { color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; }
+.cn-api-group { display: flex; flex-direction: column; gap: var(--space-1); margin-top: var(--space-3); }
+.cn-api-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.cn-api-endpoint { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.cn-api-endpoint > summary { padding: var(--space-2) var(--space-3); }
+.cn-api-head { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); min-width: 0; }
+.cn-api-head[data-removed] .cn-api-path { text-decoration: line-through; color: var(--muted); }
+.cn-api-path { font-family: var(--mono); font-size: var(--fs-sm); overflow-wrap: anywhere; color: var(--text); }
+.cn-api-summary { color: var(--text-2); font-size: var(--fs-sm); }
+.cn-api-body { display: flex; flex-direction: column; gap: var(--space-2); padding: 0 var(--space-3) var(--space-3); font-size: var(--fs-sm); }
+.cn-api-params { margin: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.cn-api-param { display: grid; grid-template-columns: minmax(8rem, 14rem) minmax(0, 1fr); gap: var(--space-1) var(--space-3); }
+.cn-api-param dt { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1); }
+.cn-api-param dt code { font-family: var(--mono); }
+.cn-api-param dd { margin: 0; min-width: 0; overflow-wrap: anywhere; color: var(--text-2); }
+.cn-api-line { margin: 0; overflow-wrap: anywhere; }
+.cn-api-label { color: var(--muted); font-weight: var(--fw-semibold); font-size: var(--fs-xs); letter-spacing: 0.02em; text-transform: uppercase; }
+.cn-api-responses { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1); overflow-wrap: anywhere; }
+
+@media (max-width: 640px) {
+  .cn-api-param { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-2); }
+}
+
+/* ---- Settings › Notifications and Admin › Notifications (pages/notification-routes.tsx) ------------------- */
+.cn-digest-note { margin: var(--space-1) 0 0; }
+/* A route's facts: one line when there's room; one fact per line on a phone, so no line starts or ends with a separator. */
+.cn-route-meta { display: block; min-width: 0; max-width: 100%; }
+
+@media (max-width: 640px) {
+  .cn-route-meta .meta-line { flex-direction: column; align-items: flex-start; }
+  .cn-route-meta .meta-line-sep { display: none; }
+}

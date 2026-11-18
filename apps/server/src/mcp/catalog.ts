@@ -9,12 +9,19 @@ export interface Catalog {
   prompts: { name: string; title?: string; description: string; arguments: string[] }[];
 }
 
-let cached: Promise<Catalog> | null = null;
+const cached = new Map<string, Promise<Catalog>>();
 
-/** The tools and prompts the MCP endpoint offers, read through the protocol itself (so it can't drift). */
+/**
+ * The tools and prompts the MCP endpoint offers, read through the protocol itself (so it can't drift). Cached per
+ * Skills for Claude mode: the instructions mention skills unless they're switched off. Skill descriptions and skill
+ * prompts are per person, so the catalog shows the generic ones.
+ */
 export function mcpCatalog(ctx: RequestContext): Promise<Catalog> {
-  cached ??= (async () => {
-    const server = buildMcpServer(ctx);
+  const mode = ctx.settings.skillsDelivery ?? "on";
+  let hit = cached.get(mode);
+  if (hit) return hit;
+  hit = (async () => {
+    const server = buildMcpServer(ctx, { skills: { deliver: mode !== "off", client: "other" } });
     const client = new Client({ name: "catalog", version: "0" });
     const [a, b] = InMemoryTransport.createLinkedPair();
     await Promise.all([server.connect(a), client.connect(b)]);
@@ -29,6 +36,7 @@ export function mcpCatalog(ctx: RequestContext): Promise<Catalog> {
     await server.close();
     return catalog;
   })();
-  cached.catch(() => (cached = null));
-  return cached;
+  cached.set(mode, hit);
+  hit.catch(() => cached.delete(mode));
+  return hit;
 }

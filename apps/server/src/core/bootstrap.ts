@@ -3,10 +3,17 @@ import { reindexArticle, reindexFinding } from "./chunking.js";
 
 /** Direct inserts for bootstrapping and tests. Normal writes go through review (M1). */
 
-export async function createScope(db: Queryable, kind: "team" | "project" | "library", slug: string, name: string, description = "") {
+export async function createScope(
+  db: Queryable,
+  kind: "team" | "project" | "library",
+  slug: string,
+  name: string,
+  description = "",
+  visibility: "team" | "members" = "team",
+) {
   const { rows } = await db.query<{ id: string }>(
-    "INSERT INTO scopes (kind, slug, name, description) VALUES ($1, $2, $3, $4) RETURNING id",
-    [kind, slug, name, description],
+    "INSERT INTO scopes (kind, slug, name, description, visibility) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+    [kind, slug, name, description, visibility],
   );
   return rows[0]!.id;
 }
@@ -114,14 +121,15 @@ export async function tagEntity(db: Queryable, kind: string, name: string, targe
   ]);
 }
 
-export async function addSourceLink(db: Queryable, target: { kind: string; id: string }, system: string, url: string, label = "") {
-  await db.query("INSERT INTO source_links (target_kind, target_id, system, url, label) VALUES ($1, $2, $3, $4, $5)", [
+export async function addSourceLink(db: Queryable, target: { kind: string; id: string }, system: string, url: string, label = ""): Promise<string> {
+  const { rows } = await db.query<{ id: string }>("INSERT INTO source_links (target_kind, target_id, system, url, label) VALUES ($1, $2, $3, $4, $5) RETURNING id", [
     target.kind,
     target.id,
     system,
     url,
     label,
   ]);
+  return rows[0]!.id;
 }
 
 /** Creates the Team and Library scopes if missing. Safe to run repeatedly. */

@@ -105,6 +105,7 @@ rm -rf "$APP_DIR.new"
 mkdir "$APP_DIR.new"
 cp -a "$STAGE/app/node_modules" "$STAGE/app/package.json" "$APP_DIR.new/"
 cp -a apps/server/dist apps/server/migrations "$APP_DIR.new/"
+cp -a CHANGELOG.md "$APP_DIR.new/"  # release notes: drafts for a version with none yet
 cp -a apps/web/dist "$APP_DIR.new/web"
 if [ -d apps/web/dist-viewer ]; then cp -a apps/web/dist-viewer "$APP_DIR.new/viewer"; fi
 chown -R root:root "$APP_DIR.new"

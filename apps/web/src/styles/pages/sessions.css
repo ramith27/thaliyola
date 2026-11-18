@@ -1,0 +1,29 @@
+/* Sessions asking each other: who's online, the ask form, and questions with their answers. */
+.sessions-page .section-head { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; justify-content: space-between; margin: 1.4rem 0 0.6rem; }
+.sessions-page .section-head h2 { margin: 0; }
+.sessions-page .section-head .chips { margin: 0; }
+.sessions-page .chip { cursor: pointer; font-family: inherit; }
+.session-list .session { display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.7rem 0.9rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); margin-bottom: 0.5rem; }
+.session-list .session.is-offline { opacity: 0.7; }
+.session-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; overflow-wrap: anywhere; }
+.presence { width: 10px; height: 10px; border-radius: 50%; margin-top: 0.4rem; flex: none; }
+.presence.listening { background: var(--status-good); }
+.presence.busy { background: var(--status-warning); }
+.presence.offline { background: transparent; border: 2px solid var(--neutral-mark); }
+.ask-form { margin: 1.2rem 0; padding: 1rem 1.1rem; max-width: 760px; }
+.ask-form h2 { margin-top: 0; }
+.ask-form label { display: block; margin: 0.7rem 0 0.3rem; font-weight: 550; font-size: 0.9rem; }
+.ask-form input, .ask-form textarea { width: 100%; }
+.question-list { display: flex; flex-direction: column; gap: 0.7rem; }
+.question { padding: 0.85rem 1rem; }
+.question-meta { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.question-meta code, .answer code { overflow-wrap: anywhere; }
+.question-text { margin: 0.5rem 0 0.3rem; white-space: pre-wrap; overflow-wrap: anywhere; font-weight: 550; }
+.question-context { white-space: pre-wrap; margin: 0 0 0.4rem; }
+.answer { margin-top: 0.5rem; padding: 0.6rem 0.8rem; border-left: 3px solid var(--status-good); background: var(--surface-2); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.answer.is-declined { border-left-color: var(--neutral-mark); }
+.answer p { margin: 0.25rem 0 0.2rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.answer-form { margin-top: 0.5rem; }
+.answer-form textarea { width: 100%; }
+.answer-form .inline-form { margin-top: 0.4rem; align-items: center; }
+.answer-form select { width: auto; }

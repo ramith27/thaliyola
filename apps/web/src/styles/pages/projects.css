@@ -1,0 +1,98 @@
+/* Projects, settings, import and export (pages/settings.tsx, projects.tsx, setup.tsx). Prefix: pj-. Tokens only. */
+
+/* ---- Shared helpers ---------------------------------------------------------------------------------------- */
+.pj-stack { display: flex; flex-direction: column; gap: var(--space-6); min-width: 0; }
+.pj-stack > .section { margin-top: var(--space-4); }
+.pj-stack > .section:first-child { margin-top: 0; }
+.pj-fields { display: flex; flex-direction: column; gap: var(--space-4); max-width: var(--w-form); }
+.pj-note { margin: 0; color: var(--muted); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.pj-note code, .pj-shortname code { font-family: var(--mono); font-size: var(--fs-sm); color: var(--text-2); overflow-wrap: anywhere; }
+.pj-strong { font-weight: var(--fw-medium); color: var(--text); overflow-wrap: anywhere; }
+a.pj-strong { color: var(--accent-text); }
+.pj-warn { display: inline-flex; align-items: flex-start; gap: var(--space-1); color: var(--warn); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.pj-warn svg { flex: none; margin-top: 2px; }
+.pj-label { color: var(--muted); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.pj-badges { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.pj-plain-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-2); font-size: var(--fs-md); }
+
+/* Two-line cells: a name, then muted detail (people, teams, repositories, projects). */
+.pj-person { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pj-person-sub { color: var(--muted); font-size: var(--fs-sm); line-height: var(--lh-sm); font-weight: var(--fw-regular); overflow-wrap: anywhere; }
+.pj-chip-line { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; }
+
+/* ---- Settings shell ------------------------------------------------------------------------------------------ */
+.pj-shortname { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font-size: var(--fs-sm); }
+
+/* ---- General -------------------------------------------------------------------------------------------------- */
+.pj-general { display: flex; flex-direction: column; gap: var(--space-6); margin-top: var(--space-6); padding-bottom: var(--space-8); }
+.pj-detected { display: flex; flex-direction: column; gap: var(--space-2); }
+.pj-detect-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-2); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.pj-detect-list li { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); align-items: baseline; }
+.pj-detect-repo { display: inline-flex; align-items: center; gap: var(--space-1); font-weight: var(--fw-medium); color: var(--text); }
+.pj-detect-repo svg { color: var(--muted); }
+
+.pj-data { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.pj-data li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-3) 0; border-top: 1px solid var(--border); }
+.pj-data li:first-child { border-top: 0; padding-top: 0; }
+.pj-data li:last-child { padding-bottom: 0; }
+.pj-data-title { margin: 0; font-weight: var(--fw-medium); color: var(--text); font-size: var(--fs-md); }
+.pj-data-text { margin: 0; color: var(--muted); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+
+.pj-danger { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); }
+.pj-danger p { margin: 0; color: var(--text-2); font-size: var(--fs-md); line-height: var(--lh-md); max-width: var(--w-form); }
+.pj-danger .btn { flex: none; }
+
+/* ---- Members and access ----------------------------------------------------------------------------------------- */
+.pj-summary { display: flex; flex-direction: column; gap: var(--space-2); max-width: var(--w-reading); }
+.pj-summary p { margin: 0; }
+.pj-summary-lead { color: var(--text); font-size: var(--fs-md); line-height: var(--lh-md); }
+.pj-summary-rules { color: var(--muted); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+/* The permission matrix stays a plain table; wide catalogues scroll sideways inside the disclosure. */
+.pj-matrix { overflow-x: auto; max-width: 100%; margin-bottom: var(--space-3); }
+.pj-role-choices { display: flex; flex-direction: column; gap: var(--space-2); }
+.pj-dialog-form { display: flex; flex-direction: column; gap: var(--space-4); }
+.pj-field-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 12rem); gap: var(--space-4); align-items: start; }
+
+/* ---- Repositories --------------------------------------------------------------------------------------------- */
+.pj-row-tools { display: inline-flex; align-items: center; gap: var(--space-1); }
+.pj-url { display: inline-flex; align-items: center; gap: var(--space-1); font-family: var(--mono); font-size: var(--fs-sm); overflow-wrap: anywhere; word-break: break-all; }
+
+/* ---- Admin › Projects ------------------------------------------------------------------------------------------- */
+.pj-project-cell { display: flex; flex-direction: column; gap: 2px; min-width: 12rem; max-width: 18rem; }
+.pj-nowrap { white-space: nowrap; }
+.pj-project-name { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); }
+.pj-tree-mark { flex: none; width: var(--space-2); height: var(--space-2); border-left: 1px solid var(--border-strong); border-bottom: 1px solid var(--border-strong); align-self: flex-start; margin-top: 3px; }
+.pj-project-desc { color: var(--muted); font-size: var(--fs-sm); line-height: var(--lh-sm); font-weight: var(--fw-regular); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pj-admins { display: inline-flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); font-size: var(--fs-sm); line-height: var(--lh-sm); overflow-wrap: anywhere; }
+
+/* ---- New project ------------------------------------------------------------------------------------------------ */
+.pj-form { display: flex; flex-direction: column; gap: var(--space-2); }
+.pj-repo-rows { display: flex; flex-direction: column; gap: var(--space-2); }
+.pj-repo-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 9rem) var(--control-md); gap: var(--space-2); align-items: center; }
+.pj-repo-head { color: var(--muted); font-size: var(--fs-xs); line-height: var(--lh-xs); font-weight: var(--fw-medium); }
+.pj-repo-remove { display: flex; justify-content: center; }
+.pj-repo-error { grid-column: 1 / -1; margin: 0; }
+.pj-starter { display: flex; flex-direction: column; gap: var(--space-2); }
+
+/* ---- Import ------------------------------------------------------------------------------------------------------ */
+.pj-import-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }
+.pj-preview-line { margin: 0; font-size: var(--fs-md); color: var(--text-2); }
+
+/* ---- Phones ------------------------------------------------------------------------------------------------------ */
+@media (max-width: 860px) {
+  .pj-import-options { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .pj-data li, .pj-danger { flex-direction: column; align-items: stretch; }
+  .pj-field-row { grid-template-columns: minmax(0, 1fr); }
+  .pj-repo-head { display: none; }
+  .pj-repo-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--control-md); padding-bottom: var(--space-3); border-bottom: 1px solid var(--border); }
+  .pj-repo-row > :first-child { grid-column: 1 / -1; }
+  .pj-project-cell { min-width: 0; max-width: none; }
+  .pj-project-desc { white-space: normal; }
+}
+
+/* Repositories: what the project's git connection last read (branch, pull requests, last commit). */
+.pj-repo-facts { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.pj-repo-branch { display: inline-flex; align-items: center; gap: var(--space-1); font-family: var(--mono); }
+.pj-repo-commit { overflow-wrap: anywhere; }

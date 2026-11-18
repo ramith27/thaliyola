@@ -4,7 +4,7 @@ import { audit } from "./audit.js";
 import { ForbiddenError, NotFoundError, ValidationError, type RequestContext } from "./context.js";
 import { newArticle } from "./direct.js";
 import { emitChanged } from "./events.js";
-import { canApprove, isAdmin, readableScopes, roleIn } from "./permissions.js";
+import { canApprove, hasPermission, isAdmin, readableScopes } from "./permissions.js";
 import { redact } from "./redaction.js";
 import { getReadableScope, type Scope } from "./scopes.js";
 
@@ -245,10 +245,10 @@ async function chain(db: Queryable, scopeId: string) {
 
 async function canEdit(ctx: RequestContext, scope: Scope) {
   if (isAdmin(ctx)) return true;
-  // Team and Library systems are shared by everyone: their owners keep them. Projects: writers too.
+  // Team and Library systems are shared by everyone: those who review there keep them. Projects: anyone whose roles
+  // there (direct, through a team, or from a project above) include Propose: Contributors and up, or a custom role.
   if (scope.kind !== "project") return canApprove(ctx, scope.id);
-  const role = await roleIn(ctx.db, scope.id, ctx.actor.id);
-  return role === "writer" || role === "owner";
+  return hasPermission(ctx, scope.id, "propose");
 }
 
 export async function getDesignSystem(ctx: RequestContext, slug: string, opts: { format?: "css" | "tailwind" | "json" | "w3c" } = {}) {
@@ -342,7 +342,7 @@ export async function updateDesignSystem(
   },
 ) {
   const scope = await getReadableScope(ctx, slug);
-  if (!(await canEdit(ctx, scope))) throw new ForbiddenError(scope.kind === "project" ? "the project's writers, owners and admins edit its design" : `${scope.name}'s owners and admins edit its design`);
+  if (!(await canEdit(ctx, scope))) throw new ForbiddenError(scope.kind === "project" ? "none of your roles here include Propose, so you can't edit the project's design (Contributors, Reviewers, Moderators and Project admins can)" : `those who review in ${scope.name}, and Administrators, edit its design`);
   const parsed = input.tokens === undefined ? undefined : tokensSchema.safeParse(input.tokens);
   if (parsed && !parsed.success) throw new ValidationError(`tokens: ${parsed.error.issues.slice(0, 5).map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
   let basedOn: string | null | undefined;
@@ -400,7 +400,7 @@ export async function restoreDesignVersion(ctx: RequestContext, slug: string, ve
   return updateDesignSystem(ctx, slug, { tokens: v.tokens, replace: true, principles: v.principles, based_on: base ?? null, note: `Restored version ${version}` });
 }
 
-/** A design decision: an ordinary decision article tagged "design", published for owners, reviewed for others. */
+/** A design decision: an ordinary decision article tagged "design", published at once for those who may publish directly, reviewed for others. */
 export async function recordDesignDecision(
   ctx: RequestContext,
   input: { project: string; title: string; context: string; options?: string; choice: string; consequences?: string },

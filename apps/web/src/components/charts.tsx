@@ -1,5 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { I, type IconName } from "./icons";
+import { InfoTip } from "./kit/overlay";
+import { SegmentedControl } from "./kit/page";
+import { Skeleton } from "./kit/feedback";
 
 /*
  * Small SVG chart kit following the dataviz method: thin marks (columns <= 24px, 2px lines),
@@ -74,39 +77,58 @@ function Tooltip({ x, y, width, children }: { x: number; y: number; width: numbe
   );
 }
 
-/** Card frame with a title and a chart/table toggle (the table is the accessible view of the same data). */
+/**
+ * Card frame with a title and a labelled Chart | Table switch (the table is the accessible view of the same data).
+ * `summary` is one visible line under the chart; `empty` replaces the chart when every value is 0.
+ */
 export function ChartCard({
   title,
   subtitle,
   table,
   children,
   className = "",
+  summary,
+  empty,
 }: {
   title: string;
   subtitle?: string;
   table: { columns: string[]; rows: (string | number)[][] };
   children: ReactNode;
   className?: string;
+  summary?: string;
+  empty?: ReactNode;
 }) {
-  const [asTable, setAsTable] = useState(false);
+  const [view, setView] = useState<"chart" | "table">("chart");
+  const numbers = table.rows.flatMap((r) => r.filter((v): v is number => typeof v === "number"));
+  const allZero = numbers.length > 0 && numbers.every((n) => n === 0);
+  const summaryId = useId();
   return (
-    <section className={`card chart-card ${className}`}>
+    <section className={`card chart-card ${className}`} aria-label={title}>
       <header className="card-head">
-        <div>
+        <div className="chart-card-heading">
           <h3>{title}</h3>
           {subtitle && <p className="muted small">{subtitle}</p>}
         </div>
-        <button className="icon-btn" onClick={() => setAsTable((t) => !t)} title={asTable ? "Show chart" : "Show table"} aria-label={asTable ? "Show chart" : "Show table"}>
-          <I name={asTable ? "chart" : "table"} size={16} />
-        </button>
+        <SegmentedControl
+          label={`Show ${title} as`}
+          size="sm"
+          options={[
+            { value: "chart", label: "Chart", icon: "chart" },
+            { value: "table", label: "Table", icon: "table" },
+          ]}
+          value={view}
+          onChange={setView}
+        />
       </header>
-      {asTable ? (
-        <div className="table-wrap chart-table">
+      {view === "table" ? (
+        <div className="table-wrap chart-table" tabIndex={0} role="region" aria-label={`${title} (table)`}>
           <table className="table">
             <thead>
               <tr>
                 {table.columns.map((c) => (
-                  <th key={c}>{c}</th>
+                  <th key={c} scope="col">
+                    {c}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -123,36 +145,90 @@ export function ChartCard({
             </tbody>
           </table>
         </div>
+      ) : allZero && empty ? (
+        <div className="chart-empty">{empty}</div>
       ) : (
-        children
+        <div className="chart-body" aria-describedby={summary ? summaryId : undefined}>
+          {children}
+        </div>
+      )}
+      {summary && view === "chart" && !(allZero && empty) && (
+        <p id={summaryId} className="chart-summary">
+          {summary}
+        </p>
       )}
     </section>
   );
 }
 
-/** Stat tile: label, value, optional note and a sparkline (de-emphasised hue, current point in the accent). */
-export function StatTile({ label, value, note, trend, icon, href, tone }: { label: string; value: number | string; note?: string; trend?: number[]; icon: IconName; href?: string; tone?: "warn" }) {
-  const body = (
-    <>
+const TILE_TONE: Record<string, string> = { warn: "warning", warning: "warning", danger: "danger", success: "success" };
+
+/**
+ * Stat tile: icon, a one-line label (full text as the tooltip), the value, a note and a sparkline. Linked tiles
+ * get hover and a chevron; static ones never look clickable. `null` shows "—" with `emptyNote`.
+ */
+export function StatTile({
+  label,
+  value,
+  note,
+  trend,
+  icon,
+  href,
+  tone,
+  info,
+  emptyNote,
+  loading,
+}: {
+  label: string;
+  value: number | string | null;
+  note?: ReactNode;
+  trend?: number[];
+  icon: IconName;
+  href?: string;
+  tone?: "neutral" | "warning" | "danger" | "success" | "warn";
+  info?: ReactNode;
+  emptyNote?: ReactNode;
+  loading?: boolean;
+}) {
+  const t = tone ? TILE_TONE[tone] : undefined;
+  const cls = `card tile ${t ? `tile-${t}` : ""} ${href ? "tile-link" : ""}`;
+  return (
+    <div className={cls}>
       <div className="tile-head">
-        <span className={`tile-icon ${tone ? `tile-icon-${tone}` : ""}`}>
+        <span className={`tile-icon ${tone === "warn" ? "tile-icon-warn" : ""}`} aria-hidden="true">
           <I name={icon} size={16} />
         </span>
-        <span className="tile-label">{label}</span>
+        {href ? (
+          <a className="tile-label tile-anchor" href={href} title={label}>
+            {label}
+          </a>
+        ) : (
+          <span className="tile-label" title={label}>
+            {label}
+          </span>
+        )}
+        {info && <InfoTip label={`About ${label.toLowerCase()}`}>{info}</InfoTip>}
+        {href && <I name="chevron-right" size={16} className="tile-chevron" />}
       </div>
-      <div className="tile-value">{typeof value === "number" ? compact(value) : value}</div>
+      <div className="tile-value">
+        {loading ? (
+          <Skeleton width="50%" height={28} />
+        ) : value === null ? (
+          <>
+            <span aria-hidden="true">—</span>
+            <span className="sr-only">No data</span>
+          </>
+        ) : typeof value === "number" ? (
+          compact(value)
+        ) : (
+          value
+        )}
+      </div>
       <div className="tile-foot">
-        {note && <span className="muted small">{note}</span>}
+        {value === null && emptyNote ? <span className="muted small">{emptyNote}</span> : note && <span className="muted small">{note}</span>}
         {trend && trend.length > 1 && <Sparkline values={trend} />}
       </div>
-    </>
-  );
-  return href ? (
-    <a className="card tile" href={href}>
-      {body}
-    </a>
-  ) : (
-    <div className="card tile">{body}</div>
+    </div>
   );
 }
 
@@ -217,7 +293,7 @@ export function StackedColumns({ data, series, xLabel }: { data: Record<string, 
               });
             const showLabel = data.length <= 8 || i % Math.ceil(data.length / 6) === 0 || i === data.length - 1;
             return (
-              <g key={i} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+              <g key={i} onPointerEnter={() => setHover(i)} onPointerLeave={() => setHover(null)}>
                 {hover === i && <rect x={cx - band / 2} y={m.top} width={band} height={ih} className="hover-band" />}
                 {segs}
                 <rect x={cx - band / 2} y={m.top} width={band} height={ih + m.bottom} fill="transparent" />
@@ -269,12 +345,12 @@ export function LineChart({ data, series, xLabel }: { data: Record<string, numbe
           height={height}
           role="img"
           aria-label="Line chart"
-          onMouseMove={(e) => {
+          onPointerMove={(e) => {
             const r = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
             const i = Math.round(((e.clientX - r.left - m.left) / Math.max(1, iw)) * (data.length - 1));
             setHover(i >= 0 && i < data.length ? i : null);
           }}
-          onMouseLeave={() => setHover(null)}
+          onPointerLeave={() => setHover(null)}
         >
           {ticks.map((t) => (
             <g key={t}>
@@ -348,7 +424,7 @@ export function HBars({ data, color = "var(--series-1)", format = (n: number) =>
             const w = (d.value / max) * iw;
             const yy = i * row;
             return (
-              <g key={d.label} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+              <g key={d.label} onPointerEnter={() => setHover(i)} onPointerLeave={() => setHover(null)}>
                 {hover === i && <rect x={0} y={yy} width={width} height={row} className="hover-band" />}
                 <text x={labelW - 8} y={yy + row / 2} dy="0.32em" textAnchor="end" className="bar-label">
                   {d.label.length > 22 ? `${d.label.slice(0, 21)}…` : d.label}
@@ -394,7 +470,7 @@ export function StatusBar({ parts }: { parts: { key: string; label: string; valu
             const last = i === visible.length - 1;
             const r = 6;
             const d = `M${x + (first ? r : 0)},4 H${x + w - (last ? r : 0)} ${last ? `Q${x + w},4 ${x + w},${4 + r} V${24 - r} Q${x + w},24 ${x + w - r},24` : `V24`} H${x + (first ? r : 0)} ${first ? `Q${x},24 ${x},${24 - r} V${4 + r} Q${x},4 ${x + r},4` : `V4`}Z`;
-            return <path key={p.key} d={d} fill={p.color} onMouseEnter={() => setHover(parts.indexOf(p))} onMouseLeave={() => setHover(null)} />;
+            return <path key={p.key} d={d} fill={p.color} onPointerEnter={() => setHover(parts.indexOf(p))} onPointerLeave={() => setHover(null)} />;
           })}
         </svg>
       )}

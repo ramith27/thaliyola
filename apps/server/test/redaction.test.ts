@@ -52,6 +52,10 @@ describe("redact", () => {
     ]);
   });
 
+  it("can leave some kinds alone (people's addresses in a notification posted to Slack)", () => {
+    expect(redact("rita@example.com shared password: hunter22", { keep: ["email"] }).text).toBe("rita@example.com shared password: [REDACTED:secret]");
+  });
+
   it("detects fields that were nothing but secrets", () => {
     expect(onlyRedacted(" [REDACTED:api_key] ")).toBe(true);
     expect(onlyRedacted("key [REDACTED:api_key]")).toBe(false);

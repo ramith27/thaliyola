@@ -1,4 +1,5 @@
-# Add to .gitlab-ci.yml. Masked CI/CD variables: ANTHROPIC_API_KEY, THALIYOLA_TOKEN.
+# Add to .gitlab-ci.yml. Masked CI/CD variables: ANTHROPIC_API_KEY, THALIYOLA_TOKEN (a bot account with access to the project, made with
+# --owner-of <project>; its pages go to review, where a Reviewer or Project admin approves them).
 thaliyola-docs:
   image: node:22
   rules:

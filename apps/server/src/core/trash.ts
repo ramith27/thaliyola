@@ -1,7 +1,7 @@
 import { withTx, type Queryable } from "../db/pool.js";
 import { audit } from "./audit.js";
 import { ForbiddenError, ValidationError, type RequestContext } from "./context.js";
-import { assertCanApprove, assertCanManage, canApprove, isAdmin } from "./permissions.js";
+import { assertCanManage, assertCanModerate, can, canModerate } from "./permissions.js";
 import { hardDeleteItem, removeStoredFiles } from "./purge.js";
 import { getScopeBySlug } from "./scopes.js";
 import { findItem } from "./writes.js";
@@ -22,7 +22,7 @@ async function closeProposals(db: Queryable, ids: string[], reviewerId: string, 
 
 export async function deleteItem(ctx: RequestContext, id: string) {
   const item = await findItem(ctx.db, id);
-  await assertCanApprove(ctx, item.scope_id);
+  await assertCanModerate(ctx, item.scope_id);
   if (item.status === "deleted") throw new ValidationError(`${item.kind} is already in the trash`);
   await withTx(ctx.db, async (db) => {
     await db.query(`UPDATE ${table(item.kind)} SET status_before_delete = status, status = 'deleted', deleted_at = now(), deleted_by = $2 WHERE id = $1`, [id, ctx.actor.id]);
@@ -35,7 +35,7 @@ export async function deleteItem(ctx: RequestContext, id: string) {
 
 export async function restoreItem(ctx: RequestContext, id: string) {
   const item = await findItem(ctx.db, id);
-  await assertCanApprove(ctx, item.scope_id);
+  await assertCanModerate(ctx, item.scope_id);
   if (item.status !== "deleted") throw new ValidationError(`${item.kind} isn't in the trash`);
   const scope = (await ctx.db.query<{ status: string; slug: string }>("SELECT status, slug FROM scopes WHERE id = $1", [item.scope_id])).rows[0]!;
   if (scope.status === "deleted") throw new ValidationError(`its project ${scope.slug} is in the trash; restore the project instead`);
@@ -55,6 +55,8 @@ export async function deleteProject(ctx: RequestContext, slug: string, confirm: 
   if (scope.kind !== "project") throw new ValidationError("only projects can be deleted; the team space and library always exist");
   await assertCanManage(ctx, scope);
   if (scope.status === "deleted") throw new ValidationError("the project is already in the trash");
+  const subs = await ctx.db.query<{ name: string }>("SELECT name FROM scopes WHERE parent_id = $1 AND status <> 'deleted' ORDER BY name", [scope.id]);
+  if (subs.rowCount) throw new ValidationError(`move or delete its sub-projects first: ${subs.rows.map((r) => r.name).join(", ")}`);
   if (confirm.trim() !== scope.name.trim() && confirm.trim() !== scope.slug) throw new ValidationError(`type the project's name (${scope.name}) to confirm`);
   const counts = await withTx(ctx.db, async (db) => {
     const a = await db.query<{ id: string }>(
@@ -100,7 +102,7 @@ export async function restoreProject(ctx: RequestContext, slug: string) {
 
 /** Admins: delete one trashed item for good. */
 export async function emptyItem(ctx: RequestContext, id: string) {
-  if (!isAdmin(ctx)) throw new ForbiddenError("only admins can delete permanently");
+  if (!can(ctx, "purge")) throw new ForbiddenError("deleting for good needs Delete permanently (Administrators have it)");
   const item = await findItem(ctx.db, id);
   if (item.status !== "deleted") throw new ValidationError("move it to the trash first");
   const res = await withTx(ctx.db, (db) => hardDeleteItem(ctx, db, item, "Deleted permanently from the trash"));
@@ -110,7 +112,7 @@ export async function emptyItem(ctx: RequestContext, id: string) {
 
 /** Admins: delete a trashed project and everything in it for good. Type the name to confirm. */
 export async function emptyProject(ctx: RequestContext, slug: string, confirm: string) {
-  if (!isAdmin(ctx)) throw new ForbiddenError("only admins can delete permanently");
+  if (!can(ctx, "purge")) throw new ForbiddenError("deleting for good needs Delete permanently (Administrators have it)");
   const scope = await getScopeBySlug(ctx.db, slug);
   if (scope.kind !== "project") throw new ValidationError("only projects can be deleted");
   if (scope.status !== "deleted") throw new ValidationError("move the project to the trash first");
@@ -133,6 +135,9 @@ export async function emptyProject(ctx: RequestContext, slug: string, confirm: s
     await db.query("DELETE FROM favourites WHERE target_id = $1", [scope.id]);
     await db.query("DELETE FROM notifications WHERE target_id = $1", [scope.id]);
     await db.query("UPDATE invitations SET scope_id = NULL, scope_role = NULL WHERE scope_id = $1", [scope.id]);
+    // Documentation runs (their pages cascade) and page records still point at the project.
+    await db.query("DELETE FROM doc_runs WHERE scope_id = $1", [scope.id]);
+    await db.query("DELETE FROM doc_pages WHERE scope_id = $1", [scope.id]);
     // Proposals raised here about items elsewhere (e.g. shares) lose their scope with it.
     const rev = (await db.query<{ id: string }>("SELECT id FROM revisions WHERE scope_id = $1", [scope.id])).rows.map((r) => r.id);
     await db.query("DELETE FROM revision_comments WHERE revision_id = ANY($1::uuid[])", [rev]);
@@ -147,7 +152,11 @@ export async function emptyProject(ctx: RequestContext, slug: string, confirm: s
       ctx.actor.id,
       JSON.stringify({ items: items.rowCount ?? 0, repositories: components.length }),
     ]);
-    await audit(db, ctx.actor.id, "purge_project", null);
+    await audit(db, ctx.actor.id, "purge_project", scope.id, {
+      targetKind: "project",
+      targetLabel: scope.name,
+      details: { slug: scope.slug, items: items.rowCount ?? 0, repositories: components.length },
+    });
     return files;
   });
   await removeStoredFiles(ctx, orphaned);
@@ -178,6 +187,6 @@ export async function listTrash(ctx: RequestContext) {
       WHERE x.status = 'deleted' AND s.status <> 'deleted' ORDER BY x.deleted_at DESC LIMIT 300`,
   );
   const visibleItems = [];
-  for (const it of items.rows) if (await canApprove(ctx, it.scope_id)) visibleItems.push({ ...it, scope_id: undefined });
-  return { projects: visibleProjects.map(({ id: _id, ...p }) => p), items: visibleItems, can_empty: isAdmin(ctx) };
+  for (const it of items.rows) if (await canModerate(ctx, it.scope_id)) visibleItems.push({ ...it, scope_id: undefined });
+  return { projects: visibleProjects.map(({ id: _id, ...p }) => p), items: visibleItems, can_empty: can(ctx, "purge") };
 }

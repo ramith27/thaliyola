@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import { api, getToken } from "../api";
 import { CopyBlock } from "./connect";
+import { Page, PageHeader } from "../components/kit";
 import { ErrorBox, formatDate, Loading, Markdown, Notice } from "../components/ui";
 import { useApi, useLiveRefresh } from "../hooks";
 import { href } from "../router";
@@ -85,261 +86,266 @@ export function DesignPage({ slug }: { slug: string }) {
   const contrastFor = (name: string, mode: "light" | "dark") => data.contrast.find((c) => c.name === name && c.mode === mode);
 
   return (
-    <div className="page design-page">
-      <p className="breadcrumbs muted small">
-        <a href={href(`/${data.scope === "team" || data.scope === "library" ? "scope" : "project"}/${data.scope}`)}>{data.name}</a> / design
-      </p>
-      <div className="page-head">
-        <div>
-          <h1>{data.name} design system</h1>
-          <p className="muted small">
-            {data.based_on ? (
-              <>
-                Based on <a href={href(`/scope/${data.based_on.slug}/design`)}>{data.based_on.name}</a>, overriding what differs.{" "}
-              </>
-            ) : null}
-            {data.version ? `Version ${data.version}, updated ${formatDate(data.updated_at)}` : "Not recorded yet"}
-            {data.source ? ` · from ${data.source}` : ""}
-            {data.used_by.length ? ` · used by ${data.used_by.map((u) => u.name).join(", ")}` : ""}
-          </p>
-        </div>
-        <div className="actions">
-          {(["css", "tailwind", "w3c", "json"] as const).map((f) => (
-            <button key={f} className="btn btn-small" disabled={empty} onClick={() => download(data.scope, f).catch(setExportError)}>
-              {f === "css" ? "CSS variables" : f === "tailwind" ? "Tailwind" : f === "w3c" ? "Design tokens" : "JSON"}
-            </button>
-          ))}
-          {data.can_edit && (
-            <button className="btn btn-small btn-primary" onClick={() => setEditing((e) => !e)}>
-              {editing ? "Close editor" : "Edit"}
-            </button>
-          )}
-        </div>
-      </div>
-      <ErrorBox error={exportError} />
+    <Page width="wide">
+      <div className="design-page">
+        <PageHeader
+          title={`${data.name} design system`}
+          documentTitle={`${data.name}: design system`}
+          icon="sliders"
+          scope={data.scope}
+          crumbs={[{ label: data.name, href: href(`/${data.scope === "team" || data.scope === "library" ? "scope" : "project"}/${data.scope}`) }, { label: "Design system", muted: true }]}
+          meta={
+            <span className="muted small">
+              {data.based_on ? (
+                <>
+                  Based on <a href={href(`/scope/${data.based_on.slug}/design`)}>{data.based_on.name}</a>, overriding what differs.{" "}
+                </>
+              ) : null}
+              {data.version ? `Version ${data.version}, updated ${formatDate(data.updated_at)}` : "Not recorded yet"}
+              {data.source ? ` · from ${data.source}` : ""}
+              {data.used_by.length ? ` · used by ${data.used_by.map((u) => u.name).join(", ")}` : ""}
+            </span>
+          }
+          actions={
+            <>
+              {(["css", "tailwind", "w3c", "json"] as const).map((f) => (
+                <button key={f} className="btn btn-small" disabled={empty} onClick={() => download(data.scope, f).catch(setExportError)}>
+                  {f === "css" ? "CSS variables" : f === "tailwind" ? "Tailwind" : f === "w3c" ? "Design tokens" : "JSON"}
+                </button>
+              ))}
+              {data.can_edit && (
+                <button className="btn btn-small btn-primary" onClick={() => setEditing((e) => !e)}>
+                  {editing ? "Close editor" : "Edit"}
+                </button>
+              )}
+            </>
+          }
+        />
+        <ErrorBox error={exportError} />
 
-      {editing && <DesignEditor design={data} onSaved={() => (setEditing(false), reload())} />}
+        {editing && <DesignEditor design={data} onSaved={() => (setEditing(false), reload())} />}
 
-      {empty && !editing && (
-        <Notice>
-          No design recorded yet. In Claude Code, open the app's repository and run <code>/mcp__thaliyola__capture-design</code>: it reads the colours, fonts, spacing and components from
-          the code. {data.can_edit ? "Or press Edit to base it on the Library's system or paste tokens." : ""}
-        </Notice>
-      )}
+        {empty && !editing && (
+          <Notice>
+            No design recorded yet. In Claude Code, open the app's repository and run <code>/mcp__thaliyola__capture-design</code>: it reads the colours, fonts, spacing and components from
+            the code. {data.can_edit ? "Or press Edit to base it on the Library's system or paste tokens." : ""}
+          </Notice>
+        )}
 
-      {!!t.colors?.length && (
-        <section>
-          <h2>Colour</h2>
-          <ul className="plain swatches">
-            {t.colors.map((c) => {
-              const light = contrastFor(c.name, "light");
-              const dark = contrastFor(c.name, "dark");
-              return (
-                <li key={c.name} className="swatch card">
-                  <div className="swatch-chips">
-                    <span className="swatch-chip" style={{ background: c.value } as CSSProperties} title={`Light: ${c.value}`} />
-                    {c.dark && <span className="swatch-chip" style={{ background: c.dark } as CSSProperties} title={`Dark: ${c.dark}`} />}
-                  </div>
-                  <div className="swatch-body">
-                    <div>
-                      <strong>{c.name}</strong> {c.role && <span className="badge badge-type">{c.role}</span>}
+        {!!t.colors?.length && (
+          <section>
+            <h2>Colour</h2>
+            <ul className="plain swatches">
+              {t.colors.map((c) => {
+                const light = contrastFor(c.name, "light");
+                const dark = contrastFor(c.name, "dark");
+                return (
+                  <li key={c.name} className="swatch card">
+                    <div className="swatch-chips">
+                      <span className="swatch-chip" style={{ background: c.value } as CSSProperties} title={`Light: ${c.value}`} />
+                      {c.dark && <span className="swatch-chip" style={{ background: c.dark } as CSSProperties} title={`Dark: ${c.dark}`} />}
                     </div>
-                    {data.based_on && <div className="muted small">{own.has(c.name.toLowerCase()) ? `${data.name} override` : `from ${data.based_on.name}`}</div>}
-                    <code className="small">
-                      {c.value}
-                      {c.dark ? ` · dark ${c.dark}` : ""}
-                    </code>
-                    {c.usage && <div className="small muted">{c.usage}</div>}
-                    {(light || dark) && (
-                      <div className="small">
-                        {[light, dark].filter(Boolean).map((r) => (
-                          <span key={r!.mode} className={`contrast ${r!.passes ? "ok" : "low"}`}>
-                            {r!.mode} {r!.ratio}:1 {r!.passes ? "AA" : "below AA"}
-                          </span>
-                        ))}
+                    <div className="swatch-body">
+                      <div>
+                        <strong>{c.name}</strong> {c.role && <span className="badge badge-type">{c.role}</span>}
                       </div>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
+                      {data.based_on && <div className="muted small">{own.has(c.name.toLowerCase()) ? `${data.name} override` : `from ${data.based_on.name}`}</div>}
+                      <code className="small">
+                        {c.value}
+                        {c.dark ? ` · dark ${c.dark}` : ""}
+                      </code>
+                      {c.usage && <div className="small muted">{c.usage}</div>}
+                      {(light || dark) && (
+                        <div className="small">
+                          {[light, dark].filter(Boolean).map((r) => (
+                            <span key={r!.mode} className={`contrast ${r!.passes ? "ok" : "low"}`}>
+                              {r!.mode} {r!.ratio}:1 {r!.passes ? "AA" : "below AA"}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
 
-      {(!!t.typography?.fonts?.length || !!t.typography?.scale?.length) && (
-        <section>
-          <h2>Typography</h2>
-          {(t.typography?.fonts ?? []).map((f) => (
-            <div key={f.role} className="font-row">
-              <span className="badge badge-type">{f.role}</span>
-              <span className="font-sample" style={{ fontFamily: f.family }}>
-                The quick brown fox jumps over the lazy dog
-              </span>
-              <code className="small">
-                {f.family}
-                {f.weights?.length ? ` · ${f.weights.join(", ")}` : ""}
-              </code>
+        {(!!t.typography?.fonts?.length || !!t.typography?.scale?.length) && (
+          <section>
+            <h2>Typography</h2>
+            {(t.typography?.fonts ?? []).map((f) => (
+              <div key={f.role} className="font-row">
+                <span className="badge badge-type">{f.role}</span>
+                <span className="font-sample" style={{ fontFamily: f.family }}>
+                  The quick brown fox jumps over the lazy dog
+                </span>
+                <code className="small">
+                  {f.family}
+                  {f.weights?.length ? ` · ${f.weights.join(", ")}` : ""}
+                </code>
+              </div>
+            ))}
+            {!!t.typography?.scale?.length && (
+              <div className="table-wrap">
+                <table className="table type-scale">
+                  <tbody>
+                    {t.typography.scale.map((s) => {
+                      const size = px(s.size);
+                      return (
+                        <tr key={s.name}>
+                          <td>
+                            <strong>{s.name}</strong>
+                            <div className="small muted">
+                              {s.size}
+                              {s.line_height ? ` / ${s.line_height}` : ""}
+                              {s.weight ? ` · ${s.weight}` : ""}
+                            </div>
+                          </td>
+                          <td>
+                            <span
+                              className="type-sample"
+                              style={{
+                                fontSize: size ? `${Math.min(size, 44)}px` : undefined,
+                                lineHeight: s.line_height,
+                                fontWeight: s.weight,
+                                fontFamily: (t.typography?.fonts ?? []).find((f) => f.role === (s.font ?? "body"))?.family,
+                              }}
+                            >
+                              {s.usage || "Design that every session can use"}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
+
+        {(!!t.spacing?.length || !!t.radii?.length || !!t.shadows?.length) && (
+          <section className="grid-2">
+            {!!t.spacing?.length && (
+              <div>
+                <h2>Spacing</h2>
+                <ul className="plain scale-list">
+                  {t.spacing.map((s) => (
+                    <li key={s.name}>
+                      <span className="scale-name">{s.name}</span>
+                      <span className="space-bar" style={{ width: `${Math.min(px(s.value) ?? 0, 240)}px` }} />
+                      <code className="small">{s.value}</code>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <div>
+              {!!t.radii?.length && (
+                <>
+                  <h2>Corners</h2>
+                  <ul className="plain shape-list">
+                    {t.radii.map((r) => (
+                      <li key={r.name}>
+                        <span className="shape" style={{ borderRadius: r.value }} />
+                        <span className="small">
+                          {r.name} <code>{r.value}</code>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {!!t.shadows?.length && (
+                <>
+                  <h2>Shadows</h2>
+                  <ul className="plain shape-list">
+                    {t.shadows.map((s) => (
+                      <li key={s.name}>
+                        <span className="shape" style={{ boxShadow: s.value }} />
+                        <span className="small">{s.name}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
             </div>
-          ))}
-          {!!t.typography?.scale?.length && (
+          </section>
+        )}
+
+        {!!t.breakpoints?.length && (
+          <section>
+            <h2>Breakpoints</h2>
+            <p className="small">
+              {t.breakpoints.map((b) => (
+                <span key={b.name} className="chip-static">
+                  {b.name} {b.value}
+                </span>
+              ))}
+            </p>
+          </section>
+        )}
+
+        {!!t.components?.length && (
+          <section>
+            <h2>Components</h2>
             <div className="table-wrap">
-              <table className="table type-scale">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Component</th>
+                    <th>What it's for</th>
+                    <th>Where</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  {t.typography.scale.map((s) => {
-                    const size = px(s.size);
-                    return (
-                      <tr key={s.name}>
-                        <td>
-                          <strong>{s.name}</strong>
-                          <div className="small muted">
-                            {s.size}
-                            {s.line_height ? ` / ${s.line_height}` : ""}
-                            {s.weight ? ` · ${s.weight}` : ""}
-                          </div>
-                        </td>
-                        <td>
-                          <span
-                            className="type-sample"
-                            style={{
-                              fontSize: size ? `${Math.min(size, 44)}px` : undefined,
-                              lineHeight: s.line_height,
-                              fontWeight: s.weight,
-                              fontFamily: (t.typography?.fonts ?? []).find((f) => f.role === (s.font ?? "body"))?.family,
-                            }}
-                          >
-                            {s.usage || "Design that every session can use"}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {t.components.map((c) => (
+                    <tr key={c.name}>
+                      <td>
+                        <strong>{c.name}</strong> {c.status && c.status !== "stable" && <span className="badge badge-type">{c.status}</span>}
+                      </td>
+                      <td className="small">{c.description}</td>
+                      <td className="small">{c.path && <code>{c.path}</code>}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
-          )}
-        </section>
-      )}
+          </section>
+        )}
 
-      {(!!t.spacing?.length || !!t.radii?.length || !!t.shadows?.length) && (
-        <section className="grid-2">
-          {!!t.spacing?.length && (
-            <div>
-              <h2>Spacing</h2>
-              <ul className="plain scale-list">
-                {t.spacing.map((s) => (
-                  <li key={s.name}>
-                    <span className="scale-name">{s.name}</span>
-                    <span className="space-bar" style={{ width: `${Math.min(px(s.value) ?? 0, 240)}px` }} />
-                    <code className="small">{s.value}</code>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <div>
-            {!!t.radii?.length && (
-              <>
-                <h2>Corners</h2>
-                <ul className="plain shape-list">
-                  {t.radii.map((r) => (
-                    <li key={r.name}>
-                      <span className="shape" style={{ borderRadius: r.value }} />
-                      <span className="small">
-                        {r.name} <code>{r.value}</code>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-            {!!t.shadows?.length && (
-              <>
-                <h2>Shadows</h2>
-                <ul className="plain shape-list">
-                  {t.shadows.map((s) => (
-                    <li key={s.name}>
-                      <span className="shape" style={{ boxShadow: s.value }} />
-                      <span className="small">{s.name}</span>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </div>
-        </section>
-      )}
+        {(data.principles || t.icons || t.voice || t.accessibility) && (
+          <section className="design-rules">
+            <h2>Rules</h2>
+            {data.principles && <Markdown text={data.principles} />}
+            <dl className="facts">
+              {t.icons && (
+                <>
+                  <dt>Icons</dt>
+                  <dd>{t.icons}</dd>
+                </>
+              )}
+              {t.voice && (
+                <>
+                  <dt>Voice</dt>
+                  <dd>{t.voice}</dd>
+                </>
+              )}
+              {t.accessibility && (
+                <>
+                  <dt>Accessibility</dt>
+                  <dd>{t.accessibility}</dd>
+                </>
+              )}
+            </dl>
+          </section>
+        )}
 
-      {!!t.breakpoints?.length && (
-        <section>
-          <h2>Breakpoints</h2>
-          <p className="small">
-            {t.breakpoints.map((b) => (
-              <span key={b.name} className="chip-static">
-                {b.name} {b.value}
-              </span>
-            ))}
-          </p>
-        </section>
-      )}
-
-      {!!t.components?.length && (
-        <section>
-          <h2>Components</h2>
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Component</th>
-                  <th>What it's for</th>
-                  <th>Where</th>
-                </tr>
-              </thead>
-              <tbody>
-                {t.components.map((c) => (
-                  <tr key={c.name}>
-                    <td>
-                      <strong>{c.name}</strong> {c.status && c.status !== "stable" && <span className="badge badge-type">{c.status}</span>}
-                    </td>
-                    <td className="small">{c.description}</td>
-                    <td className="small">{c.path && <code>{c.path}</code>}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      {(data.principles || t.icons || t.voice || t.accessibility) && (
-        <section className="design-rules">
-          <h2>Rules</h2>
-          {data.principles && <Markdown text={data.principles} />}
-          <dl className="facts">
-            {t.icons && (
-              <>
-                <dt>Icons</dt>
-                <dd>{t.icons}</dd>
-              </>
-            )}
-            {t.voice && (
-              <>
-                <dt>Voice</dt>
-                <dd>{t.voice}</dd>
-              </>
-            )}
-            {t.accessibility && (
-              <>
-                <dt>Accessibility</dt>
-                <dd>{t.accessibility}</dd>
-              </>
-            )}
-          </dl>
-        </section>
-      )}
-
-      <Decisions design={data} onChange={reload} />
-    </div>
+        <Decisions design={data} onChange={reload} />
+      </div>
+    </Page>
   );
 }
 

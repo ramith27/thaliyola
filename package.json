@@ -1,11 +1,13 @@
 {
   "name": "thaliyola",
+  "version": "1.1.1",
   "private": true,
   "license": "MIT",
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
-    "dev": "pnpm --filter @thaliyola/server dev"
+    "dev": "pnpm --filter @thaliyola/server dev",
+    "version:bump": "node scripts/version-bump.mjs"
   }
 }

@@ -17,6 +17,9 @@ services:
     build:
       context: .
       dockerfile: apps/server/Dockerfile
+      # The commit shown on /healthz and Help › About: BUILD_SHA=$(git rev-parse HEAD) docker compose up -d --build
+      args:
+        BUILD_SHA: ${BUILD_SHA:-}
     env_file: .env
     environment:
       DATABASE_URL: postgres://thaliyola:${POSTGRES_PASSWORD:-thaliyola}@db:5432/thaliyola

@@ -1,3 +1,4 @@
+import { reviewSelfApprovalOn } from "./approvals.js";
 import type { RequestContext } from "./context.js";
 import { onProposal, track } from "./notify.js";
 import { canApprove } from "./permissions.js";
@@ -22,12 +23,16 @@ import {
  */
 
 export async function settleProposal<T extends { revision_id: string }>(ctx: RequestContext, scopeId: string, proposal: T) {
-  if (!(await canApprove(ctx, scopeId))) {
+  // Already published when it was written (personal space, or the author may publish here).
+  if ((proposal as { published?: boolean }).published) return { ...proposal, published: true };
+  // A reviewer's own edit counts as approving their own proposal: with "Reviewers may approve their own proposals"
+  // off, it waits for someone else like anyone's.
+  if (!(await canApprove(ctx, scopeId)) || !(await reviewSelfApprovalOn(ctx))) {
     // Not self-approvable after all: now tell the reviewers.
     if (ctx.quietProposals) track(onProposal(ctx.db, ctx.settings, proposal.revision_id).catch(() => undefined));
     return { ...proposal, published: false };
   }
-  const approved = await approveRevision(ctx, proposal.revision_id);
+  const approved = await approveRevision(ctx, proposal.revision_id, undefined, { settle: true });
   return { ...proposal, ...approved, status: "published" as const, published: true };
 }
 

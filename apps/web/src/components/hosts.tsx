@@ -1,16 +1,17 @@
 import { useState } from "react";
 import { CopyBlock } from "../pages/connect";
+import { Tabs } from "./kit";
 
 /** Setup for MCP hosts other than Claude Code, and CI jobs that keep repository docs current. */
 
-interface Setup {
+export interface Setup {
   url: string; // MCP endpoint
   token: string;
   project?: string;
   component?: string;
 }
 
-interface HostGuide {
+export interface HostGuide {
   id: string;
   name: string;
   steps: { label: string; text: string }[];
@@ -109,33 +110,68 @@ export function hostGuides(s: Setup): HostGuide[] {
   ];
 }
 
+/** Where each tool reads its standing instructions (the AGENTS_MD snippet goes there). */
+export const INSTRUCTIONS_FILE: Record<string, string> = {
+  "claude-code": "the repository's CLAUDE.md",
+  "claude-ai": "a claude.ai project's instructions",
+  codex: "the repository's AGENTS.md",
+  cursor: "the repository's AGENTS.md",
+  vscode: "AGENTS.md or .github/copilot-instructions.md",
+  "copilot-cli": "the repository's AGENTS.md",
+  gemini: "the repository's GEMINI.md",
+  windsurf: "the repository's AGENTS.md",
+  opencode: "the repository's AGENTS.md",
+  kiro: ".kiro/steering/thaliyola.md",
+  other: "AGENTS.md (or the tool's instructions file)",
+  all: "the repository's AGENTS.md (or each tool's instructions file)",
+};
+
+/** One host's config snippets, each with Copy, and its note. */
+export function HostSetup({ guide }: { guide: HostGuide }) {
+  return (
+    <div className="tl-stack">
+      {guide.steps.map((st) => (
+        <CopyBlock key={st.label} label={st.label} text={st.text} />
+      ))}
+      {guide.note && <p className="muted small">{guide.note}</p>}
+    </div>
+  );
+}
+
+/** The connect.sh one-liner that sets up every agent found on the machine. */
+export function ConnectScript({ origin, token }: { origin: string; token: string }) {
+  return (
+    <div className="tl-stack">
+      <p className="muted small">
+        Finds Claude Code, Codex, Gemini CLI, Copilot CLI, VS Code, Cursor, Windsurf, OpenCode and Kiro and asks before adding Thaliyola to each. Config files are backed
+        up first. Read it before running:{" "}
+        <a href={`${origin}/connect.sh`} target="_blank" rel="noopener noreferrer">
+          connect.sh
+        </a>
+        .
+      </p>
+      <CopyBlock label="Run in a terminal" language="shell" text={`curl -fsSL ${origin}/connect.sh | THALIYOLA_TOKEN=${token} sh`} />
+      <p className="muted small">The command includes your token, so it ends up in your shell history. Revoke the token in Account if that's a problem.</p>
+    </div>
+  );
+}
+
+/** Every agent other than Claude Code: the one-liner, a host picker (kit Tabs, arrow keys) and the instructions snippet. */
 export function OtherAgents({ setup, origin }: { setup: Setup; origin: string }) {
   const guides = hostGuides(setup);
   const [host, setHost] = useState(guides[0]!.id);
   const g = guides.find((x) => x.id === host) ?? guides[0]!;
   return (
-    <>
-      <h3>One command for every agent on your machine</h3>
-      <p className="muted small">
-        Finds Claude Code, Codex, Gemini CLI, Copilot CLI, VS Code, Cursor, Windsurf, OpenCode and Kiro and asks before adding Thaliyola to each. Config files are backed
-        up first. Read it before running: <a href={`${origin}/connect.sh`}>connect.sh</a>.
-      </p>
-      <CopyBlock text={`curl -fsSL ${origin}/connect.sh | THALIYOLA_TOKEN=${setup.token} sh`} />
-
-      <h3>Or set up one by hand</h3>
-      <div className="chips host-tabs" role="tablist" aria-label="Agent">
-        {guides.map((x) => (
-          <button key={x.id} role="tab" aria-selected={x.id === host} className={`chip ${x.id === host ? "active" : ""}`} onClick={() => setHost(x.id)}>
-            {x.name}
-          </button>
-        ))}
+    <div className="tl-stack">
+      <h3 className="tl-subhead">One command for every agent on your machine</h3>
+      <ConnectScript origin={origin} token={setup.token} />
+      <h3 className="tl-subhead">Or set up one by hand</h3>
+      <Tabs label="Agent" idPrefix="tl-host" value={g.id} onChange={setHost} items={guides.map((x) => ({ id: x.id, label: x.name }))} />
+      <div role="tabpanel" id={`tl-host-panel-${g.id}`} aria-labelledby={`tl-host-tab-${g.id}`} className="tl-tabpanel">
+        <HostSetup guide={g} />
       </div>
-      {g.steps.map((st) => (
-        <CopyBlock key={st.label} label={st.label} text={st.text} />
-      ))}
-      {g.note && <p className="muted small">{g.note}</p>}
-      <CopyBlock label="Add to the repository's AGENTS.md (or the host's instructions file)" text={AGENTS_MD} />
-    </>
+      <CopyBlock label={`Add to ${INSTRUCTIONS_FILE[g.id] ?? INSTRUCTIONS_FILE.other}`} language="markdown" text={AGENTS_MD} />
+    </div>
   );
 }
 
@@ -248,22 +284,29 @@ export function CiDocs({ mcpUrl }: { mcpUrl: string }) {
   const [ci, setCi] = useState(templates[0]!.id);
   const t = templates.find((x) => x.id === ci) ?? templates[0]!;
   return (
-    <>
+    <div className="tl-stack">
       <p className="muted small">
-        After the first <code>/mcp__thaliyola__document-repo</code>, a CI job can keep the docs and the security dashboard current on every merge. Its first step
-        uploads the lockfiles for vulnerability matching (no Anthropic key needed; keep just that step if you only want security). Then Claude Code runs headless, sends the changed files,
-        and rewrites only the pages whose facts changed (and does nothing when nothing relevant changed). Create a bot token that owns the project, so pages publish directly, with{" "}
-        <code>thaliyola-admin create-token --service docs-bot --name "CI docs" --owner-of &lt;project&gt;</code> on the server; with a writer token they go to review.
+        After the first <code>/mcp__thaliyola__document-repo</code>, a CI job can keep the docs and the security dashboard current on every merge.
       </p>
-      <div className="chips host-tabs" role="tablist" aria-label="CI system">
-        {templates.map((x) => (
-          <button key={x.id} role="tab" aria-selected={x.id === ci} className={`chip ${x.id === ci ? "active" : ""}`} onClick={() => setCi(x.id)}>
-            {x.name}
-          </button>
-        ))}
+      <ul className="tl-list small">
+        <li>
+          Its first step uploads the lockfiles for vulnerability matching. It needs no Anthropic key: keep just that step if you only want security checks.
+        </li>
+        <li>Then Claude Code runs headless, sends the changed files, and rewrites only the pages whose facts changed. When nothing relevant changed, it does nothing.</li>
+      </ul>
+      <Tabs label="CI system" idPrefix="tl-ci" value={t.id} onChange={setCi} items={templates.map((x) => ({ id: x.id, label: x.name }))} />
+      <div role="tabpanel" id={`tl-ci-panel-${t.id}`} aria-labelledby={`tl-ci-tab-${t.id}`} className="tl-tabpanel tl-stack">
+        <CopyBlock label={t.file} language="yaml" text={t.text} />
+        <p className="muted small">
+          Needs: {t.secrets} The full git history is fetched so the job can diff against the last documented commit.
+        </p>
       </div>
-      <CopyBlock label={t.file} text={t.text} />
-      <p className="muted small">Needs: {t.secrets} The full git history is fetched so the job can diff against the last documented commit.</p>
-    </>
+      <h3 className="tl-subhead">For admins: the job's token</h3>
+      <p className="muted small">
+        Create a bot account with access to the project with the command below, on the server. Its pages go to review, where a Reviewer or Project admin approves them.
+        Save the token it prints as THALIYOLA_TOKEN in the CI secrets.
+      </p>
+      <CopyBlock label="On the server" language="shell" text={'thaliyola-admin create-token --service docs-bot --name "CI docs" --owner-of <project>'} />
+    </div>
   );
 }

@@ -4,10 +4,11 @@ import { z } from "zod";
 import { sameOrigin } from "../auth/index.js";
 import type { Settings } from "../config.js";
 import { audit } from "../core/audit.js";
-import { ForbiddenError, NotFoundError, ValidationError, type Actor, type RequestContext } from "../core/context.js";
+import { ForbiddenError, nameWithEmail, NotFoundError, ValidationError, type Actor, type RequestContext } from "../core/context.js";
 import { consumeActionToken, NOTIFICATION_KINDS, peekActionToken } from "../core/notify.js";
 import { readableScopes } from "../core/permissions.js";
 import { approveRevision } from "../core/review.js";
+import { actorById } from "../core/users.js";
 import { findItemFor } from "../core/writes.js";
 import type { Db } from "../db/pool.js";
 
@@ -145,7 +146,7 @@ export function actionsRouter(db: Db, settings: Settings) {
       const t = await peekActionToken(db, String(req.params.token));
       if (!t) return page(res, "Link expired", `<p>This link has expired or was already used. Open the review queue in Thaliyola instead.</p><a class="btn" href="/#/review">Open review queue</a>`);
       const { rows } = await db.query(
-        `SELECT r.summary, r.state, s.name AS scope, coalesce(u.display_name, u.email) AS author FROM revisions r
+        `SELECT r.summary, r.state, s.name AS scope, u.display_name AS author_name, coalesce(u.email, u.subject) AS author_email FROM revisions r
            JOIN scopes s ON s.id = r.scope_id JOIN users u ON u.id = r.author_id WHERE r.id = $1`,
         [t.revision_id],
       );
@@ -154,7 +155,7 @@ export function actionsRouter(db: Db, settings: Settings) {
       page(
         res,
         "Approve this change?",
-        `<p><strong>${escapeHtml(r.summary)}</strong></p><p class="muted">Proposed by ${escapeHtml(r.author)} in ${escapeHtml(r.scope)}.</p>
+        `<p><strong>${escapeHtml(r.summary)}</strong></p><p class="muted">Proposed by ${escapeHtml(nameWithEmail({ name: r.author_name, email: r.author_email }))} in ${escapeHtml(r.scope)}.</p>
          <form method="post"><button type="submit">Approve</button><a class="btn secondary" href="/#/review/${t.revision_id}">Review the diff first</a></form>`,
       );
     } catch (err) {
@@ -167,8 +168,9 @@ export function actionsRouter(db: Db, settings: Settings) {
       if (!sameOrigin(req, publicOrigin)) return void res.status(403).send("cross-site request refused");
       const t = await consumeActionToken(db, String(req.params.token));
       if (!t) return page(res, "Link expired", `<p>This link has expired or was already used.</p><a class="btn" href="/#/review">Open review queue</a>`);
-      const actor = (await db.query<Actor>(`SELECT id, subject, email, kind, is_admin AS "isAdmin", disabled_at IS NOT NULL AS disabled FROM users WHERE id = $1`, [t.user_id])).rows[0];
-      if (!actor || actor.disabled) return page(res, "Not allowed", "<p>This account can't approve changes.</p>");
+      // The full actor (organisation permissions included), so approving follows the same rules as in the app.
+      const actor = await actorById(db, t.user_id);
+      if (!actor || actor.disabled || !actor.approved) return page(res, "Not allowed", "<p>This account can't approve changes.</p>");
       try {
         await approveRevision({ db, settings, actor }, t.revision_id);
         await audit(db, actor.id, "email_approve", t.revision_id);

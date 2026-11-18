@@ -11,7 +11,7 @@ export async function listImpactNotices(ctx: RequestContext, opts: { project?: s
   const { rows } = await ctx.db.query(
     `SELECT n.id, n.state, n.summary, n.source_kind, n.source_id, n.source_version, n.created_at, n.acked_at,
             coalesce(a.title, f.title) AS source_title, s.slug AS source_scope, c.slug AS component,
-            coalesce(u.email, u.subject) AS acked_by
+            coalesce(u.email, u.subject) AS acked_by, u.display_name AS acked_by_name
        FROM impact_notices n
        LEFT JOIN articles a ON n.source_kind = 'article' AND a.id = n.source_id
        LEFT JOIN findings f ON n.source_kind = 'finding' AND f.id = n.source_id

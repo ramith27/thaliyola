@@ -178,8 +178,8 @@ describe("lockfiles", () => {
 });
 
 describe("vulnerabilities", () => {
-  it("hands writers a one-time upload link; readers can't scan", async () => {
-    await expect(beginDependencyScan(await ctx("viewer@example.com"), { repo: "https://github.com/acme/shop-web.git" })).rejects.toThrow(/writers, owners and admins/);
+  it("hands Contributors a one-time upload link; readers can't scan", async () => {
+    await expect(beginDependencyScan(await ctx("viewer@example.com"), { repo: "https://github.com/acme/shop-web.git" })).rejects.toThrow(/Contributors and Project admins, Security leads and Administrators/);
     const scan = await beginDependencyScan(await ctx("dev@example.com"), { repo: "https://github.com/acme/shop-web.git", head_sha: "abc123" });
     expect(scan).toMatchObject({ project: "shop", repository: "web", expires_in_minutes: 30 });
     expect(scan.upload_url).toMatch(/^https:\/\/kb\.example\.com\/deps\/upload\/[\w-]{20,}$/);
@@ -213,7 +213,7 @@ describe("vulnerabilities", () => {
     const asReader = await listVulnerabilities(await ctx("viewer@example.com"), { project: "shop" });
     expect(asReader.vulnerabilities).toHaveLength(0);
     expect(asReader.counts_only).toEqual([{ project: "shop", critical: 1, high: 2, medium: 1, low: 0 }]);
-    await expect(getVulnerability(await ctx("viewer@example.com"), lodash.id)).rejects.toThrow(/writers, owners and admins/);
+    await expect(getVulnerability(await ctx("viewer@example.com"), lodash.id)).rejects.toThrow(/Contributors and Project admins, Security leads and Administrators/);
 
     // One security notification for each writer, owner and admin; the critical one isn't announced again.
     const notes = await db.query<{ email: string; title: string }>("SELECT u.email, n.title FROM notifications n JOIN users u ON u.id = n.user_id WHERE n.kind = 'security'");
@@ -223,7 +223,7 @@ describe("vulnerabilities", () => {
     expect((await db.query("SELECT 1 FROM notifications WHERE kind = 'security'")).rowCount).toBe(3);
   });
 
-  it("puts urgent ones in the project context for writers and counts for readers", async () => {
+  it("puts urgent ones in the project context for Contributors and counts for readers", async () => {
     const forDev = (await getProjectContext(await ctx("dev@example.com"), "shop", "web")) as { security?: { urgent: { package: string }[]; hint: string } };
     expect(forDev.security!.urgent.map((u) => u.package).sort()).toEqual(["lodash", "requests", "urllib3"]);
     expect(forDev.security!.hint).toMatch(/upgrade to a fixed version/);
@@ -242,7 +242,7 @@ describe("vulnerabilities", () => {
 
   it("publishes reported vulnerabilities, announces critical ones, and leaves risk decisions to owners", async () => {
     const dev = await ctx("dev@example.com");
-    await expect(reportVulnerability(await ctx("viewer@example.com"), { project: "shop", component: "api", title: "x", details: "y", severity: "low" })).rejects.toThrow(/writers/);
+    await expect(reportVulnerability(await ctx("viewer@example.com"), { project: "shop", component: "api", title: "x", details: "y", severity: "low" })).rejects.toThrow(/Contributors/);
     const r = await reportVulnerability(dev, {
       repo: "https://github.com/acme/shop-api",
       title: "SQL injection in order search",
@@ -256,7 +256,7 @@ describe("vulnerabilities", () => {
     expect((v as unknown as { details: string }).details).not.toContain("sk_live_abcdefghijklmnop1234");
     expect((await db.query("SELECT 1 FROM notifications WHERE kind = 'security' AND title LIKE 'Shop: 1 new%' AND target_id = $1", [r.id])).rowCount).toBe(3);
 
-    await expect(updateVulnerability(dev, { id: r.id, status: "accepted", note: "internal only" })).rejects.toThrow(/owners and admins/);
+    await expect(updateVulnerability(dev, { id: r.id, status: "accepted", note: "internal only" })).rejects.toThrow(/Project admins, Security leads and Administrators/);
     await expect(updateVulnerability(await ctx("owner@example.com"), { id: r.id, status: "accepted" })).rejects.toThrow(/why/);
     await updateVulnerability(dev, { id: r.id, status: "acknowledged", note: "Fix in review" });
     await updateVulnerability(dev, { id: r.id, status: "fixed", note: "Deployed bound parameters" });
@@ -279,8 +279,8 @@ describe("vulnerabilities", () => {
     expect(asViewer.counts_only).toEqual([{ project: "shop", critical: 0, high: 2, medium: 1, low: 0 }]);
   });
 
-  it("scans any repository: an owner's first scan adds it to the project; others are told who can", async () => {
-    await expect(beginDependencyScan(await ctx("dev@example.com"), { project: "shop", repo: "git@github.com:acme/shop-worker.git" })).rejects.toThrow(/project owner can add it/);
+  it("scans any repository: a Project admin's first scan adds it to the project; others are told who can", async () => {
+    await expect(beginDependencyScan(await ctx("dev@example.com"), { project: "shop", repo: "git@github.com:acme/shop-worker.git" })).rejects.toThrow(/a Project admin can add it/);
     const scan = await beginDependencyScan(await ctx("owner@example.com"), { project: "shop", repo: "git@github.com:acme/shop-worker.git", head_sha: "777" });
     expect(scan).toMatchObject({ project: "shop", repository: "shop-worker", registered: "Added shop-worker to shop's repositories." });
     await expect(beginDependencyScan(await ctx("owner@example.com"), { repo: "git@github.com:acme/unknown.git" })).rejects.toThrow(/pass project/);
@@ -304,7 +304,7 @@ describe("vulnerabilities", () => {
       vulnerability_ids: [first.id],
     });
     expect(review).toMatchObject({ project: "shop", repository: "shop-worker", found: { high: 1, critical: 0 } });
-    await expect(recordSecurityReview(await ctx("viewer@example.com"), { project: "shop", summary: "x" })).rejects.toThrow(/writers/);
+    await expect(recordSecurityReview(await ctx("viewer@example.com"), { project: "shop", summary: "x" })).rejects.toThrow(/Contributors/);
     const o = await securityOverview(dev, { project: "shop" });
     expect(o.reviews[0]).toMatchObject({ kind: "code", repository: "shop-worker", tools: ["semgrep", "gitleaks"], counts: { high: 1 } });
     expect(o.reviews.some((r: { kind: string }) => r.kind === "dependencies")).toBe(true);

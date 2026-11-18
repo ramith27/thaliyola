@@ -16,6 +16,7 @@ import { parseArgs } from "node:util";
 import { createApiToken, createLocalUser, listLocalUsers, resetPassword } from "../auth/local.js";
 import { loadConfig, settingsFrom } from "../config.js";
 import { exportMarkdown } from "../core/exporter.js";
+import { serviceUserId, SYSTEM_ACCOUNTS } from "../core/users.js";
 import { migrate } from "../db/migrate.js";
 import { createPool, type Db } from "../db/pool.js";
 
@@ -39,16 +40,6 @@ async function userId(db: Db, email: string) {
   return rows[0].id;
 }
 
-async function serviceUserId(db: Db, name: string) {
-  if (!/^[a-z0-9][a-z0-9-]{1,40}$/.test(name)) throw new Error("service names are lowercase letters, digits and hyphens");
-  const { rows } = await db.query<{ id: string }>(
-    `INSERT INTO users (subject, display_name, kind) VALUES ($1, $2, 'service')
-     ON CONFLICT (subject) DO UPDATE SET display_name = EXCLUDED.display_name RETURNING id`,
-    [`service:${name}`, name],
-  );
-  return rows[0]!.id;
-}
-
 const db = createPool(process.env.DATABASE_URL ?? "postgres://thaliyola:thaliyola@localhost:5432/thaliyola");
 try {
   await migrate(db);
@@ -69,17 +60,18 @@ try {
     }
   } else if (command === "create-token") {
     if (!values.name) throw new Error("--name is required");
+    if (values.service && SYSTEM_ACCOUNTS.includes(values.service)) throw new Error(`${values.service} is reserved for Thaliyola itself`);
     const owner = values.service ? await serviceUserId(db, values.service) : values.email ? await userId(db, values.email) : null;
     if (!owner) throw new Error("pass --email (a person's token) or --service (a bot's token)");
-    // A bot that writes docs must own its projects so pages publish without review.
+    // A bot needs a role to write in members-only projects; its writes are proposals people review (service accounts never publish).
     for (const slug of values["owner-of"] ?? []) {
       const scope = (await db.query<{ id: string }>("SELECT id FROM scopes WHERE slug = $1 AND kind = 'project'", [slug])).rows[0];
       if (!scope) throw new Error(`no project ${slug}`);
       await db.query(
-        "INSERT INTO scope_members (scope_id, user_id, role) VALUES ($1, $2, 'owner') ON CONFLICT (scope_id, user_id) DO UPDATE SET role = 'owner'",
+        "INSERT INTO scope_members (scope_id, user_id, role) VALUES ($1, $2, 'owner') ON CONFLICT DO NOTHING",
         [scope.id, owner],
       );
-      console.error(`Owner of ${slug}.`);
+      console.error(`Project admin of ${slug} (its writes still go to review: service accounts never publish).`);
     }
     const token = await createApiToken(db, owner, values.name, values.days ? Number(values.days) : undefined);
     console.log(token.token);

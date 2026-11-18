@@ -1,0 +1,13 @@
+{
+  "name": "fixture-skills",
+  "displayName": "Fixture Skills",
+  "owner": {"name": "Tests"},
+  "plugins": [
+    {"name": "alpha", "displayName": "Alpha Analytics", "description": "Alpha: data skills with connectors.", "source": "./plugins/alpha", "version": "0.0.0"},
+    {"name": "beta", "displayName": "Beta Tools", "description": "Beta: stamping edge cases.", "source": "./plugins/beta", "version": "0.0.0"},
+    {"name": "gamma", "description": "Gamma: validation and scanning cases.", "source": "./plugins/gamma", "version": "0.0.0"},
+    {"name": "im-knowledge-base", "displayName": "Knowledge Base", "description": "Thaliyola's own skill and a loader.", "source": "./plugins/im-knowledge-base", "version": "0.0.0"},
+    {"name": "external", "description": "Lives elsewhere.", "source": {"source": "github", "repo": "example/elsewhere"}, "version": "0.0.0"}
+  ],
+  "renames": {"old-alpha": "alpha", "gone-plugin": null}
+}

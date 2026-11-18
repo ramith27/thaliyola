@@ -1,12 +1,13 @@
 import pg from "pg";
 import { withTx, type Queryable } from "../db/pool.js";
+import { assertClaudeMayDecide, assertNotFreshOwnWork, decidedVia, reviewSelfApprovalOn, viaDetails } from "./approvals.js";
 import { audit } from "./audit.js";
 import { reindexArticle, reindexFinding, replaceSection } from "./chunking.js";
 import { redact } from "./redaction.js";
-import { ConflictError, NotFoundError, ValidationError, type RequestContext } from "./context.js";
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError, type RequestContext } from "./context.js";
 import { getArticle, getFinding } from "./items.js";
 import { onDecision, onImpactNotices, track } from "./notify.js";
-import { assertCanApprove, assertCanRead, canApprove, readableScopes } from "./permissions.js";
+import { assertCanApprove, assertCanRead, can, canApprove, canPublishOwn, readableScopes } from "./permissions.js";
 import { getReadableScope } from "./scopes.js";
 import { moveItems } from "./move.js";
 import { findItem } from "./writes.js";
@@ -23,31 +24,145 @@ interface RevisionRow {
   assignee_id: string | null;
   state: string;
   summary: string;
+  created_via: string | null;
+  created_at: Date;
+  decided_via: string | null;
 }
 
-export async function listReviewQueue(ctx: RequestContext, opts: { scope?: string; state?: string; mine?: boolean; assigned?: boolean; limit?: number } = {}) {
-  const scopeId = opts.scope ? (await getReadableScope(ctx, opts.scope)).id : null;
-  const readable = await readableScopes(ctx);
+/** Review categories, as people think of them, and the kinds of proposal (op) in each. */
+export const REVIEW_CATEGORIES = {
+  new: ["create"],
+  edit: ["update", "promote"],
+  move: ["move"],
+  share: ["share"],
+  retire: ["verify"],
+} as const;
+export type ReviewCategory = keyof typeof REVIEW_CATEGORIES;
+
+export interface ReviewFilters {
+  /** Project (or team/library) slug the proposal is reviewed in. */
+  scope?: string;
+  state?: "pending" | "approved" | "rejected";
+  category?: ReviewCategory;
+  kind?: "article" | "finding";
+  /** Article or finding type, e.g. runbook, rca. */
+  type?: string;
+  /** Whose proposals: people, agents (service accounts), or the caller's own. */
+  author?: "people" | "agents" | "me";
+  /** to_review: pending ones the caller may approve and didn't write; me: assigned to the caller; none: unassigned. */
+  assigned?: "to_review" | "me" | "none" | boolean;
+  /** Words in the summary or the item's title. */
+  q?: string;
+  sort?: "oldest" | "newest";
+  limit?: number;
+  /** Older options, kept for callers that pass them. */
+  mine?: boolean;
+}
+
+/**
+ * The review queue the caller can see, filtered. Each row says whether the caller may decide it (can_review) and
+ * whether the item changed since it was proposed (outdated: approving it would conflict).
+ */
+export async function listReviewQueue(ctx: RequestContext, opts: ReviewFilters = {}) {
+  const { where, params } = await reviewWhere(ctx, opts);
+  params.push(Math.min(opts.limit ?? 50, 200));
+  const newest = opts.sort ? opts.sort === "newest" : !!opts.state && opts.state !== "pending";
   const { rows } = await ctx.db.query(
-    `SELECT r.id, r.op, r.state, r.summary, r.redactions, r.base_version, r.created_at, r.decided_at, r.reason,
+    `SELECT r.id, r.op, r.state, r.summary, r.redactions, r.base_version, r.created_at, r.decided_at, r.reason, r.created_via, r.decided_via, (r.author_id = $1) AS own,
             r.target_kind, r.target_id, coalesce(a.title, f.title) AS target_title, coalesce(a.type, f.type) AS target_type,
-            s.slug AS scope, coalesce(u.email, u.subject) AS author, coalesce(rv.email, rv.subject) AS reviewer,
-            r.assignee_id, coalesce(asg.display_name, asg.email) AS assignee,
-            (SELECT count(*) FROM revision_comments c WHERE c.revision_id = r.id)::int AS comments
-       FROM revisions r
+            s.slug AS scope, s.name AS scope_name, s.kind AS scope_kind,
+            coalesce(u.email, u.subject) AS author, u.display_name AS author_name, u.kind AS author_kind,
+            coalesce(rv.email, rv.subject) AS reviewer, rv.display_name AS reviewer_name,
+            r.assignee_id, coalesce(asg.display_name, asg.email) AS assignee, asg.email AS assignee_email, asg.display_name AS assignee_name,
+            (SELECT count(*) FROM revision_comments c WHERE c.revision_id = r.id)::int AS comments,
+            ${CAN_REVIEW} AS can_review,
+            (r.base_version IS NOT NULL AND r.op IN ('update', 'promote') AND coalesce(a.version, f.version) > r.base_version) AS outdated
+       ${FROM}
+      WHERE ${where}
+      ORDER BY r.created_at ${newest ? "DESC" : "ASC"}
+      LIMIT $${params.length}`,
+    params,
+  );
+  // With "Reviewers may approve their own proposals" off, nobody decides their own.
+  const selfOk = await reviewSelfApprovalOn(ctx);
+  return rows.map(({ own, ...r }) => (own && !selfOk ? { ...r, can_review: false } : r));
+}
+
+/**
+ * Counts for the filter bar: per state, and within the chosen state per category, project, type and author.
+ * Each facet counts with the other filters applied but not its own, so choosing one shows what else is there.
+ */
+export async function reviewFacets(ctx: RequestContext, opts: ReviewFilters = {}) {
+  const count = async (sql: string, without: Partial<Record<keyof ReviewFilters, undefined>>) => {
+    const { where, params } = await reviewWhere(ctx, { ...opts, ...without });
+    return (await ctx.db.query(`SELECT ${sql} ${FROM} WHERE ${where} GROUP BY 1 ORDER BY 2 DESC`, params)).rows;
+  };
+  const toMap = (rows: { k: string; n: number }[]) => Object.fromEntries(rows.map((r) => [r.k, r.n]));
+  const opCategory = `CASE ${Object.entries(REVIEW_CATEGORIES)
+    .map(([c, ops]) => `WHEN r.op IN (${ops.map((o) => `'${o}'`).join(", ")}) THEN '${c}'`)
+    .join(" ")} END`;
+  const [states, categories, projects, types, authors, toReview] = await Promise.all([
+    count("r.state AS k, count(*)::int AS n", { state: undefined }),
+    count(`${opCategory} AS k, count(*)::int AS n`, { category: undefined }),
+    count("s.slug AS k, count(*)::int AS n, min(s.name) AS name, min(s.kind) AS kind", { scope: undefined }),
+    count("coalesce(a.type, f.type) AS k, count(*)::int AS n", { type: undefined, kind: undefined }),
+    count("CASE WHEN u.kind = 'service' THEN 'agents' ELSE 'people' END AS k, count(*)::int AS n", { author: undefined }),
+    reviewWhere(ctx, { ...opts, state: "pending", assigned: "to_review" }).then(async ({ where, params }) => (await ctx.db.query(`SELECT count(*)::int AS n ${FROM} WHERE ${where}`, params)).rows[0].n as number),
+  ]);
+  return {
+    states: toMap(states),
+    categories: toMap(categories),
+    projects: projects.map((p) => ({ slug: p.k, name: p.name, kind: p.kind, count: p.n })),
+    types: toMap(types),
+    authors: toMap(authors),
+    to_review: toReview,
+  };
+}
+
+const FROM = `FROM revisions r
        JOIN scopes s ON s.id = r.scope_id
        JOIN users u ON u.id = r.author_id
        LEFT JOIN users rv ON rv.id = r.reviewer_id
        LEFT JOIN users asg ON asg.id = r.assignee_id
        LEFT JOIN articles a ON r.target_kind = 'article' AND a.id = r.target_id
-       LEFT JOIN findings f ON r.target_kind = 'finding' AND f.id = r.target_id
-      WHERE r.state = $1 AND ($2::uuid IS NULL OR r.scope_id = $2) AND (NOT $3 OR r.author_id = $4) AND (NOT $7 OR r.assignee_id = $4)
-        AND ($6::uuid[] IS NULL OR (r.scope_id = ANY($6) AND (r.op = 'share' OR coalesce(a.scope_id, f.scope_id) = ANY($6))))
-      ORDER BY r.created_at ${opts.state && opts.state !== "pending" ? "DESC" : "ASC"}
-      LIMIT $5`,
-    [opts.state ?? "pending", scopeId, !!opts.mine, ctx.actor.id, Math.min(opts.limit ?? 50, 200), readable, !!opts.assigned],
-  );
-  return rows;
+       LEFT JOIN findings f ON r.target_kind = 'finding' AND f.id = r.target_id`;
+
+/** Whether the caller ($1 actor id, $2 sees-all flag) may decide a revision: the review permission where it is reviewed. */
+const CAN_REVIEW = `($2 OR EXISTS (SELECT 1 FROM scope_permissions p WHERE p.scope_id = r.scope_id AND p.user_id = $1 AND p.permission = 'review'))`;
+
+async function reviewWhere(ctx: RequestContext, opts: ReviewFilters) {
+  const scopeId = opts.scope ? (await getReadableScope(ctx, opts.scope)).id : null;
+  const readable = await readableScopes(ctx);
+  const human = ctx.actor.kind === "human";
+  const params: unknown[] = [ctx.actor.id, human && can(ctx, "manage_all_projects"), opts.state ?? "pending", readable];
+  const where = [
+    // $1 (the caller) and $2 (sees everything) are used only by some filters; typed here so every query can be prepared.
+    "$1::uuid IS NOT NULL AND $2::boolean IS NOT NULL",
+    "r.state = $3",
+    // What the caller can read; library shares are reviewed in the library even when the item's project is private.
+    "($4::uuid[] IS NULL OR (r.scope_id = ANY($4) AND (r.op = 'share' OR coalesce(a.scope_id, f.scope_id) = ANY($4))))",
+  ];
+  const add = (sql: string, value: unknown) => {
+    params.push(value);
+    where.push(sql.replaceAll("$?", `$${params.length}`));
+  };
+  if (scopeId) add("r.scope_id = $?", scopeId);
+  if (opts.category) {
+    if (!(opts.category in REVIEW_CATEGORIES)) throw new ValidationError(`category is one of ${Object.keys(REVIEW_CATEGORIES).join(", ")}`);
+    add("r.op = ANY($?::text[])", [...REVIEW_CATEGORIES[opts.category]]);
+  }
+  if (opts.kind) add("r.target_kind = $?", opts.kind);
+  if (opts.type) add("coalesce(a.type, f.type) = $?", opts.type);
+  const author = opts.author ?? (opts.mine ? "me" : undefined);
+  if (author === "me") where.push("r.author_id = $1");
+  if (author === "people") where.push("u.kind = 'human'");
+  if (author === "agents") where.push("u.kind = 'service'");
+  const assigned = opts.assigned === true ? "me" : opts.assigned || undefined;
+  if (assigned === "me") where.push("r.assignee_id = $1");
+  if (assigned === "none") where.push("r.assignee_id IS NULL");
+  if (assigned === "to_review") where.push(`r.author_id <> $1 AND ${CAN_REVIEW}`);
+  if (opts.q?.trim()) add("(r.summary ILIKE $? OR coalesce(a.title, f.title) ILIKE $?)", `%${opts.q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
+  return { where: where.join(" AND "), params };
 }
 
 /** A revision with the item's current state and, for article edits, the body it would produce. */
@@ -61,7 +176,7 @@ export async function getRevision(ctx: RequestContext, id: string) {
   let proposed: unknown = r.payload;
   if (r.target_kind === "article" && (r.op === "update" || r.op === "promote")) {
     const body = (current as { body_md: string }).body_md;
-    proposed = { ...r.payload, body_md: nextArticleBody(body, r.payload) };
+    proposed = { ...r.payload, body_md: nextArticleBody(body, r.payload), ...(Array.isArray(r.payload.tags) ? { tags: r.payload.tags } : { tags: (current as { tags?: string[] }).tags ?? [] }) };
   }
   return {
     ...r,
@@ -71,9 +186,49 @@ export async function getRevision(ctx: RequestContext, id: string) {
   };
 }
 
+/**
+ * A proposal shaped for deciding it from Claude (get_proposal): who wrote it where, whether the caller may decide it,
+ * the item now and what it would become.
+ */
+export async function proposalForReview(ctx: RequestContext, id: string) {
+  const rev = await getRevision(ctx, id);
+  const meta = (
+    await ctx.db.query<{ scope: string; scope_name: string; author: string | null; reviewer: string | null; decided_at: string | null; reason: string | null }>(
+      `SELECT s.slug AS scope, s.name AS scope_name, coalesce(nullif(u.display_name, ''), u.email) AS author,
+              coalesce(nullif(rv.display_name, ''), rv.email) AS reviewer, r.decided_at, r.reason
+         FROM revisions r JOIN scopes s ON s.id = r.scope_id JOIN users u ON u.id = r.author_id LEFT JOIN users rv ON rv.id = r.reviewer_id WHERE r.id = $1`,
+      [id],
+    )
+  ).rows[0]!;
+  const mine = rev.author_id === ctx.actor.id;
+  const canReview = rev.state === "pending" && (await canApprove(ctx, rev.scope_id)) && (!mine || (await reviewSelfApprovalOn(ctx)));
+  return {
+    id: rev.id,
+    op: rev.op,
+    state: rev.state,
+    summary: rev.summary,
+    target_kind: rev.target_kind,
+    target_id: rev.target_id,
+    scope: meta.scope,
+    scope_name: meta.scope_name,
+    author: meta.author,
+    mine,
+    proposed_through_claude: rev.created_via === "mcp",
+    created_at: rev.created_at,
+    reviewer: meta.reviewer,
+    decided_at: meta.decided_at,
+    decided_via: rev.decided_via,
+    reason: meta.reason,
+    stale: rev.stale,
+    can_review: canReview,
+    current: rev.current,
+    proposed: rev.proposed,
+  };
+}
+
 async function loadRevision(db: Queryable, id: string, lock = false): Promise<RevisionRow> {
   const { rows } = await db.query<RevisionRow>(
-    `SELECT id, target_kind, target_id, scope_id, op, base_version, payload, author_id, assignee_id, state, summary
+    `SELECT id, target_kind, target_id, scope_id, op, base_version, payload, author_id, assignee_id, state, summary, created_via, created_at, decided_via
        FROM revisions WHERE id = $1 ${lock ? "FOR UPDATE" : ""}`,
     [id],
   );
@@ -82,6 +237,8 @@ async function loadRevision(db: Queryable, id: string, lock = false): Promise<Re
 }
 
 function nextArticleBody(body: string, payload: Record<string, any>): string {
+  // A tags-only (or title-only) edit leaves the body as it is.
+  if (payload.text === undefined || payload.text === null) return body;
   if (!payload.section) return payload.text;
   return replaceSection(body, payload.section, payload.text, payload.mode === "append" ? "append" : "replace");
 }
@@ -99,19 +256,54 @@ export async function approveRevision(
   ctx: RequestContext,
   id: string,
   edits?: ReviewerEdits,
+  opts: {
+    ownWrite?: boolean;
+    /** The user said yes to approving their own work written through Claude minutes ago (core/approvals.ts). */
+    confirmed?: boolean;
+    /** The author's own write published as it's made (a personal space, a web edit by a reviewer): not a review decision. */
+    settle?: boolean;
+  } = {},
 ): Promise<{ revision_id: string; state: string } & Record<string, unknown>> {
+  // Publishing one's own write (ownWrite, settle) isn't a review decision: only a reviewer's approval is.
+  const review = !opts.ownWrite && !opts.settle;
+  if (review) await assertClaudeMayDecide(ctx, "approving a proposal");
   const peek = await loadRevision(ctx.db, id);
-  const result = peek.op === "move" ? await approveMove(ctx, peek, edits) : await approveInTx(ctx, id, edits);
+  if (opts.ownWrite && (peek.op === "move" || peek.op === "share")) throw new ValidationError(`a '${peek.op}' proposal always goes through review`);
+  const check = review ? { confirmed: opts.confirmed } : null;
+  const result = peek.op === "move" ? await approveMove(ctx, peek, edits, check) : await approveInTx(ctx, id, edits, opts.ownWrite, check);
   ctx.onWrite?.();
   track(afterDecision(ctx, id, result));
   return result;
 }
 
-async function approveInTx(ctx: RequestContext, id: string, edits?: ReviewerEdits): Promise<{ revision_id: string; state: string } & Record<string, unknown>> {
+/**
+ * The checks on a reviewer: Review in the scope and, for a review decision (`check`; not an author's own write
+ * published as it's made), the self-approval setting and Claude's own fresh work.
+ */
+async function assertReviewerMay(ctx: RequestContext, r: RevisionRow, check: { confirmed?: boolean } | null) {
+  await assertCanApprove(ctx, r.scope_id);
+  if (!check) return;
+  const confirmed = check.confirmed;
+  if (r.author_id === ctx.actor.id && !(await reviewSelfApprovalOn(ctx))) {
+    throw new ForbiddenError("someone else must approve this proposal: you wrote it (an Administrator turned off \"Reviewers may approve their own proposals\" in Admin › System)");
+  }
+  assertNotFreshOwnWork(ctx, r, confirmed, "proposal");
+}
+
+async function approveInTx(
+  ctx: RequestContext,
+  id: string,
+  edits?: ReviewerEdits,
+  ownWrite = false,
+  check: { confirmed?: boolean } | null = null,
+): Promise<{ revision_id: string; state: string } & Record<string, unknown>> {
   return withTx(ctx.db, async (db) => {
     const r = await loadRevision(db, id, true);
     if (r.state !== "pending") throw new ValidationError(`revision is already ${r.state}`);
-    await assertCanApprove(ctx, r.scope_id);
+    // Publishing one's own write needs "publish" there (not "review"); anyone else's needs "review".
+    if (ownWrite) {
+      if (r.author_id !== ctx.actor.id || !(await canPublishOwn(ctx, r.scope_id))) throw new ForbiddenError("you can't publish here without review");
+    } else await assertReviewerMay(ctx, r, check);
     const item = await findItem(db, r.target_id, true);
     if (r.op !== "create" && r.base_version !== item.version) {
       throw new ConflictError(
@@ -145,8 +337,22 @@ async function approveInTx(ctx: RequestContext, id: string, edits?: ReviewerEdit
     if (r.op === "create" || r.op === "update" || r.op === "promote") await snapshot(db, item.kind, item.id, r.author_id, ctx.actor.id, r.summary);
     if (r.op === "share" && typeof result.library_copy_id === "string") await snapshot(db, item.kind, result.library_copy_id, r.author_id, ctx.actor.id, r.summary);
 
-    await db.query("UPDATE revisions SET state = 'approved', reviewer_id = $2, decided_at = now() WHERE id = $1", [id, ctx.actor.id]);
-    await audit(db, ctx.actor.id, "approve_revision", r.target_id);
+    await db.query("UPDATE revisions SET state = 'approved', reviewer_id = $2, decided_at = now(), decided_via = $3 WHERE id = $1", [id, ctx.actor.id, check ? decidedVia(ctx) : null]);
+    // An author's own write published as it's made (a personal space among them) records no title or summary, so a
+    // private note's never reaches the audit log.
+    await audit(
+      db,
+      ctx.actor.id,
+      "approve_revision",
+      r.target_id,
+      check
+        ? {
+            targetKind: item.kind === "article" ? "article" : "finding",
+            targetLabel: item.title,
+            details: { revision_id: id, op: r.op, summary: r.summary, ...viaDetails(ctx), ...(edits && Object.values(edits).some((v) => v !== undefined) ? { edited: true } : {}) },
+          }
+        : {},
+    );
     return { revision_id: id, state: "approved", ...result };
   });
 }
@@ -155,10 +361,10 @@ async function approveInTx(ctx: RequestContext, id: string, edits?: ReviewerEdit
  * A move runs the same path as a person's move (approval rights in both scopes,
  * search index, open proposals and files follow the item), then closes the proposal.
  */
-async function approveMove(ctx: RequestContext, r: RevisionRow, edits?: ReviewerEdits) {
+async function approveMove(ctx: RequestContext, r: RevisionRow, edits?: ReviewerEdits, check: { confirmed?: boolean } | null = null) {
   if (r.state !== "pending") throw new ValidationError(`revision is already ${r.state}`);
   if (edits && Object.values(edits).some((v) => v !== undefined)) throw new ValidationError("a move can't be edited; reject it and move the item yourself");
-  await assertCanApprove(ctx, r.scope_id);
+  await assertReviewerMay(ctx, r, check);
   const item = await findItem(ctx.db, r.target_id);
   const from = (await ctx.db.query<{ slug: string }>("SELECT slug FROM scopes WHERE id = $1", [item.scope_id])).rows[0]!.slug;
   const p = r.payload as { to: string; folder: string | null; repo: string | null };
@@ -169,9 +375,15 @@ async function approveMove(ctx: RequestContext, r: RevisionRow, edits?: Reviewer
     ...(item.kind === "article" ? { into_folder: p.folder ?? (from === p.to ? undefined : "") } : {}),
     ...(p.repo ? { component: p.repo } : from !== p.to ? { component: "" } : {}),
   });
-  const { rowCount } = await ctx.db.query("UPDATE revisions SET state = 'approved', reviewer_id = $2, decided_at = now() WHERE id = $1 AND state = 'pending'", [r.id, ctx.actor.id]);
+  const { rowCount } = await ctx.db.query("UPDATE revisions SET state = 'approved', reviewer_id = $2, decided_at = now(), decided_via = $3 WHERE id = $1 AND state = 'pending'", [r.id, ctx.actor.id, check ? decidedVia(ctx) : null]);
   if (!rowCount) throw new ValidationError("revision was decided while moving");
-  await audit(ctx.db, ctx.actor.id, "approve_revision", r.target_id);
+  await audit(
+    ctx.db,
+    ctx.actor.id,
+    "approve_revision",
+    r.target_id,
+    check ? { targetKind: item.kind === "article" ? "article" : "finding", targetLabel: item.title, details: { revision_id: r.id, op: r.op, summary: r.summary, moved_to: p.to, ...viaDetails(ctx) } } : {},
+  );
   return { revision_id: r.id, state: "approved", moved_to: p.to, moved: moved.moved };
 }
 
@@ -189,6 +401,7 @@ async function afterDecision(ctx: RequestContext, id: string, result: Record<str
 }
 
 export async function rejectRevision(ctx: RequestContext, id: string, reason: string) {
+  await assertClaudeMayDecide(ctx, "rejecting a proposal");
   const result = await rejectInTx(ctx, id, reason);
   track(afterDecision(ctx, id, result));
   return result;
@@ -204,12 +417,28 @@ async function rejectInTx(ctx: RequestContext, id: string, reason: string) {
       const table = r.target_kind === "article" ? "articles" : "findings";
       await db.query(`UPDATE ${table} SET status = 'rejected', updated_at = now() WHERE id = $1 AND status = 'draft'`, [r.target_id]);
     }
-    await db.query("UPDATE revisions SET state = 'rejected', reviewer_id = $2, reason = $3, decided_at = now() WHERE id = $1", [
+    await db.query("UPDATE revisions SET state = 'rejected', reviewer_id = $2, reason = $3, decided_at = now(), decided_via = $4 WHERE id = $1", [
       id,
       ctx.actor.id,
       reason.trim(),
+      decidedVia(ctx),
     ]);
-    await audit(db, ctx.actor.id, "reject_revision", r.target_id);
+    const item = await findItem(db, r.target_id);
+    // Never a personal space's title or summary (see approveInTx).
+    const personal = (await db.query<{ kind: string }>("SELECT kind FROM scopes WHERE id = $1", [r.scope_id])).rows[0]?.kind === "personal";
+    await audit(
+      db,
+      ctx.actor.id,
+      "reject_revision",
+      r.target_id,
+      personal
+        ? {}
+        : {
+            targetKind: item.kind === "article" ? "article" : "finding",
+            targetLabel: item.title,
+            details: { revision_id: id, op: r.op, summary: r.summary, reason: reason.trim().slice(0, 300), ...viaDetails(ctx) },
+          },
+    );
     return { revision_id: id, state: "rejected" };
   });
 }
@@ -253,7 +482,7 @@ export async function snapshot(db: Queryable, kind: string, id: string, authorId
   const sql =
     kind === "article"
       ? `INSERT INTO item_versions (target_kind, target_id, version, title, content, summary, author_id, approver_id)
-         SELECT 'article', id, version, title, jsonb_build_object('body_md', body_md), $2, $3, $4 FROM articles WHERE id = $1
+         SELECT 'article', id, version, title, jsonb_build_object('body_md', body_md, 'tags', tags), $2, $3, $4 FROM articles WHERE id = $1
          ON CONFLICT (target_id, version) DO NOTHING`
       : `INSERT INTO item_versions (target_kind, target_id, version, title, content, summary, author_id, approver_id)
          SELECT 'finding', id, version, title, jsonb_build_object('symptoms', symptoms, 'root_cause', root_cause, 'fix', fix, 'tags', tags), $2, $3, $4 FROM findings WHERE id = $1
@@ -290,11 +519,13 @@ async function applyFindingPatch(db: Tx, item: { id: string; scope_id: string },
 async function applyArticleEdit(db: Tx, ctx: RequestContext, item: { id: string; status: string }, r: RevisionRow) {
   const current = (await db.query("SELECT body_md FROM articles WHERE id = $1", [item.id])).rows[0];
   const body = nextArticleBody(current.body_md, r.payload);
+  // Tags the proposal set (replaced, or with some added and removed): normalised when it was proposed.
+  const tags = Array.isArray(r.payload.tags) ? (r.payload.tags as string[]) : null;
   const { rows } = await db.query(
-    `UPDATE articles SET body_md = $2, title = coalesce($3, title), version = version + 1, updated_at = now(), last_verified_at = now(),
+    `UPDATE articles SET body_md = $2, title = coalesce($3, title), tags = coalesce($4::text[], tags), version = version + 1, updated_at = now(), last_verified_at = now(),
             status = CASE WHEN status = 'possibly_stale' THEN 'published' ELSE status END
       WHERE id = $1 RETURNING id, scope_id, title, body_md, version, status`,
-    [item.id, body, r.payload.title ?? null],
+    [item.id, body, r.payload.title ?? null, tags],
   );
   const updated = rows[0];
   await reindexArticle(db, updated);

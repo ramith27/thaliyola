@@ -131,6 +131,10 @@ describe("OAuth for MCP clients (local mode)", () => {
     expect(back.origin + back.pathname).toBe(REDIRECT);
     expect(back.searchParams.get("state")).toBe("xyz");
     const code = back.searchParams.get("code")!;
+    // The audit log names the app that got access (never the code).
+    const recorded = (await db.query("SELECT tool, target_kind, target_label, details FROM audit_log WHERE action = 'oauth_authorize' ORDER BY id DESC LIMIT 1")).rows[0];
+    expect(recorded).toEqual({ tool: "oauth_authorize", target_kind: "app", target_label: "Test Connector", details: { client_name: "Test Connector", client_id: clientId } });
+    expect(JSON.stringify((await db.query("SELECT a::text FROM audit_log a")).rows)).not.toContain(code);
 
     expect((await token({ grant_type: "authorization_code", client_id: clientId, code, code_verifier: "wrong-verifier-wrong-verifier-wrong-verifier", redirect_uri: REDIRECT })).status).toBe(400);
     const issued = await token({ grant_type: "authorization_code", client_id: clientId, code, code_verifier: verifier, redirect_uri: REDIRECT });

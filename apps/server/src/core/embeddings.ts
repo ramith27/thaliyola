@@ -129,13 +129,17 @@ export function startIndexer(db: Db, embedder: Embedder, log: (msg: string) => v
   let timer: NodeJS.Timeout | null = null;
   let running = false;
   let stopped = false;
+  let current: Promise<void> | null = null;
 
-  async function tick() {
+  function tick() {
     if (running || stopped) return;
+    current = drain();
+  }
+  async function drain() {
     running = true;
     try {
       let total = 0;
-      for (let n = await indexPendingChunks(db, embedder); n > 0; n = await indexPendingChunks(db, embedder)) total += n;
+      for (let n = await indexPendingChunks(db, embedder); n > 0 && !stopped; n = await indexPendingChunks(db, embedder)) total += n;
       if (total) log(`embedded ${total} chunk(s) with ${embedder.model}`);
     } catch (err) {
       log(`embedding failed: ${(err as Error).message}`);
@@ -150,9 +154,11 @@ export function startIndexer(db: Db, embedder: Embedder, log: (msg: string) => v
       if (timer) clearTimeout(timer);
       timer = setTimeout(tick, 200);
     },
-    stop() {
+    /** Starts no more batches; resolves when the one in progress (if any) has finished. */
+    async stop() {
       stopped = true;
       if (timer) clearTimeout(timer);
+      await current;
     },
   };
 }
