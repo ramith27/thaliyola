@@ -1,9 +1,12 @@
 import type { RequestContext } from "./context.js";
+import { projectHierarchy } from "./hierarchy.js";
 import { ValidationError } from "./context.js";
 import { readableScopes } from "./permissions.js";
 import { projectHint } from "./tasks.js";
 import { projectSecurity } from "./security.js";
 import { projectAdvisories } from "./advisories.js";
+import { projectDataSources } from "./connections/data.js";
+import { repoFacts } from "./connections/repos.js";
 import { designSummary } from "./design.js";
 import { getComponent, getReadableScope, listComponents, resolveProject } from "./scopes.js";
 
@@ -97,7 +100,9 @@ export async function getProjectContext(ctx: RequestContext, projectSlug?: strin
   return {
     project: { id: project.id, slug: project.slug, name: project.name, description: project.description, status: project.status },
     component: comp ? { slug: comp.slug, kind: comp.kind, repo_url: comp.repo_url } : null,
-    components: (await listComponents(db, project.id)).map((c) => ({ slug: c.slug, kind: c.kind, repo_url: c.repo_url })),
+    components: (await listComponents(db, project.id)).map((c) => ({ slug: c.slug, kind: c.kind, repo_url: c.repo_url, ...(c.repo_info ? { repo: repoFacts(c.repo_info, c.repo_synced_at ?? null) } : {}) })),
+    // Where it sits: the projects above it (their members have roles here too) and its sub-projects.
+    ...(await projectHierarchy(ctx, project.id).then((h) => (h.path.length || h.sub_projects.length ? { hierarchy: h } : {}))),
     open_impact_notices: notices.rows,
     overview: overview
       ? {
@@ -116,6 +121,8 @@ export async function getProjectContext(ctx: RequestContext, projectSlug?: strin
     uses: uses.rows,
     ...(await projectHint(ctx, project.slug).then((c) => (c ? { curation: c } : {})).catch(() => ({}))),
     open_known_issues: knownIssues.rows,
+    // Databases it reads (connections with schema sync): only when there are some.
+    ...(await projectDataSources(ctx, project.id).then((d) => (d ? { data_sources: d } : {}))),
     ...(await projectSecurity(ctx, project.id, comp?.slug).then((s) => (s ? { security: s } : {})).catch(() => ({}))),
     ...(await designSummary(ctx, project.slug).then((d) => (d ? { design: d } : {})).catch(() => ({}))),
     ...(await projectAdvisories(ctx, project.slug)

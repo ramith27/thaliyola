@@ -1,47 +1,49 @@
+import { createHash } from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { sessionToken } from "../auth/index.js";
-import {
-  changePassword,
-  createApiToken,
-  createLocalUser,
-  listApiTokens,
-  listLocalUsers,
-  login,
-  logout,
-  resetPassword,
-  revokeApiToken,
-  SESSION_COOKIE,
-  sessionHash,
-  updateLocalUser,
-} from "../auth/local.js";
+import { changePassword, createApiToken, listApiTokens, login, logout, revokeApiToken, ROTATION_GRACE_DAYS, rotateApiToken, SESSION_COOKIE, sessionHash } from "../auth/local.js";
 import { acceptInvitation, createInvitation, describeInvitation, listInvitations, revokeInvitation } from "../auth/invitations.js";
 import { listConnections, revokeConnection } from "../auth/oauth.js";
 import type { Settings } from "../config.js";
 import { audit } from "../core/audit.js";
-import { ValidationError, type Actor } from "../core/context.js";
+import { ForbiddenError, ValidationError, type Actor } from "../core/context.js";
+import { assertMayGrant, can, resolveRoles } from "../core/roles.js";
+import { assertCanManage } from "../core/permissions.js";
+import { getReadableScope } from "../core/scopes.js";
+import { addPerson, createAccount, listPeople, resetAccountPassword, updatePerson } from "../core/users.js";
 import type { Db } from "../db/pool.js";
 
-/** Failed-login throttle: per email+IP and per IP, in memory (one instance) — enough to stop online guessing. */
-class LoginThrottle {
-  private readonly hits = new Map<string, { count: number; reset: number }>();
+/**
+ * Failed-attempt throttle (sign-in per email+address and per address, invitation links per address), counted in
+ * Postgres so every replica shares one count and a deploy doesn't reset it. Keys are stored as unsalted SHA-256
+ * hashes: not the values in plain sight, but not anonymous either (an IPv4 address can be recovered by trying them all).
+ */
+export class LoginThrottle {
   constructor(
+    private readonly db: Db,
+    private readonly bucket: string,
     private readonly limit: number,
     private readonly windowMs: number,
   ) {}
-  blocked(key: string) {
-    const h = this.hits.get(key);
-    return !!h && h.reset > Date.now() && h.count >= this.limit;
+  private key(key: string) {
+    return createHash("sha256").update(`${this.bucket}\0${key}`).digest("hex");
   }
-  fail(key: string) {
-    const now = Date.now();
-    const h = this.hits.get(key);
-    if (!h || h.reset <= now) this.hits.set(key, { count: 1, reset: now + this.windowMs });
-    else h.count++;
-    if (this.hits.size > 10_000) for (const [k, v] of this.hits) if (v.reset <= now) this.hits.delete(k);
+  async blocked(key: string) {
+    const { rows } = await this.db.query<{ failures: number }>("SELECT failures FROM auth_throttle WHERE key = $1 AND reset_at > now()", [this.key(key)]);
+    return (rows[0]?.failures ?? 0) >= this.limit;
   }
-  clear(key: string) {
-    this.hits.delete(key);
+  async fail(key: string) {
+    await this.db.query(
+      `INSERT INTO auth_throttle (key, failures, reset_at) VALUES ($1, 1, now() + make_interval(secs => $2))
+       ON CONFLICT (key) DO UPDATE SET
+         failures = CASE WHEN auth_throttle.reset_at <= now() THEN 1 ELSE auth_throttle.failures + 1 END,
+         reset_at = CASE WHEN auth_throttle.reset_at <= now() THEN EXCLUDED.reset_at ELSE auth_throttle.reset_at END`,
+      [this.key(key), this.windowMs / 1000],
+    );
+  }
+  async clear(key: string) {
+    await this.db.query("DELETE FROM auth_throttle WHERE key = $1", [this.key(key)]);
   }
 }
 
@@ -61,8 +63,8 @@ function setSessionCookie(req: Request, res: Response, settings: Settings, token
 /** Unauthenticated endpoints: which sign-in the UI should show, and local login/logout. */
 export function publicAuthRouter(db: Db, settings: Settings) {
   const router = Router();
-  const perAccount = new LoginThrottle(10, 15 * 60_000);
-  const perIp = new LoginThrottle(50, 15 * 60_000);
+  const perAccount = new LoginThrottle(db, "login", 10, 15 * 60_000);
+  const perIp = new LoginThrottle(db, "login-ip", 50, 15 * 60_000);
 
   router.get("/config", (_req, res) => {
     res.json({ mode: settings.authMode });
@@ -75,16 +77,16 @@ export function publicAuthRouter(db: Db, settings: Settings) {
       if (!body.success) return void res.status(400).json({ error: "email and password are required" });
       const ip = req.ip ?? "unknown";
       const accountKey = `${body.data.email.trim().toLowerCase()}|${ip}`;
-      if (perAccount.blocked(accountKey) || perIp.blocked(ip)) {
+      if ((await perAccount.blocked(accountKey)) || (await perIp.blocked(ip))) {
         return void res.status(429).json({ error: "too many failed attempts; try again in 15 minutes" });
       }
       const session = await login(db, body.data.email, body.data.password, { ttlHours: settings.sessionTtlHours, userAgent: req.header("user-agent") });
       if (!session) {
-        perAccount.fail(accountKey);
-        perIp.fail(ip);
+        await perAccount.fail(accountKey);
+        await perIp.fail(ip);
         return void res.status(401).json({ error: "wrong email or password" });
       }
-      perAccount.clear(accountKey);
+      await perAccount.clear(accountKey);
       await audit(db, session.userId, "login", null);
       setSessionCookie(req, res, settings, session.token);
       res.json({ ok: true, must_change_password: session.mustChangePassword });
@@ -94,7 +96,7 @@ export function publicAuthRouter(db: Db, settings: Settings) {
   });
 
   // Invitation links: show who invited whom, then create the account with the invitee's own password and sign them in.
-  const invites = new LoginThrottle(30, 15 * 60_000);
+  const invites = new LoginThrottle(db, "invite-ip", 30, 15 * 60_000);
   router.get("/invite/:token", async (req, res, next) => {
     try {
       const inv = await describeInvitation(db, String(req.params.token));
@@ -107,12 +109,12 @@ export function publicAuthRouter(db: Db, settings: Settings) {
   router.post("/invite/:token", async (req, res, next) => {
     try {
       const ip = req.ip ?? "unknown";
-      if (invites.blocked(ip)) return void res.status(429).json({ error: "too many attempts; try again in 15 minutes" });
+      if (await invites.blocked(ip)) return void res.status(429).json({ error: "too many attempts; try again in 15 minutes" });
       const body = z.object({ password: z.string().min(1).max(200), name: z.string().max(200).optional() }).safeParse(req.body);
       if (!body.success) return void res.status(400).json({ error: "choose a password" });
       const accepted = await acceptInvitation(db, String(req.params.token), body.data);
       if (!accepted) {
-        invites.fail(ip);
+        await invites.fail(ip);
         return void res.status(404).json({ error: "this invitation link has expired or was already used" });
       }
       await audit(db, accepted.userId, "accept_invitation", null);
@@ -142,7 +144,7 @@ export function publicAuthRouter(db: Db, settings: Settings) {
 const isLocal = (actor: Actor) => actor.subject.startsWith("local:");
 
 /** Authenticated account and user-management endpoints, mounted under /api. */
-export function accountRouter(db: Db, settings: Settings, isAdmin: (actor: Actor) => boolean) {
+export function accountRouter(db: Db, settings: Settings, _isAdmin?: (actor: Actor) => boolean) {
   const router = Router();
   const actorOf = (res: Response) => res.locals.actor as Actor;
   const wrap = (fn: (req: Request, res: Response) => Promise<unknown>) => async (req: Request, res: Response, next: (err?: unknown) => void) => {
@@ -153,13 +155,17 @@ export function accountRouter(db: Db, settings: Settings, isAdmin: (actor: Actor
       next(err);
     }
   };
+  // People are managed by Administrators and anyone with Manage people (User managers); who may change which
+  // account (no escalation, Administrators only for Administrators) is decided in core/users.ts.
+  const ctxOf = (res: Response) => ({ db, settings, actor: actorOf(res) });
   const requireAdmin = (res: Response) => {
-    if (!isAdmin(actorOf(res))) {
-      res.status(403).json({ error: "admin only" });
+    if (!can(ctxOf(res), "manage_users")) {
+      res.status(403).json({ error: "you need Manage people (User managers and Administrators)" });
       return false;
     }
     return true;
   };
+  const roleInputs = z.array(z.string().max(100)).max(20);
 
   router.post(
     "/account/password",
@@ -180,7 +186,11 @@ export function accountRouter(db: Db, settings: Settings, isAdmin: (actor: Actor
     wrap(async (req, res) => {
       const body = z.object({ name: z.string().min(1).max(100), expires_in_days: z.number().int().min(1).max(3650).optional() }).parse(req.body);
       const created = await createApiToken(db, actorOf(res).id, body.name, body.expires_in_days);
-      await audit(db, actorOf(res).id, "create_api_token", null);
+      await audit(db, actorOf(res).id, "create_api_token", created.id, {
+        targetKind: "token",
+        targetLabel: created.name,
+        details: { token_name: created.name, expires_at: created.expires_at },
+      });
       return created;
     }),
   );
@@ -188,8 +198,33 @@ export function accountRouter(db: Db, settings: Settings, isAdmin: (actor: Actor
     "/account/tokens/:id",
     wrap(async (req, res) => {
       const result = await revokeApiToken(db, actorOf(res).id, z.string().uuid().parse(req.params.id));
-      await audit(db, actorOf(res).id, "revoke_api_token", null);
+      await audit(db, actorOf(res).id, "revoke_api_token", result.id, { targetKind: "token", targetLabel: result.name, details: { token_name: result.name } });
       return result;
+    }),
+  );
+  // Rotation: a new token with the same name and lifetime (shown once); the old one works for the grace period.
+  // People rotate their own tokens; service-account tokens are rotated in Admin › Service accounts.
+  router.post(
+    "/account/tokens/:id/rotate",
+    wrap(async (req, res) => {
+      const actor = actorOf(res);
+      if (actor.kind !== "human") throw new ForbiddenError("service-account tokens are rotated by people who manage people, in Admin › Service accounts");
+      const id = z.string().uuid().parse(req.params.id);
+      const { grace } = z.object({ grace: z.enum(Object.keys(ROTATION_GRACE_DAYS) as [keyof typeof ROTATION_GRACE_DAYS]) }).parse(req.body);
+      const rotated = await rotateApiToken(db, actor.id, id, grace);
+      await audit(db, actor.id, "rotate_api_token", rotated.id, {
+        targetKind: "token",
+        targetLabel: rotated.name,
+        details: {
+          token_name: rotated.name,
+          old_token_id: rotated.replaced.id,
+          new_token_id: rotated.id,
+          grace,
+          old_works_until: rotated.replaced.works_until,
+          expires_at: rotated.expires_at,
+        },
+      });
+      return rotated;
     }),
   );
 
@@ -203,19 +238,37 @@ export function accountRouter(db: Db, settings: Settings, isAdmin: (actor: Actor
     }),
   );
 
-  // ---- Admin: local users ----
+  // ---- Admin: people (every sign-in), plus local accounts and invitations ----
   router.get(
     "/users",
-    wrap(async (_req, res) => (requireAdmin(res) ? { users: await listLocalUsers(db) } : undefined)),
+    wrap(async (req, res) => {
+      if (!requireAdmin(res)) return undefined;
+      const query = typeof req.query.q === "string" ? req.query.q.slice(0, 100) : undefined;
+      return { users: await listPeople(ctxOf(res), { query }) };
+    }),
   );
   router.post(
     "/users",
     wrap(async (req, res) => {
       if (!requireAdmin(res)) return undefined;
-      const body = z.object({ email: z.string(), name: z.string().max(200).optional(), is_admin: z.boolean().optional() }).parse(req.body);
-      const created = await createLocalUser(db, { email: body.email, name: body.name, isAdmin: body.is_admin });
-      await audit(db, actorOf(res).id, "create_user", created.user.id);
-      return { user: created.user, temporary_password: created.temporaryPassword };
+      const body = z
+        .object({
+          email: z.string().max(320),
+          name: z.string().max(200).optional(),
+          // Organisation roles ("Administrator" included) and a project with roles there (Contributor by default).
+          roles: roleInputs.optional(),
+          project: z.string().optional(),
+          project_roles: roleInputs.optional(),
+          // Deprecated: one project role; use project_roles.
+          role: z.string().max(100).optional(),
+          // Deprecated: use roles: ["Administrator"].
+          is_admin: z.boolean().optional(),
+        })
+        .parse(req.body);
+      const input = { email: body.email, name: body.name, roles: body.roles, isAdmin: body.is_admin, project: body.project, projectRoles: body.project_roles, role: body.role };
+      // Without built-in passwords, people sign in elsewhere (Cloudflare Access): add them by email, approved in advance.
+      // With them, an account with a temporary password. Either way everything is checked first and written at once.
+      return settings.authMode !== "local" ? addPerson(ctxOf(res), input) : createAccount(ctxOf(res), input);
     }),
   );
   router.get(
@@ -227,10 +280,30 @@ export function accountRouter(db: Db, settings: Settings, isAdmin: (actor: Actor
     wrap(async (req, res) => {
       if (!requireAdmin(res)) return undefined;
       const body = z
-        .object({ email: z.string().max(320), name: z.string().max(200).optional(), scope: z.string().optional(), role: z.enum(["reader", "writer", "owner"]).optional() })
+        .object({
+          email: z.string().max(320),
+          name: z.string().max(200).optional(),
+          scope: z.string().optional(),
+          roles: roleInputs.optional(),
+          // Deprecated: one project role; use roles.
+          role: z.string().max(100).optional(),
+        })
         .parse(req.body);
+      if (body.scope) {
+        // Inviting into a project gives roles there: the same rules as giving them directly.
+        const ctx = ctxOf(res);
+        const scope = await getReadableScope(ctx, body.scope);
+        await assertCanManage(ctx, scope, "manage_members");
+        if (body.roles && !body.roles.some((r) => r.trim())) throw new ValidationError("give them at least one role in the project, e.g. roles: ['Contributor']");
+        await assertMayGrant(ctx, await resolveRoles(db, "project", body.roles ?? (body.role ? [body.role] : ["writer"])), scope.id);
+      }
       const inv = await createInvitation(db, settings, actorOf(res).id, body);
-      await audit(db, actorOf(res).id, "invite_user", inv.id);
+      // Never the invitation link (it signs the invitee in).
+      await audit(db, actorOf(res).id, "invite_user", null, {
+        targetKind: "person",
+        targetLabel: body.email.trim().toLowerCase(),
+        details: { invitation_id: inv.id, email: body.email.trim().toLowerCase(), project: body.scope ?? null, roles: body.roles ?? (body.role ? [body.role] : []) },
+      });
       return inv;
     }),
   );
@@ -242,10 +315,7 @@ export function accountRouter(db: Db, settings: Settings, isAdmin: (actor: Actor
     "/users/:id/reset-password",
     wrap(async (req, res) => {
       if (!requireAdmin(res)) return undefined;
-      const id = z.string().uuid().parse(req.params.id);
-      const temporary = await resetPassword(db, id);
-      await audit(db, actorOf(res).id, "reset_password", id);
-      return { temporary_password: temporary };
+      return resetAccountPassword(ctxOf(res), z.string().uuid().parse(req.params.id));
     }),
   );
   router.patch(
@@ -253,10 +323,20 @@ export function accountRouter(db: Db, settings: Settings, isAdmin: (actor: Actor
     wrap(async (req, res) => {
       if (!requireAdmin(res)) return undefined;
       const id = z.string().uuid().parse(req.params.id);
-      const body = z.object({ is_admin: z.boolean().optional(), disabled: z.boolean().optional(), name: z.string().max(200).optional() }).parse(req.body);
-      const user = await updateLocalUser(db, actorOf(res).id, id, { isAdmin: body.is_admin, disabled: body.disabled, name: body.name });
-      await audit(db, actorOf(res).id, "update_user", id);
-      return { user };
+      // Organisation roles: `roles` replaces them (never removing Administrator), or `add` / `remove` ("Administrator"
+      // included). `is_admin` is the older form and is merged into them.
+      const body = z
+        .object({
+          roles: roleInputs.optional(),
+          add: roleInputs.optional(),
+          remove: roleInputs.optional(),
+          is_admin: z.boolean().optional(),
+          disabled: z.boolean().optional(),
+          // A display name; null or "" clears it.
+          name: z.string().max(200).nullable().optional(),
+        })
+        .parse(req.body);
+      return updatePerson(ctxOf(res), id, { roles: body.roles, add: body.add, remove: body.remove, isAdmin: body.is_admin, disabled: body.disabled, name: body.name });
     }),
   );
 

@@ -1,3 +1,4 @@
+import { agentCallSql } from "./audit.js";
 import type { RequestContext } from "./context.js";
 import { readableScopes } from "./permissions.js";
 
@@ -37,7 +38,7 @@ export async function insights(ctx: RequestContext) {
   const activity = await db.query(
     `WITH days AS (SELECT generate_series(current_date - 29, current_date, interval '1 day')::date AS day)
      SELECT to_char(d.day, 'YYYY-MM-DD') AS day,
-            count(l.id) FILTER (WHERE l.tool NOT LIKE 'api:%' AND l.tool NOT IN ('login', 'approve_revision', 'reject_revision', 'change_password'))::int AS agents,
+            count(l.id) FILTER (WHERE ${agentCallSql("l")})::int AS agents,
             count(l.id) FILTER (WHERE l.tool LIKE 'api:%')::int AS web
        FROM days d LEFT JOIN audit_log l ON l.at::date = d.day
       GROUP BY d.day ORDER BY d.day`,

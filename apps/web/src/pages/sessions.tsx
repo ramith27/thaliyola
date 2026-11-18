@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api, type ScopeInfo } from "../api";
+import { Page, PageHeader } from "../components/kit";
 import { ErrorBox, formatDate, Loading, Notice } from "../components/ui";
 import { useApi, useLiveRefresh } from "../hooks";
 import { href, navigate, type Route } from "../router";
@@ -61,92 +62,95 @@ export function SessionsPage({ route, scopes }: { route: Route; scopes: ScopeInf
   const projects = scopes.filter((s) => s.kind === "project");
 
   return (
-    <div className="page sessions-page">
-      <h1>Sessions</h1>
-      <p className="lead">
-        Claude sessions (yours and teammates', on any machine) ask each other questions here. A listening session answers within seconds, a busy one when it finishes its
-        task, and you can answer for any session or project you belong to.
-      </p>
+    <Page width="content">
+      <div className="sessions-page">
+        <PageHeader
+          title="Sessions"
+          icon="chat"
+          nav="sessions"
+          description="Claude sessions (yours and teammates', on any machine) ask each other questions here. A listening session answers within seconds, a busy one when it finishes its task, and you can answer for any session or project you belong to."
+        />
 
-      <section className="sessions-online">
-        <div className="section-head">
-          <h2>Who can be asked</h2>
-          <label className="inline small">
-            <input type="checkbox" checked={offline} onChange={(e) => setOffline(e.target.checked)} /> Include offline (last 7 days)
-          </label>
-        </div>
-        <ErrorBox error={sessions.error} />
-        {!sessions.data ? (
-          <Loading />
-        ) : !sessions.data.sessions.length ? (
-          <Notice>
-            No sessions online. In Claude Code with the Thaliyola plugin, every session joins automatically; elsewhere run <code>/mcp__thaliyola__listen</code>.
-          </Notice>
-        ) : (
-          <ul className="plain session-list">
-            {sessions.data.sessions.map((s) => (
-              <li key={s.handle} className={`session ${s.online ? "" : "is-offline"}`}>
-                <span className={`presence ${s.online ? (s.listening ? "listening" : "busy") : "offline"}`} aria-hidden="true" />
-                <div className="session-main">
-                  <div>
-                    <code>{s.handle}</code> {s.mine && <span className="badge badge-type">you</span>}
-                    {s.visibility === "private" && <span className="badge badge-type">private</span>}
-                  </div>
-                  <div className="small muted">
-                    {s.online ? (s.listening ? "Listening" : "Busy, answers when it finishes") : `Offline, seen ${ago(s.last_seen_at)}`}
-                    {s.project ? ` · ${s.project}${s.repository ? `/${s.repository}` : ""}` : ""} · {s.owner}
-                    {s.waiting ? ` · ${s.waiting} waiting` : ""}
-                  </div>
-                  {s.description && <div className="small">{s.description}</div>}
-                </div>
-                {!s.mine && (
-                  <a className="btn btn-small" href={href("/sessions", { tab, to: s.handle })}>
-                    Ask
-                  </a>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <AskForm
-        initialTo={route.query.get("to") ?? ""}
-        suggestions={[...(sessions.data?.sessions.filter((s) => !s.mine).map((s) => s.handle) ?? []), ...projects.map((p) => p.slug)]}
-        onAsked={() => questions.reload()}
-      />
-
-      <section>
-        <div className="section-head">
-          <h2>Questions</h2>
-          <div className="chips" role="tablist" aria-label="Which questions">
-            {(
-              [
-                ["open", "Open"],
-                ["closed", "Answered and closed"],
-                ["all", "All"],
-              ] as const
-            ).map(([k, label]) => (
-              <button key={k} role="tab" aria-selected={tab === k} className={`chip ${tab === k ? "active" : ""}`} onClick={() => navigate("/sessions", { tab: k })}>
-                {label}
-              </button>
-            ))}
+        <section className="sessions-online">
+          <div className="section-head">
+            <h2>Who can be asked</h2>
+            <label className="inline small">
+              <input type="checkbox" checked={offline} onChange={(e) => setOffline(e.target.checked)} /> Include offline (last 7 days)
+            </label>
           </div>
-        </div>
-        <ErrorBox error={questions.error} />
-        {!questions.data ? (
-          <Loading />
-        ) : !questions.data.questions.length ? (
-          <p className="muted">{tab === "open" ? "No open questions." : "Nothing here yet."}</p>
-        ) : (
-          <ul className="plain question-list">
-            {questions.data.questions.map((q) => (
-              <QuestionCard key={q.id} q={q} projects={projects} onChange={() => questions.reload()} />
-            ))}
-          </ul>
-        )}
-      </section>
-    </div>
+          <ErrorBox error={sessions.error} />
+          {!sessions.data ? (
+            <Loading />
+          ) : !sessions.data.sessions.length ? (
+            <Notice>
+              No sessions online. In Claude Code with the Thaliyola plugin, every session joins automatically; elsewhere run <code>/mcp__thaliyola__listen</code>.
+            </Notice>
+          ) : (
+            <ul className="plain session-list">
+              {sessions.data.sessions.map((s) => (
+                <li key={s.handle} className={`session ${s.online ? "" : "is-offline"}`}>
+                  <span className={`presence ${s.online ? (s.listening ? "listening" : "busy") : "offline"}`} aria-hidden="true" />
+                  <div className="session-main">
+                    <div>
+                      <code>{s.handle}</code> {s.mine && <span className="badge badge-type">you</span>}
+                      {s.visibility === "private" && <span className="badge badge-type">private</span>}
+                    </div>
+                    <div className="small muted">
+                      {s.online ? (s.listening ? "Listening" : "Busy, answers when it finishes") : `Offline, seen ${ago(s.last_seen_at)}`}
+                      {s.project ? ` · ${s.project}${s.repository ? `/${s.repository}` : ""}` : ""} · {s.owner}
+                      {s.waiting ? ` · ${s.waiting} waiting` : ""}
+                    </div>
+                    {s.description && <div className="small">{s.description}</div>}
+                  </div>
+                  {!s.mine && (
+                    <a className="btn btn-small" href={href("/sessions", { tab, to: s.handle })}>
+                      Ask
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <AskForm
+          initialTo={route.query.get("to") ?? ""}
+          suggestions={[...(sessions.data?.sessions.filter((s) => !s.mine).map((s) => s.handle) ?? []), ...projects.map((p) => p.slug)]}
+          onAsked={() => questions.reload()}
+        />
+
+        <section>
+          <div className="section-head">
+            <h2>Questions</h2>
+            <div className="chips" role="tablist" aria-label="Which questions">
+              {(
+                [
+                  ["open", "Open"],
+                  ["closed", "Answered and closed"],
+                  ["all", "All"],
+                ] as const
+              ).map(([k, label]) => (
+                <button key={k} role="tab" aria-selected={tab === k} className={`chip ${tab === k ? "active" : ""}`} onClick={() => navigate("/sessions", { tab: k })}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <ErrorBox error={questions.error} />
+          {!questions.data ? (
+            <Loading />
+          ) : !questions.data.questions.length ? (
+            <p className="muted">{tab === "open" ? "No open questions." : "Nothing here yet."}</p>
+          ) : (
+            <ul className="plain question-list">
+              {questions.data.questions.map((q) => (
+                <QuestionCard key={q.id} q={q} projects={projects} onChange={() => questions.reload()} />
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+    </Page>
   );
 }
 

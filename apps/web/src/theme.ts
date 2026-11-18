@@ -14,6 +14,21 @@ export function getTheme(): Theme {
 export function applyTheme(theme: Theme = getTheme()) {
   if (theme === "system") document.documentElement.removeAttribute("data-theme");
   else document.documentElement.setAttribute("data-theme", theme);
+  syncThemeColor(theme);
+}
+
+/**
+ * The browser chrome colour follows the page canvas. index.html ships one meta per system scheme;
+ * a forced theme points both at that theme's --bg, and "system" restores what index.html said.
+ */
+function syncThemeColor(theme: Theme) {
+  const metas = document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]');
+  if (!metas.length) return;
+  const bg = theme === "system" ? "" : getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+  metas.forEach((m) => {
+    if (m.dataset.original === undefined) m.dataset.original = m.content;
+    m.content = bg || m.dataset.original;
+  });
 }
 
 export function setTheme(theme: Theme) {

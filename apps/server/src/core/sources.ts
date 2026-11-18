@@ -206,13 +206,16 @@ export async function runDueSources(db: Db, settings: Settings, log: (msg: strin
 
 /** Checks for due sources every five minutes, one instance at a time. */
 export function startSourceJobs(db: Db, settings: Settings, log: (msg: string) => void) {
-  if (!settings.sources?.enabled) return { stop() {} };
+  if (!settings.sources?.enabled) return { async stop() {} };
   const LOCK = 7_402_213;
   let running = false;
+  let current: Promise<void> | null = null;
   async function tick() {
     if (running) return;
     running = true;
-    const client = await db.connect();
+    // Database unreachable: log and try again next tick instead of an unhandled rejection that ends the process.
+    const client = await db.connect().catch((err: Error) => void log(`sources failed: ${err.message}`));
+    if (!client) return void (running = false);
     try {
       const { rows } = await client.query<{ locked: boolean }>("SELECT pg_try_advisory_lock($1) AS locked", [LOCK]);
       if (!rows[0]?.locked) return;
@@ -228,14 +231,20 @@ export function startSourceJobs(db: Db, settings: Settings, log: (msg: string) =
       running = false;
     }
   }
-  const first = setTimeout(tick, 30_000);
-  const timer = setInterval(tick, 5 * 60_000);
+  const start = () => {
+    if (running) return;
+    current = tick();
+  };
+  const first = setTimeout(start, 30_000);
+  const timer = setInterval(start, 5 * 60_000);
   first.unref();
   timer.unref();
   return {
-    stop() {
+    /** Starts no more runs; resolves when the one in progress (if any) has finished. */
+    async stop() {
       clearTimeout(first);
       clearInterval(timer);
+      await current;
     },
   };
 }

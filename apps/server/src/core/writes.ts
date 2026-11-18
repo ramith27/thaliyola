@@ -1,14 +1,18 @@
 import { VECTOR_CANDIDATES, withTx, type Queryable } from "../db/pool.js";
+import { audit, requestVia } from "./audit.js";
 import { addSourceLink, insertArticle, insertFinding, relate } from "./bootstrap.js";
 import { ConflictError, NotFoundError, ValidationError, type RequestContext } from "./context.js";
 import { getArticle, getFinding } from "./items.js";
-import { assertCanPropose, assertCanRead } from "./permissions.js";
+import { assertCanPropose, assertCanRead, assertCanVerify, canApprove, canPublishOwn } from "./permissions.js";
 import { onlyRedacted, redactFields, type Redaction } from "./redaction.js";
+import { approveRevision } from "./review.js";
 import { toPgVector } from "./embeddings.js";
 import { onProposal, track } from "./notify.js";
 import { getComponent, getReadableScope, getScopeBySlug, resolveProject, type Scope } from "./scopes.js";
 import { linkEntities, normalizeTags, type EntityRef } from "./tags.js";
-import { missingSections, stripHints } from "./templates.js";
+import { attachTrackerLink } from "./connections/tickets.js";
+import { isTracker } from "./connections/trackers.js";
+import { missingSections, newItemSummary, stripHints } from "./templates.js";
 
 /**
  * Proposals. Every write by a person or agent becomes a pending revision that
@@ -102,23 +106,47 @@ async function insertRevision(
   },
 ): Promise<string> {
   const { rows } = await db.query<{ id: string }>(
-    `INSERT INTO revisions (target_kind, target_id, scope_id, op, base_version, payload, author_id, summary, redactions)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-    [r.targetKind, r.targetId, r.scopeId, r.op, r.baseVersion, JSON.stringify(r.payload), r.authorId, r.summary, JSON.stringify(r.redactions)],
+    `INSERT INTO revisions (target_kind, target_id, scope_id, op, base_version, payload, author_id, summary, redactions, created_via)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+    // Written through Claude: the same person approving it there soon after needs the user's say-so (core/approvals.ts).
+    [r.targetKind, r.targetId, r.scopeId, r.op, r.baseVersion, JSON.stringify(r.payload), r.authorId, r.summary, JSON.stringify(r.redactions), requestVia() === "mcp" ? "mcp" : null],
   );
   return rows[0]!.id;
 }
 
-async function addLinks(db: Queryable, target: { kind: string; id: string }, links: SourceLinkInput[] | undefined) {
+async function addLinks(db: Queryable, target: { kind: string; id: string }, links: SourceLinkInput[] | undefined, actorId?: string) {
   for (const l of links ?? []) {
     const { fields } = redactFields({ url: l.url, label: l.label ?? "" });
-    await addSourceLink(db, target, l.system, fields.url, fields.label);
+    // A Jira or Linear issue's link: once per item, and its status is cached and shown with it (core/connections/tickets.ts).
+    if (isTracker(l.system)) await attachTrackerLink(db, target, { system: l.system, url: fields.url, label: fields.label }, actorId);
+    else await addSourceLink(db, target, l.system, fields.url, fields.label);
   }
 }
 
-/** Tells reviewers about a committed proposal (asynchronously; never fails the write). */
-function announce<T extends { revision_id?: string; status?: string }>(ctx: RequestContext, result: T): T {
-  if (result.revision_id && !ctx.quietProposals) {
+/** Proposal kinds an author with "publish" publishes themselves; moves and library shares always get a review. */
+const SELF_PUBLISHED = new Set(["create", "update", "promote", "verify"]);
+
+/**
+ * Tells reviewers about a committed proposal (asynchronously; never fails the write).
+ * Some writes don't wait: in a personal space there is nobody to review, so its owner's writes publish on the spot;
+ * and someone holding "publish" in the project (Project admins) publishes their own (see canPublishOwn).
+ */
+async function announce<T extends { revision_id?: string; status?: string }>(ctx: RequestContext, result: T): Promise<T> {
+  if (!result.revision_id) return result;
+  const { rows } = await ctx.db.query<{ kind: string; scope_id: string; op: string }>(
+    "SELECT s.kind, r.scope_id, r.op FROM revisions r JOIN scopes s ON s.id = r.scope_id WHERE r.id = $1",
+    [result.revision_id],
+  );
+  const r = rows[0];
+  if (r?.kind === "personal" && (await canApprove(ctx, r.scope_id))) {
+    const approved = await approveRevision(ctx, result.revision_id, undefined, { settle: true });
+    return { ...result, ...approved, status: "published", published: true };
+  }
+  if (r && SELF_PUBLISHED.has(r.op) && (await canPublishOwn(ctx, r.scope_id))) {
+    const approved = await approveRevision(ctx, result.revision_id, undefined, { ownWrite: true });
+    return { ...result, ...approved, status: "published", published: true, message: "Published: you may publish in this project without review." };
+  }
+  if (!ctx.quietProposals) {
     track(onProposal(ctx.db, ctx.settings, result.revision_id).catch((err) => console.error(`[notify] ${(err as Error).message}`)));
   }
   return result;
@@ -278,7 +306,7 @@ export async function proposeFinding(ctx: RequestContext, input: ProposeFindingI
       authorId: ctx.actor.id,
     });
     await linkEntities(db, { kind: "finding", id }, input.entities);
-    await addLinks(db, { kind: "finding", id }, input.source_links);
+    await addLinks(db, { kind: "finding", id }, input.source_links, ctx.actor.id);
     for (const rel of input.related_ids ?? []) {
       const other = await findItem(db, rel);
       await relate(db, { kind: "finding", id }, "related", { kind: other.kind, id: other.id });
@@ -291,7 +319,7 @@ export async function proposeFinding(ctx: RequestContext, input: ProposeFindingI
       baseVersion: 1,
       payload: {},
       authorId: ctx.actor.id,
-      summary: `New ${input.type.replace(/_/g, " ")}: ${fields.title}`.slice(0, LIMITS.summary),
+      summary: newItemSummary(input.type, fields.title).slice(0, LIMITS.summary),
       redactions,
     });
     ctx.onWrite?.();
@@ -388,7 +416,7 @@ export async function createArticle(ctx: RequestContext, input: CreateArticleInp
       ownerId: ctx.actor.kind === "human" ? ctx.actor.id : undefined,
     });
     await linkEntities(db, { kind: "article", id }, input.entities);
-    await addLinks(db, { kind: "article", id }, input.source_links);
+    await addLinks(db, { kind: "article", id }, input.source_links, ctx.actor.id);
     for (const target of input.uses_ids ?? []) {
       const other = await findItem(db, target);
       await relate(db, { kind: "article", id }, "uses", { kind: other.kind, id: other.id });
@@ -401,7 +429,7 @@ export async function createArticle(ctx: RequestContext, input: CreateArticleInp
       baseVersion: 1,
       payload: {},
       authorId: ctx.actor.id,
-      summary: `New ${input.type.replace(/_/g, " ")}: ${fields.title}`.slice(0, LIMITS.summary),
+      summary: newItemSummary(input.type, fields.title).slice(0, LIMITS.summary),
       redactions,
     });
     const missing = missingSections(input.type, fields.body_md);
@@ -423,9 +451,35 @@ export interface ArticleEditInput {
   summary: string;
   /** Section heading to replace (or add); omit to replace the whole body. */
   section?: string;
-  text: string;
+  /** New text; omit for an edit that only changes tags (or the title). */
+  text?: string;
   /** New title (whole-article edits from the UI). */
   title?: string;
+  /** Replace all of the article's tags. Not with add_tags / remove_tags. */
+  tags?: string[];
+  /** Tags to add and to remove, keeping the others. */
+  add_tags?: string[];
+  remove_tags?: string[];
+}
+
+/**
+ * The tags an article edit leaves: `tags` replaces them all, `add_tags` / `remove_tags` change some; each is
+ * normalised like a new article's (lower case, hyphens for spaces, no duplicates). Null when the edit leaves tags alone.
+ */
+export function nextArticleTags(current: string[], input: Pick<ArticleEditInput, "tags" | "add_tags" | "remove_tags">): { tags: string[]; added: string[]; removed: string[] } | null {
+  const replace = input.tags !== undefined;
+  const change = input.add_tags !== undefined || input.remove_tags !== undefined;
+  if (replace && change) throw new ValidationError("pass tags (replace them all) or add_tags / remove_tags (change some), not both");
+  if (!replace && !change) return null;
+  let next: string[];
+  if (replace) next = normalizeTags(input.tags);
+  else {
+    const remove = new Set(normalizeTags(input.remove_tags));
+    next = normalizeTags([...current, ...(input.add_tags ?? [])]).filter((t) => !remove.has(t));
+  }
+  const before = new Set(current);
+  const after = new Set(next);
+  return { tags: next, added: next.filter((t) => !before.has(t)), removed: current.filter((t) => !after.has(t)) };
 }
 
 export async function proposeArticleEdit(ctx: RequestContext, input: ArticleEditInput) {
@@ -436,8 +490,9 @@ export async function proposeArticleEdit(ctx: RequestContext, input: ArticleEdit
   if (item.version !== input.version) {
     throw new ConflictError(`article is at version ${item.version}, not ${input.version}`, await getArticle(ctx, input.id));
   }
+  const hasText = input.text !== undefined;
   const { fields, redactions } = redactFields({
-    text: stripHints(input.text),
+    text: hasText ? stripHints(input.text!) : "",
     summary: input.summary.trim(),
     section: (input.section ?? "").trim(),
     title: (input.title ?? "").trim(),
@@ -445,13 +500,25 @@ export async function proposeArticleEdit(ctx: RequestContext, input: ArticleEdit
   requireText("summary", fields.summary);
   checkLength("text", fields.text, LIMITS.body);
   checkLength("title", fields.title, LIMITS.title);
+  // Tags change through the same review as text: the proposal carries the tags it leaves and what it adds and removes.
+  const current = (await ctx.db.query<{ tags: string[] }>("SELECT tags FROM articles WHERE id = $1", [item.id])).rows[0]?.tags ?? [];
+  const tags = nextArticleTags(current, input);
+  if (tags && !tags.added.length && !tags.removed.length && !hasText && !fields.title) throw new ValidationError("the article already has exactly these tags: nothing to change");
+  if (!hasText && !tags && !fields.title) throw new ValidationError("pass text, a title, or tags (tags, or add_tags / remove_tags) to change");
+  if (!hasText && fields.section) throw new ValidationError("a section needs its new text");
   const revisionId = await insertRevision(ctx.db, {
     targetKind: "article",
     targetId: item.id,
     scopeId: item.scope_id,
     op: "update",
     baseVersion: item.version,
-    payload: { section: fields.section || null, text: fields.text, mode: "replace", ...(fields.title ? { title: fields.title } : {}) },
+    payload: {
+      section: fields.section || null,
+      ...(hasText ? { text: fields.text } : {}),
+      mode: "replace",
+      ...(fields.title ? { title: fields.title } : {}),
+      ...(tags ? { tags: tags.tags, tags_added: tags.added, tags_removed: tags.removed } : {}),
+    },
     authorId: ctx.actor.id,
     summary: fields.summary.slice(0, LIMITS.summary),
     redactions,
@@ -491,7 +558,7 @@ export async function addSourceLinkTo(ctx: RequestContext, id: string, link: Sou
   const item = await findItemFor(ctx, id);
   await assertCanPropose(ctx, item.scope_id);
   if (!/^https?:\/\//.test(link.url)) throw new ValidationError("links must be http(s)");
-  await addLinks(ctx.db, { kind: item.kind, id: item.id }, [link]);
+  await addLinks(ctx.db, { kind: item.kind, id: item.id }, [link], ctx.actor.id);
   return { target_id: item.id, system: link.system, url: redactFields({ u: link.url }).fields.u };
 }
 
@@ -540,20 +607,40 @@ export async function shareToLibrary(ctx: RequestContext, input: { id: string; s
 // ---------------------------------------------------------------------------
 // Verification and links
 
+/** Days until an article's next review after someone confirms an overdue one is still accurate. */
+export const REVIEW_INTERVAL_DAYS = 180;
+
+/** Whether confirming an article also counts as its scheduled review: a person, in the app, with Review in the scope. */
+async function canMoveReviewDate(ctx: RequestContext, scopeId: string): Promise<boolean> {
+  return !ctx.viaAgent && (await canApprove(ctx, scopeId));
+}
+
 export async function verifyEntry(ctx: RequestContext, input: { id: string; still_valid: boolean; note?: string }) {
   const item = await findItemFor(ctx, input.id);
-  await assertCanPropose(ctx, item.scope_id);
+  await assertCanVerify(ctx, item.scope_id);
   if (item.status !== "published" && item.status !== "possibly_stale") {
     throw new ValidationError(`only published items can be verified (this one is ${item.status})`);
   }
   if (input.still_valid) {
-    // A lightweight signal, applied directly: it only refreshes freshness.
-    const table = item.kind === "article" ? "articles" : "findings";
-    const { rows } = await ctx.db.query(
-      `UPDATE ${table} SET last_verified_at = now(), status = 'published' WHERE id = $1 RETURNING last_verified_at, status`,
-      [item.id],
-    );
-    return { status: "verified" as const, last_verified_at: rows[0].last_verified_at, item_status: rows[0].status };
+    // A lightweight signal, applied directly: it refreshes freshness. Only a person who may review in the project,
+    // confirming in the app, also moves an overdue review date on: agents (MCP), service accounts and contributors
+    // confirming what they read must not silently clear the scheduled review.
+    const movesReview = item.kind === "article" && (await canMoveReviewDate(ctx, item.scope_id));
+    const { rows } =
+      item.kind === "article"
+        ? await ctx.db.query(
+            `UPDATE articles SET last_verified_at = now(), status = 'published',
+                    review_due = CASE WHEN $3::boolean AND review_due < current_date THEN current_date + $2::int ELSE review_due END
+              WHERE id = $1 RETURNING last_verified_at, status, review_due`,
+            [item.id, REVIEW_INTERVAL_DAYS, movesReview],
+          )
+        : await ctx.db.query(`UPDATE findings SET last_verified_at = now(), status = 'published' WHERE id = $1 RETURNING last_verified_at, status`, [item.id]);
+    return {
+      status: "verified" as const,
+      last_verified_at: rows[0].last_verified_at,
+      item_status: rows[0].status,
+      ...(item.kind === "article" ? { review_due: rows[0].review_due } : {}),
+    };
   }
   const note = redactFields({ note: (input.note ?? "").trim() }).fields.note;
   requireText("note (why it is no longer valid)", note);
@@ -599,9 +686,31 @@ const LINK_RULES: Record<string, { from: Ref["kind"][]; to: Ref["kind"][] }> = {
   depends_on: { from: ["article"], to: ["article"] },
   provided_by: { from: ["article"], to: ["component"] },
   consumed_by: { from: ["article"], to: ["component"] },
+  // Lineage: a repository reads or writes a table (its table article, from a database connection's sync or written by
+  // hand). Schema changes to the table then reach the repository's project as impact notices.
+  reads: { from: ["component"], to: ["article"] },
+  writes: { from: ["component"], to: ["article"] },
 };
 
 export const LINK_KINDS = Object.keys(LINK_RULES) as [string, ...string[]];
+export const LINEAGE_KINDS = ["reads", "writes"] as const;
+
+/** reads/writes point at a table article. */
+async function assertTableArticle(ctx: RequestContext, to: Ref, relation: string) {
+  const a = (await ctx.db.query<{ type: string; title: string }>("SELECT type, title FROM articles WHERE id = $1", [to.id])).rows[0];
+  if (a?.type !== "table") throw new ValidationError(`'${relation}' links a repository to a table article (type table), and "${a?.title ?? to.id}" is ${a ? `a ${a.type} article` : "not an article"}`);
+}
+
+/** A lineage link added or removed, on the Audit log as the repository's event with the table it names. */
+async function auditLineage(ctx: RequestContext, tool: "link_entries" | "unlink_entries", from: Ref, to: Ref, relation: string) {
+  const repo = (await ctx.db.query<{ project: string; component: string }>("SELECT s.slug AS project, c.slug AS component FROM components c JOIN scopes s ON s.id = c.scope_id WHERE c.id = $1", [from.id])).rows[0];
+  const table = (await ctx.db.query<{ title: string }>("SELECT title FROM articles WHERE id = $1", [to.id])).rows[0];
+  await audit(ctx.db, ctx.actor.id, tool, from.id, {
+    targetKind: "repository",
+    targetLabel: repo ? `${repo.project}/${repo.component}` : null,
+    details: { relation, table: table?.title ?? null, table_id: to.id, ...(repo ? { project: repo.project, repository: repo.component } : {}) },
+  });
+}
 
 /** Typed links are low-risk metadata, so they apply directly (and are audited). */
 export async function linkEntries(ctx: RequestContext, input: { from: string; to: string; relation: string }) {
@@ -617,6 +726,7 @@ export async function linkEntries(ctx: RequestContext, input: { from: string; to
     const s = (await ctx.db.query<{ kind: string }>("SELECT kind FROM scopes WHERE id = $1", [from.id])).rows[0]!;
     if (s.kind !== "project") throw new ValidationError("only projects can declare that they use an item");
   }
+  if ((LINEAGE_KINDS as readonly string[]).includes(input.relation)) await assertTableArticle(ctx, to, input.relation);
   await assertCanPropose(ctx, from.scopeId);
   const { rows } = await ctx.db.query<{ id: string }>(
     `INSERT INTO relations (from_kind, from_id, kind, to_kind, to_id, created_by) VALUES ($1, $2, $3, $4, $5, $6)
@@ -624,7 +734,23 @@ export async function linkEntries(ctx: RequestContext, input: { from: string; to
      RETURNING id`,
     [from.kind, from.id, input.relation, to.kind, to.id, ctx.actor.id],
   );
+  if ((LINEAGE_KINDS as readonly string[]).includes(input.relation)) await auditLineage(ctx, "link_entries", from, to, input.relation);
   return { relation_id: rows[0]!.id, from: { kind: from.kind, id: from.id }, relation: input.relation, to: { kind: to.kind, id: to.id } };
+}
+
+/**
+ * Removes a lineage link (a repository reads or writes a table): the same people who may add it, Propose in the
+ * repository's project. Other kinds of links aren't removed this way.
+ */
+export async function unlinkEntries(ctx: RequestContext, input: { from: string; to: string; relation: string }) {
+  if (!(LINEAGE_KINDS as readonly string[]).includes(input.relation)) throw new ValidationError(`only ${LINEAGE_KINDS.join(" and ")} links can be removed`);
+  const from = await resolveRef(ctx, input.from);
+  const to = await resolveRef(ctx, input.to);
+  await assertCanPropose(ctx, from.scopeId);
+  const { rowCount } = await ctx.db.query("DELETE FROM relations WHERE from_id = $1 AND to_id = $2 AND kind = $3", [from.id, to.id, input.relation]);
+  if (!rowCount) throw new NotFoundError(`a ${input.relation} link from ${input.from} to ${input.to}`);
+  await auditLineage(ctx, "unlink_entries", from, to, input.relation);
+  return { removed: true, from: { kind: from.kind, id: from.id }, relation: input.relation, to: { kind: to.kind, id: to.id } };
 }
 
 /**

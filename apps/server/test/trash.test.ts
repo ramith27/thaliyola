@@ -24,7 +24,7 @@ describe("trash", () => {
     const a = await admin();
     const page = await getArticle(a, ids.runbook);
     const edit = await proposeArticleEdit(await ctxFor(db, { email: "writer@example.com" }), { id: ids.runbook, version: page.version, section: "Fix", text: "x", summary: "pending edit" });
-    await expect(deleteItem(await ctxFor(db, { email: "writer@example.com" }), ids.runbook)).rejects.toThrow(/owners and admins/);
+    await expect(deleteItem(await ctxFor(db, { email: "writer@example.com" }), ids.runbook)).rejects.toThrow(/include Moderate/);
     await deleteItem(a, ids.runbook);
     expect((await db.query("SELECT state FROM revisions WHERE id = $1", [edit.revision_id])).rows[0].state).toBe("rejected");
     // Gone for readers, from search and from browsing; still visible to someone who can restore it.
@@ -63,15 +63,37 @@ describe("trash", () => {
 
   it("lets only admins empty the trash for good", async () => {
     const a = await admin();
+    // Generated documentation (a page and its claims) points at articles without a foreign key, and at projects with one.
+    const documented = async (articleId: string) => {
+      const { scope_id } = (await db.query("SELECT scope_id FROM articles WHERE id = $1", [articleId])).rows[0];
+      await db.query("INSERT INTO doc_runs (scope_id, mode, head_sha, started_by) VALUES ($1, 'init', 'abc123', $2)", [scope_id, a.actor.id]);
+      await db.query("INSERT INTO doc_pages (scope_id, key, article_id) VALUES ($1, $2, $3)", [scope_id, `page-${articleId}`, articleId]);
+      await db.query("INSERT INTO claims (article_id, text, evidence) VALUES ($1, 'x', '[]')", [articleId]);
+      return scope_id as string;
+    };
+    const docRows = async (scopeId: string, articleId: string) =>
+      (
+        await db.query(
+          `SELECT (SELECT count(*) FROM doc_runs WHERE scope_id = $1)::int AS runs, (SELECT count(*) FROM doc_pages WHERE article_id = $2)::int AS pages,
+                  (SELECT count(*) FROM claims WHERE article_id = $2)::int AS claims`,
+          [scopeId, articleId],
+        )
+      ).rows[0];
+
+    await documented(ids.cvr);
     await deleteItem(a, ids.cvr);
-    await expect(emptyItem(await ctxFor(db, { email: "owner@example.com" }), ids.cvr)).rejects.toThrow(/only admins/);
+    await expect(emptyItem(await ctxFor(db, { email: "owner@example.com" }), ids.cvr)).rejects.toThrow(/needs Delete permanently/);
     await emptyItem(a, ids.cvr);
     expect((await db.query("SELECT count(*)::int AS n FROM articles WHERE id = $1", [ids.cvr])).rows[0].n).toBe(0);
+    expect(await docRows("00000000-0000-0000-0000-000000000000", ids.cvr)).toMatchObject({ pages: 0, claims: 0 });
 
+    const doomedDoc = (await db.query("SELECT a.id FROM articles a JOIN scopes s ON s.id = a.scope_id WHERE s.slug = 'doomed' LIMIT 1")).rows[0].id;
+    const doomed = await documented(doomedDoc);
     await deleteProject(a, "doomed", "doomed");
     await expect(emptyProject(a, "doomed", "nope")).rejects.toThrow(/type the project's name/);
     await emptyProject(a, "doomed", "Doomed project");
     expect((await db.query("SELECT count(*)::int AS n FROM scopes WHERE slug = 'doomed'")).rows[0].n).toBe(0);
+    expect(await docRows(doomed, doomedDoc)).toEqual({ runs: 0, pages: 0, claims: 0 });
     expect((await db.query("SELECT reason FROM purges WHERE target_kind = 'project'")).rows[0].reason).toMatch(/doomed deleted permanently/);
   });
 });

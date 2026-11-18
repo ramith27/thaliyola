@@ -1,8 +1,9 @@
 import type { NextFunction, Request, Response } from "express";
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
-import type { Config } from "../config.js";
+import type { Config, Settings } from "../config.js";
 import type { Actor } from "../core/context.js";
-import { upsertUser } from "../core/users.js";
+import { announceAccessRequest, approvalRequired, safeName, upsertUser } from "../core/users.js";
+import { track } from "../core/notify.js";
 import { SESSION_COOKIE, userForApiToken, userForSession } from "./local.js";
 import { OAUTH_ACCESS_PREFIX, userForOAuthToken } from "./oauth.js";
 import type { Db } from "../db/pool.js";
@@ -11,8 +12,15 @@ export interface Identity {
   subject: string;
   email: string | null;
   kind: Actor["kind"];
+  /** A display name from the sign-in (Cloudflare Access claims): fills in an account without one, never replaces one. */
+  name?: string | null;
   /** "cookie" for browser sessions; writes over cookies get a same-origin check. */
   via?: "cookie" | "header";
+  /**
+   * Authenticated by a personal API token or an OAuth access token: what Claude Code, connectors and scripts hold, not
+   * a person signed in to the app. Review decisions on skills refuse these (core/skills/review.ts refuseAgent).
+   */
+  apiToken?: boolean;
 }
 
 export type Authenticator = (req: Request) => Promise<Identity | null>;
@@ -38,7 +46,8 @@ export function devAuthenticator(devTokens: string): Authenticator {
  * `Cf-Access-Jwt-Assertion`. We verify it ourselves (defence in depth, in case
  * the origin is reached without passing Access) against the team's JWKS and
  * the Access application's AUD tag. Users carry `email`; service tokens carry
- * `common_name` (the client id) instead.
+ * `common_name` (the client id) instead. A user's name comes from the claims when
+ * the identity provider passes one (see nameFromClaims).
  */
 export function cloudflareAuthenticator(teamDomain: string, aud: string): Authenticator {
   const issuer = teamDomain.replace(/\/+$/, "");
@@ -52,10 +61,28 @@ export function cloudflareAuthenticator(teamDomain: string, aud: string): Authen
     } catch {
       return null;
     }
-    if (payload.email) return { subject: `cf:${payload.email.toLowerCase()}`, email: payload.email.toLowerCase(), kind: "human" };
+    if (payload.email) {
+      const name = nameFromClaims(payload);
+      return { subject: `cf:${payload.email.toLowerCase()}`, email: payload.email.toLowerCase(), kind: "human", ...(name ? { name } : {}) };
+    }
     if (payload.common_name) return { subject: `cf-svc:${payload.common_name}`, email: null, kind: "service" };
     return null;
   };
+}
+
+/**
+ * A person's name from Access JWT claims: `name`, else `given_name` plus `family_name`, else `common_name`; top-level
+ * or under `custom` (where Access puts claims passed through from an OIDC provider). Null when none is usable.
+ */
+export function nameFromClaims(payload: Record<string, unknown>): string | null {
+  const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  const custom = payload.custom && typeof payload.custom === "object" ? (payload.custom as Record<string, unknown>) : {};
+  for (const c of [payload, custom]) {
+    const full = str(c.name) || [str(c.given_name), str(c.family_name)].filter(Boolean).join(" ") || str(c.common_name);
+    const name = safeName(full);
+    if (name) return name;
+  }
+  return null;
 }
 
 function cookie(req: Request, name: string): string | undefined {
@@ -89,7 +116,7 @@ export function apiTokenAuthenticator(db: Db, oauthResource?: URL): Authenticato
     if (!m) return null;
     const token = m[1]!;
     const user = token.startsWith(OAUTH_ACCESS_PREFIX) ? await userForOAuthToken(db, token, oauthResource) : await userForApiToken(db, token);
-    return user ? { subject: user.subject, email: user.email, kind: user.kind, via: "header" } : null;
+    return user ? { subject: user.subject, email: user.email, kind: user.kind, via: "header", apiToken: true } : null;
   };
 }
 
@@ -137,9 +164,10 @@ export function sameOrigin(req: Request, publicOrigin?: string): boolean {
 
 /**
  * Rejects unauthenticated requests; attaches the user (created on first sight) as `res.locals.actor`.
+ * Someone seen for the first time waits for an admin's approval when REQUIRE_APPROVAL is on.
  * With `resourceMetadataUrl`, 401s point OAuth clients at the protected-resource metadata (RFC 9728).
  */
-export function requireAuth(db: Db, authenticate: Authenticator, resourceMetadataUrl?: URL, publicOrigin?: string) {
+export function requireAuth(db: Db, settings: Settings, authenticate: Authenticator, resourceMetadataUrl?: URL, publicOrigin?: string) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const identity = await authenticate(req);
@@ -152,13 +180,19 @@ export function requireAuth(db: Db, authenticate: Authenticator, resourceMetadat
         res.status(403).json({ error: "cross-site request refused" });
         return;
       }
-      const actor = await upsertUser(db, identity);
+      const { created, ...actor } = await upsertUser(db, identity, { approval: approvalRequired(identity, settings) });
       if (actor.disabled) {
-        res.status(403).json({ error: "account disabled" });
+        res.status(403).json({ error: "account disabled", code: "account_disabled" });
+        return;
+      }
+      if (!actor.approved) {
+        if (created) track(announceAccessRequest(db, settings, actor).catch((err) => console.error(`[notify] ${(err as Error).message}`)));
+        res.status(403).json({ error: "waiting for an admin to approve your access", code: "approval_required", email: actor.email });
         return;
       }
       res.locals.actor = actor;
       res.locals.via = identity.via ?? "header";
+      res.locals.apiToken = identity.apiToken === true;
       next();
     } catch (err) {
       next(err);

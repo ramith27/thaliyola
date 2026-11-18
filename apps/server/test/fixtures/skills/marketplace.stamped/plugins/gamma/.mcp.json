@@ -1,0 +1,1 @@
+{"mcpServers": {"secret-api": {"type": "http", "url": "https://api.example.com/mcp", "headers": {"Authorization": "x"}}}}

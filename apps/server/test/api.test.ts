@@ -39,8 +39,10 @@ async function call(token: string, method: string, p: string, body?: unknown) {
 describe("REST API", () => {
   it("lists scopes with components and the type vocabularies", async () => {
     const { body } = await call("user", "GET", "/api/scopes");
-    expect(body.scopes.map((s: { slug: string }) => s.slug)).toEqual(["team", "library", "merchant-portal", "order-service"]);
-    expect(body.scopes[3].components.map((c: { slug: string }) => c.slug)).toEqual(["backend", "frontend"]);
+    // Everyone has a personal space from their first visit (after team and library).
+    expect(body.scopes.map((s: { slug: string }) => s.slug)).toEqual(["team", "library", expect.stringMatching(/^personal-/), "merchant-portal", "order-service"]);
+    expect(body.scopes[2]).toMatchObject({ kind: "personal", visibility: "members", my_role: "owner", can_manage: false });
+    expect(body.scopes[4].components.map((c: { slug: string }) => c.slug)).toEqual(["backend", "frontend"]);
     expect(body.article_types).toContain("screen_spec");
   });
 
@@ -109,7 +111,7 @@ describe("REST API", () => {
     expect(body.account).toMatchObject({ email: "alice@example.com", admin: false });
     expect(body.projects.map((p: { slug: string }) => p.slug)).toEqual(["merchant-portal", "order-service"]);
     expect(body.projects[1].components).toEqual(["backend", "frontend"]);
-    expect(body.catalog.tools).toHaveLength(59);
+    expect(body.catalog.tools).toHaveLength(114);
     expect(body.catalog.prompts.map((p: { name: string }) => p.name)).toContain("start-coding");
     expect(body.catalog.instructions).toMatch(/search_knowledge first/);
     expect(body.has_connected).toBe(false);

@@ -1,0 +1,12 @@
+/* Static site viewer (viewer/main.tsx). */
+
+/* Static site viewer */
+.viewer { display: grid; grid-template-columns: 270px minmax(0, 1fr); min-height: 100vh; background: var(--bg); }
+.viewer-side { position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: var(--space-4) var(--space-3); border-right: 1px solid var(--border); background: var(--bg-sidebar); }
+.viewer-search { width: 100%; margin: var(--space-2) 0 var(--space-3); }
+.viewer-main { padding: var(--space-6) var(--space-8) var(--space-12); }
+@media (max-width: 860px) {
+  .viewer { grid-template-columns: minmax(0, 1fr); }
+  .viewer-side { position: static; height: auto; max-height: 45vh; border-right: 0; border-bottom: 1px solid var(--border); }
+  .viewer-main { padding: var(--space-4); }
+}

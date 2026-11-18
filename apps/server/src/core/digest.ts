@@ -25,6 +25,8 @@ interface Person {
   email: string;
   name: string | null;
   admin: boolean;
+  /** Sees usage (view_metrics: Administrators, Auditors): gets the week's knowledge gaps. */
+  metrics: boolean;
 }
 
 async function digestFor(db: Db, p: Person) {
@@ -49,7 +51,7 @@ async function digestFor(db: Db, p: Person) {
   const toReview = await db.query<{ id: string; summary: string }>(
     `SELECT r.id, r.summary FROM revisions r
       WHERE r.state = 'pending' AND r.author_id <> $1
-        AND ($2 OR r.scope_id IN (SELECT scope_id FROM scope_roles WHERE user_id = $1 AND role = 'owner'))
+        AND ($2 OR r.scope_id IN (SELECT scope_id FROM scope_permissions WHERE user_id = $1 AND permission = 'review'))
       ORDER BY r.created_at LIMIT 5`,
     [p.id, p.admin],
   );
@@ -59,7 +61,7 @@ async function digestFor(db: Db, p: Person) {
     [p.id],
   );
   const unread = (await db.query<{ n: number }>("SELECT count(*)::int AS n FROM notifications WHERE user_id = $1 AND read_at IS NULL", [p.id])).rows[0]!.n;
-  const gaps = p.admin
+  const gaps = p.metrics
     ? (
         await db.query<{ query: string; n: number }>(
           `SELECT lower(query) AS query, count(*)::int AS n FROM search_log WHERE query IS NOT NULL AND at > now() - interval '7 days'
@@ -86,7 +88,11 @@ export async function sendDigests(db: Db, settings: Settings, now = new Date()) 
   if (settings.mailTransport === "off") return { sent: 0, skipped: 0 };
   const slot = digestSlot(now, settings.digestDay, settings.digestHour);
   const { rows } = await db.query<Person>(
-    `SELECT id, email, display_name AS name, (is_admin OR lower(email) = ANY($2::text[])) AS admin FROM users
+    `SELECT id, email, display_name AS name, (is_admin OR lower(email) = ANY($2::text[])) AS admin,
+            (is_admin OR lower(email) = ANY($2::text[])
+             OR EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.key = ur.role AND r.kind = 'org'
+                         WHERE ur.user_id = users.id AND 'view_metrics' = ANY (r.permissions))) AS metrics
+       FROM users
       WHERE kind = 'human' AND disabled_at IS NULL AND email IS NOT NULL AND subject NOT LIKE 'pending:%'
         AND coalesce((prefs->>'digest')::boolean, true)
         AND (prefs->>'digest_sent_at' IS NULL OR (prefs->>'digest_sent_at')::timestamptz < $1)`,

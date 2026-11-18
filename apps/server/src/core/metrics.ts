@@ -1,6 +1,6 @@
 import type { RequestContext } from "./context.js";
 import { ForbiddenError } from "./context.js";
-import { isAdmin, readableScopes } from "./permissions.js";
+import { can, readableScopes } from "./permissions.js";
 
 /**
  * Is the knowledge base working? Numbers for the Metrics page: whether
@@ -112,7 +112,7 @@ export async function successMetrics(ctx: RequestContext, opts: { days?: number 
     repeats: repeats.rows,
     hygiene,
     unowned: unowned.rows,
-    gaps_visible: isAdmin(ctx),
+    gaps_visible: can(ctx, "view_metrics"),
   };
 }
 
@@ -122,7 +122,7 @@ export async function successMetrics(ctx: RequestContext, opts: { days?: number 
  * matches did, which often aren't the answer.
  */
 export async function knowledgeGaps(ctx: RequestContext, opts: { days?: number } = {}) {
-  if (!isAdmin(ctx)) throw new ForbiddenError("knowledge gaps show what people searched for; admins only");
+  if (!can(ctx, "view_metrics")) throw new ForbiddenError("knowledge gaps show what people searched for; admins and auditors only");
   const days = Math.min(Math.max(opts.days ?? 30, 1), 365);
   const { rows } = await ctx.db.query(
     `SELECT lower(query) AS query, count(*)::int AS searches, count(DISTINCT actor_id)::int AS people,
@@ -138,7 +138,7 @@ export async function knowledgeGaps(ctx: RequestContext, opts: { days?: number }
 
 /** Dismisses a gap once it's been answered (or was noise): its logged searches lose their text. */
 export async function dismissGap(ctx: RequestContext, query: string) {
-  if (!isAdmin(ctx)) throw new ForbiddenError("admins only");
+  if (!can(ctx, "view_metrics")) throw new ForbiddenError("admins only");
   const { rowCount } = await ctx.db.query("UPDATE search_log SET query = NULL WHERE lower(query) = lower($1)", [query]);
   return { query, cleared: rowCount };
 }

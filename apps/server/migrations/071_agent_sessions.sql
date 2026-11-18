@@ -53,6 +53,19 @@ CREATE INDEX session_questions_to_scope ON session_questions (to_scope_id, creat
 CREATE INDEX session_questions_from ON session_questions (from_session_id, created_at DESC);
 CREATE INDEX session_questions_from_user ON session_questions (from_user_id, created_at DESC);
 
--- Questions waiting for someone get a notification kind of their own.
-ALTER TABLE notifications DROP CONSTRAINT notifications_kind_check;
-ALTER TABLE notifications ADD CONSTRAINT notifications_kind_check CHECK (kind IN ('review', 'decided', 'change', 'watch', 'stale', 'comment', 'assigned', 'invite', 'security', 'question'));
+-- Questions waiting for someone get a notification kind of their own. Extended, not restated, exactly like 051.
+DO $$
+DECLARE def text; vals text[];
+BEGIN
+  SELECT pg_get_constraintdef(oid) INTO def FROM pg_constraint
+   WHERE conrelid = 'notifications'::regclass AND conname = 'notifications_kind_check';
+  IF def IS NULL THEN
+    RAISE EXCEPTION 'constraint notifications_kind_check not found; it must exist before 071 extends it';
+  END IF;
+  SELECT array_agg(btrim(x)) INTO vals
+    FROM regexp_matches(def, '''([^'']+)''', 'g') AS m, unnest(string_to_array(btrim(m[1], '{}'), ',')) AS x;
+  vals := ARRAY(SELECT DISTINCT v FROM unnest(coalesce(vals, '{}') || ARRAY['question']) AS v WHERE v <> '' ORDER BY v);
+  ALTER TABLE notifications DROP CONSTRAINT notifications_kind_check;
+  EXECUTE format('ALTER TABLE notifications ADD CONSTRAINT notifications_kind_check CHECK (kind IN (%s))',
+                 (SELECT string_agg(quote_literal(v), ', ') FROM unnest(vals) AS v));
+END $$;

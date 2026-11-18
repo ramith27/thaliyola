@@ -5,6 +5,7 @@ import { ForbiddenError, NotFoundError, ValidationError, type RequestContext } f
 import { assertCanRead, canApprove } from "./permissions.js";
 import { redact } from "./redaction.js";
 import { S3AssetStore } from "./s3.js";
+import { assertCanEditFeature, canManageReleases, readFeature } from "./releases.js";
 import { findItemFor } from "./writes.js";
 
 /**
@@ -84,14 +85,29 @@ export interface AssetMeta {
   alt_text: string;
   created_at: string;
   uploaded_by: string | null;
+  uploaded_by_name?: string | null;
+}
+
+/** What an upload attaches to: an article or finding, or a feature on What's new (screenshots; kept in the Team space). */
+async function uploadTarget(ctx: RequestContext, targetId: string): Promise<{ id: string; kind: "article" | "finding" | "feature"; scope_id: string }> {
+  const feature = await ctx.db.query("SELECT 1 FROM features WHERE id = $1", [targetId]);
+  if (feature.rowCount) {
+    await assertCanEditFeature(ctx, targetId);
+    const team = (await ctx.db.query<{ id: string }>("SELECT id FROM scopes WHERE kind = 'team' ORDER BY created_at LIMIT 1")).rows[0];
+    if (!team) throw new NotFoundError("the Team space");
+    return { id: targetId, kind: "feature", scope_id: team.id };
+  }
+  const item = await findItemFor(ctx, targetId);
+  if (item.status === "rejected") throw new ValidationError(`${item.kind} is rejected`);
+  return { id: item.id, kind: item.kind as "article" | "finding", scope_id: item.scope_id };
 }
 
 export async function uploadAsset(
   ctx: RequestContext,
   input: { target_id: string; filename: string; mime: string; data: Buffer; alt_text?: string },
 ) {
-  const item = await findItemFor(ctx, input.target_id);
-  if (item.status === "rejected") throw new ValidationError(`${item.kind} is rejected`);
+  const item = await uploadTarget(ctx, input.target_id);
+  if (item.kind === "feature" && !input.mime.startsWith("image/")) throw new ValidationError("a feature's screenshots are images (PNG, JPEG, GIF or WebP)");
   const check = MIME_TYPES[input.mime];
   if (!check) throw new ValidationError(`unsupported type ${input.mime}; allowed: ${ASSET_MIME_TYPES.join(", ")}`);
   if (!input.data.length) throw new ValidationError("file is empty");
@@ -122,7 +138,7 @@ export async function uploadAsset(
 
 export async function listAssets(ctx: RequestContext, targetId: string): Promise<AssetMeta[]> {
   const { rows } = await ctx.db.query<AssetMeta>(
-    `SELECT a.id, a.filename, a.mime, a.size_bytes::int AS size_bytes, a.alt_text, a.created_at, coalesce(u.email, u.subject) AS uploaded_by
+    `SELECT a.id, a.filename, a.mime, a.size_bytes::int AS size_bytes, a.alt_text, a.created_at, coalesce(u.email, u.subject) AS uploaded_by, u.display_name AS uploaded_by_name
        FROM assets a LEFT JOIN users u ON u.id = a.created_by
       WHERE a.target_id = $1 AND a.deleted_at IS NULL ORDER BY a.created_at`,
     [targetId],
@@ -133,23 +149,27 @@ export async function listAssets(ctx: RequestContext, targetId: string): Promise
 export async function getAsset(ctx: RequestContext, id: string, opts: { skipReadCheck?: boolean } = {}): Promise<{ meta: AssetMeta & { target_id: string; target_kind: string }; data: Buffer }> {
   const { rows } = await ctx.db.query(
     `SELECT a.id, a.filename, a.mime, a.size_bytes::int AS size_bytes, a.alt_text, a.created_at, a.storage_key, a.target_id, a.target_kind, a.scope_id,
-            coalesce(u.email, u.subject) AS uploaded_by
+            coalesce(u.email, u.subject) AS uploaded_by, u.display_name AS uploaded_by_name
        FROM assets a LEFT JOIN users u ON u.id = a.created_by WHERE a.id = $1 AND a.deleted_at IS NULL`,
     [id],
   );
   const row = rows[0];
   if (!row) throw new NotFoundError(`asset ${id}`);
-  if (!opts.skipReadCheck) await assertCanRead(ctx, row.scope_id, `asset ${id}`);
+  // A feature's screenshot is read like the feature: published ones by everyone, drafts' by release managers.
+  if (!opts.skipReadCheck && row.target_kind === "feature") await readFeature(ctx, row.target_id).catch(() => Promise.reject(new NotFoundError(`asset ${id}`)));
+  else if (!opts.skipReadCheck) await assertCanRead(ctx, row.scope_id, `asset ${id}`);
   const { storage_key, scope_id: _scope, ...meta } = row;
   return { meta, data: await storeFor(ctx).get(storage_key) };
 }
 
 export async function deleteAsset(ctx: RequestContext, id: string) {
-  const { rows } = await ctx.db.query("SELECT scope_id, created_by, target_id FROM assets WHERE id = $1 AND deleted_at IS NULL", [id]);
+  const { rows } = await ctx.db.query("SELECT scope_id, created_by, target_id, target_kind FROM assets WHERE id = $1 AND deleted_at IS NULL", [id]);
   const row = rows[0];
   if (!row) throw new NotFoundError(`asset ${id}`);
-  if (row.created_by !== ctx.actor.id && !(await canApprove(ctx, row.scope_id))) {
-    throw new ForbiddenError("only the uploader or a scope owner can remove an asset");
+  if (row.target_kind === "feature") {
+    if (!canManageReleases(ctx) || ctx.viaAgent) throw new ForbiddenError("only Administrators and people with Manage releases change a feature's screenshots");
+  } else if (row.created_by !== ctx.actor.id && !(await canApprove(ctx, row.scope_id))) {
+    throw new ForbiddenError("only the uploader or someone with Manage settings in the project (its Project admins) can remove an asset");
   }
   await ctx.db.query("UPDATE assets SET deleted_at = now() WHERE id = $1", [id]);
   return { asset_id: id, deleted: true };

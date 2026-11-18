@@ -1,0 +1,87 @@
+/* Element defaults and global text helpers (SPEC §3.6, §3.11).
+   Element styles sit inside :where(), so they have zero specificity and never beat a class rule. */
+
+/* ============================================================ Base */
+*, *::before, *::after { box-sizing: border-box; }
+:where(html) {
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  /* Keeps focused elements clear of the sticky top bar and the phone tab bar (WCAG 2.4.11). */
+  scroll-padding-top: var(--space-16);
+  scroll-padding-bottom: calc(var(--space-16) + var(--space-8));
+}
+:where(body) {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: var(--font); font-size: var(--fs-md); line-height: var(--lh-md); font-weight: var(--fw-regular);
+  font-feature-settings: "cv11", "ss01";
+}
+:where(a) { color: var(--accent-text); text-decoration: none; }
+:where(a:hover) { text-decoration: underline; text-underline-offset: 2px; }
+:where(h1) { font-size: var(--fs-2xl); line-height: var(--lh-2xl); font-weight: var(--fw-semibold); letter-spacing: var(--tracking-tight); margin: 0 0 var(--space-1); }
+:where(h2) { font-size: var(--fs-xl); line-height: var(--lh-xl); font-weight: var(--fw-semibold); margin: var(--space-8) 0 var(--space-3); }
+:where(h3) { font-size: var(--fs-lg); line-height: var(--lh-lg); font-weight: var(--fw-semibold); margin: var(--space-5) 0 var(--space-2); }
+:where(mark) { background: var(--mark); color: inherit; border-radius: calc(var(--radius-sm) / 2); padding: 0 2px; }
+:where(code, kbd) { font-family: var(--mono); font-size: var(--fs-sm); }
+:where(code) { background: var(--code); padding: 1px var(--space-1); border-radius: calc(var(--radius-sm) - 2px); }
+:where(::placeholder) { color: var(--muted); opacity: 1; }
+::selection { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+
+.muted { color: var(--muted); }
+.small { font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.lead { color: var(--muted); font-size: var(--fs-md); line-height: var(--lh-md); margin: 0 0 var(--space-5); max-width: 72ch; }
+.warn { color: var(--warn); }
+ul.plain, ol.plain { list-style: none; padding: 0; margin: 0; }
+ul.list, ol.list { padding-left: var(--space-5); margin: var(--space-2) 0; }
+ul.list li, ol.list li { margin: var(--space-1) 0; }
+
+/* Focus: one solid 2px ring on everything (SPEC §3.11). Programmatic focus on headings shows none. */
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+:where(h1, h2, h3, [tabindex="-1"]):focus:not(:focus-visible) { outline: none; }
+
+/* ============================================================ Shell */
+:where(kbd) {
+  display: inline-block; min-width: 1.25rem; text-align: center;
+  font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--text-2);
+  border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: calc(var(--radius-sm) - 2px);
+  padding: 0 var(--space-1); background: var(--surface-2);
+}
+
+/* Forms: text fields, selects and textareas share one look. Checkboxes and radios stay native, in the accent colour. */
+:where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="image"], [type="submit"], [type="button"], [type="reset"]), select, textarea) {
+  font: inherit; color: var(--text); background: var(--surface);
+  border: 1px solid var(--border-control); border-radius: var(--radius-sm);
+  min-height: var(--control-md); padding: calc(var(--space-2) - 1px) var(--space-3);
+  transition: border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard);
+}
+:where(textarea) { line-height: var(--lh-md); }
+:where(input[type="checkbox"], input[type="radio"]) { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; flex: none; }
+:where(input:disabled, select:disabled, textarea:disabled) { background: var(--surface-2); color: var(--text-disabled); border-color: var(--border); cursor: not-allowed; }
+:where(input, select, textarea)[aria-invalid="true"] { border-color: var(--danger); }
+:where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="image"], [type="submit"], [type="button"], [type="reset"]), select, textarea):focus {
+  outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px var(--focus);
+}
+
+/* Responsive */
+@media (max-width: 860px) {
+  :where(kbd) { display: none; }
+  /* Forms: 16px text stops iOS zooming on focus. */
+  :where(input, select, textarea) { font-size: var(--fs-lg); }
+}
+
+/* Forced colours: borders and checks stay visible; focus uses the system highlight. */
+@media (forced-colors: active) {
+  :focus-visible { outline-color: Highlight; }
+  .badge, .chip, .chip-static, .count, .tile-icon,
+  [aria-selected="true"], [aria-pressed="true"], [aria-current="page"], [aria-checked="true"],
+  .chip.active, .nav-link.active, .tabs a.active, .settings-tabs a.active {
+    border: 1px solid CanvasText;
+  }
+  .btn, .icon-btn, .link-btn { border: 1px solid ButtonText; }
+}
+
+/* Reduced motion: nothing slides or scales; only short fades remain (SPEC §3.9). */
+@media (prefers-reduced-motion: reduce) {
+  :root { --duration-fast: 1ms; --duration-base: 80ms; --duration-slow: 80ms; }
+  :where(html) { scroll-behavior: auto; }
+  :where(*, *::before, *::after) { animation-iteration-count: 1; }
+}

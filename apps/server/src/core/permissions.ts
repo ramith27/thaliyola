@@ -1,38 +1,54 @@
 import type { Queryable } from "../db/pool.js";
 import { ForbiddenError, NotFoundError, type RequestContext } from "./context.js";
+import { can, isAdmin, PERMISSION_LABELS, permissionsIn, PROJECT_KEYS, roleListText, type ProjectPermission } from "./roles.js";
 
 /**
- * Reading: team-visible scopes are open to every authenticated user; members-only projects to their members.
- * Proposing: open to everyone until a scope lists writers/owners; then only they (and admins) may.
- * Approving and managing a project (members, teams, repositories, settings): its owners and admins.
- * Service identities never approve. A person's role in a scope is the highest of their direct role
- * and the roles of the teams they belong to (the scope_roles view).
+ * Permissions come from roles (see roles.ts): someone's permissions in a scope are those of every project role they
+ * hold there, directly, through a team or from a project above; organisation roles (Administrator included) add
+ * permissions across all of Thaliyola.
+ * Reading: team-visible scopes are open to everyone signed in; members-only projects to people with a role there
+ * (and Read every project). Proposing, verifying and commenting: open to everyone in a team-visible scope until
+ * someone there holds that permission; then, and always in members-only projects, only those who hold it.
+ * Approving needs Review; deleting and restoring entries, Moderate; access, Manage access; settings, Manage settings.
+ * Manage every project (Administrators) acts as Project admin everywhere. Service accounts never approve or publish.
+ * Personal spaces belong to one person: nobody else reads or writes them, Administrators included, and they can't be
+ * shared. effectiveFrom states all of this once, so what the UI shows matches what the server allows.
  */
 
-export function isAdmin(ctx: RequestContext): boolean {
-  if (ctx.actor.kind !== "human") return false;
-  return !!ctx.actor.isAdmin || (!!ctx.actor.email && ctx.settings.adminEmails.includes(ctx.actor.email.toLowerCase()));
+export { can, isAdmin } from "./roles.js";
+
+/** The caller's most powerful project role in a scope (for display), from all their direct and team roles. */
+export async function roleIn(db: Queryable, scopeId: string, userId: string): Promise<string | undefined> {
+  const { rows } = await db.query<{ role: string }>(
+    "SELECT r.role FROM scope_roles r JOIN roles ro ON ro.key = r.role WHERE r.scope_id = $1 AND r.user_id = $2 ORDER BY ro.position LIMIT 1",
+    [scopeId, userId],
+  );
+  return rows[0]?.role;
 }
 
-const RANK: Record<string, number> = { reader: 1, writer: 2, owner: 3 };
-
-/** The caller's effective role in a scope: the highest of their direct and team roles. */
-export async function roleIn(db: Queryable, scopeId: string, userId: string): Promise<"reader" | "writer" | "owner" | undefined> {
-  const { rows } = await db.query<{ role: "reader" | "writer" | "owner" }>("SELECT role FROM scope_roles WHERE scope_id = $1 AND user_id = $2", [scopeId, userId]);
-  return rows.reduce<"reader" | "writer" | "owner" | undefined>((best, r) => (!best || RANK[r.role]! > RANK[best]! ? r.role : best), undefined);
+/** Every project role the caller holds in a scope, most powerful first. */
+export async function rolesIn(db: Queryable, scopeId: string, userId: string): Promise<string[]> {
+  const { rows } = await db.query<{ role: string }>(
+    "SELECT DISTINCT r.role, ro.position FROM scope_roles r JOIN roles ro ON ro.key = r.role WHERE r.scope_id = $1 AND r.user_id = $2 ORDER BY ro.position",
+    [scopeId, userId],
+  );
+  return rows.map((r) => r.role);
 }
 
 const readableCache = new WeakMap<RequestContext, Promise<string[] | null>>();
 
 /**
  * Scopes the caller may read: every team-visible scope plus members-only
- * projects they belong to. `null` means everything (admins).
+ * projects they belong to (and their own personal space). Admins read every
+ * scope except other people's personal spaces.
  */
 export function readableScopes(ctx: RequestContext): Promise<string[] | null> {
   let cached = readableCache.get(ctx);
   if (!cached) {
-    cached = isAdmin(ctx)
-      ? Promise.resolve(null)
+    cached = can(ctx, "read_all_projects") || can(ctx, "manage_all_projects")
+      ? ctx.db
+          .query<{ id: string }>("SELECT id FROM scopes WHERE kind <> 'personal' OR owner_id = $1", [ctx.actor.id])
+          .then((r) => r.rows.map((x) => x.id))
       : ctx.db
           .query<{ id: string }>(
             `SELECT id FROM scopes WHERE visibility = 'team'
@@ -47,7 +63,11 @@ export function readableScopes(ctx: RequestContext): Promise<string[] | null> {
 
 export async function canReadScope(ctx: RequestContext, scopeId: string): Promise<boolean> {
   const readable = await readableScopes(ctx);
-  return readable === null || readable.includes(scopeId);
+  if (readable === null || readable.includes(scopeId)) return true;
+  // Not in the list read earlier for this request: the scope (or the caller's role in it) may be newer than the list.
+  readableCache.delete(ctx);
+  const fresh = await readableScopes(ctx);
+  return fresh === null || fresh.includes(scopeId);
 }
 
 /** Unreadable things are reported as missing, so their existence doesn't leak. */
@@ -55,37 +75,103 @@ export async function assertCanRead(ctx: RequestContext, scopeId: string, what: 
   if (!(await canReadScope(ctx, scopeId))) throw new NotFoundError(what);
 }
 
-export async function assertCanPropose(ctx: RequestContext, scopeId: string): Promise<void> {
-  if (isAdmin(ctx)) return;
+/** The owner of a personal space (undefined for every other scope). */
+async function personalOwner(db: Queryable, scopeId: string): Promise<string | undefined> {
+  const { rows } = await db.query<{ owner_id: string }>("SELECT owner_id FROM scopes WHERE id = $1 AND kind = 'personal'", [scopeId]);
+  return rows[0]?.owner_id;
+}
+
+/** Only its owner works in a personal space; to anyone else it doesn't exist. */
+async function assertOwnPersonal(ctx: RequestContext, scopeId: string): Promise<boolean> {
+  const owner = await personalOwner(ctx.db, scopeId);
+  if (owner === undefined) return false;
+  if (owner !== ctx.actor.id) throw new NotFoundError("scope");
+  return true;
+}
+
+/** Whether the caller holds a project permission in a scope (their own personal space: everything). */
+export async function hasPermission(ctx: RequestContext, scopeId: string, permission: ProjectPermission): Promise<boolean> {
+  if (await assertOwnPersonal(ctx, scopeId)) return true;
+  if (can(ctx, "manage_all_projects")) return true;
+  return (await permissionsIn(ctx.db, scopeId, ctx.actor.id)).has(permission);
+}
+
+/** "none of your roles here include Review, so you can't approve here (Reviewer, Moderator and Project admin do)". */
+async function missingPermission(ctx: RequestContext, permission: ProjectPermission, what: string): Promise<ForbiddenError> {
+  const list = await roleListText(ctx.db, permission);
+  const holders = list ? ` (${list} ${list.includes(" and ") ? "do" : "does"})` : "";
+  return new ForbiddenError(`none of your roles here include ${PERMISSION_LABELS[permission]}, so you can't ${what} here${holders}`);
+}
+
+/**
+ * Contributing permissions (propose, verify, comment): needed in members-only projects; in team-visible scopes
+ * only once someone there holds the permission (until then anyone may).
+ */
+async function assertContributes(ctx: RequestContext, scopeId: string, permission: "propose" | "verify" | "comment", what: string) {
+  if (await hasPermission(ctx, scopeId, permission)) return;
   const { rows } = await ctx.db.query<{ visibility: string }>("SELECT visibility FROM scopes WHERE id = $1", [scopeId]);
-  if (rows[0]?.visibility === "members") {
-    // Members-only projects: only writers and owners may propose (readers can just read).
-    const role = await roleIn(ctx.db, scopeId, ctx.actor.id);
-    if (role !== "writer" && role !== "owner") throw new ForbiddenError("you are not a writer in this scope");
-    return;
+  if (rows[0]?.visibility !== "members") {
+    const restricted = await ctx.db.query("SELECT 1 FROM scope_permissions WHERE scope_id = $1 AND permission = $2 LIMIT 1", [scopeId, permission]);
+    if (!restricted.rowCount) return;
   }
-  const restricted = await ctx.db.query("SELECT 1 FROM scope_roles WHERE scope_id = $1 AND role IN ('writer', 'owner') LIMIT 1", [scopeId]);
-  if (!restricted.rowCount) return;
-  const role = await roleIn(ctx.db, scopeId, ctx.actor.id);
-  if (role !== "writer" && role !== "owner") throw new ForbiddenError("you are not a writer in this scope");
+  throw await missingPermission(ctx, permission, what);
+}
+
+export async function assertCanPropose(ctx: RequestContext, scopeId: string): Promise<void> {
+  await assertContributes(ctx, scopeId, "propose", "propose");
+}
+
+export async function assertCanVerify(ctx: RequestContext, scopeId: string): Promise<void> {
+  await assertContributes(ctx, scopeId, "verify", "confirm or flag entries");
+}
+
+export async function assertCanComment(ctx: RequestContext, scopeId: string): Promise<void> {
+  await assertContributes(ctx, scopeId, "comment", "comment");
 }
 
 export async function assertCanApprove(ctx: RequestContext, scopeId: string): Promise<void> {
   if (ctx.actor.kind !== "human") throw new ForbiddenError("service identities cannot approve changes");
-  if (isAdmin(ctx)) return;
-  if ((await roleIn(ctx.db, scopeId, ctx.actor.id)) !== "owner") throw new ForbiddenError("only scope owners and admins can approve");
+  if (!(await hasPermission(ctx, scopeId, "review"))) throw await missingPermission(ctx, "review", "approve");
 }
 
-/** Managing a scope (members, teams, repositories, name and visibility): admins, and owners of a project. */
-export async function assertCanManage(ctx: RequestContext, scope: { id: string; kind: string }): Promise<void> {
-  if (isAdmin(ctx)) return;
-  if (ctx.actor.kind === "human" && scope.kind === "project" && (await roleIn(ctx.db, scope.id, ctx.actor.id)) === "owner") return;
-  throw new ForbiddenError(scope.kind === "project" ? "only this project's owners and admins can change its settings" : "only admins can change this scope's settings");
+/** Deleting, restoring and re-filing entries: Moderate (Moderators, Project admins, Administrators). */
+export async function assertCanModerate(ctx: RequestContext, scopeId: string): Promise<void> {
+  if (ctx.actor.kind !== "human") throw new ForbiddenError("service identities cannot delete or restore");
+  if (!(await hasPermission(ctx, scopeId, "moderate"))) throw await missingPermission(ctx, "moderate", "delete or restore entries");
 }
 
-export async function canManage(ctx: RequestContext, scope: { id: string; kind: string }): Promise<boolean> {
+export async function canModerate(ctx: RequestContext, scopeId: string): Promise<boolean> {
+  return ctx.actor.kind === "human" && (await hasPermission(ctx, scopeId, "moderate"));
+}
+
+/**
+ * Managing a scope: its settings (name, visibility, repositories, sources) or who has access (people and teams).
+ * Projects: holders of that permission (Project admins) and Manage every project; team and library: Administrators only.
+ */
+export async function assertCanManage(
+  ctx: RequestContext,
+  scope: { id: string; kind: string },
+  permission: "manage_settings" | "manage_members" = "manage_settings",
+): Promise<void> {
+  if (scope.kind === "personal") throw new ForbiddenError("a personal space belongs to one person and can't be shared or changed");
+  if (can(ctx, "manage_all_projects")) return;
+  if (ctx.actor.kind === "human" && scope.kind === "project" && (await permissionsIn(ctx.db, scope.id, ctx.actor.id)).has(permission)) return;
+  throw new ForbiddenError(
+    scope.kind === "project"
+      ? permission === "manage_members"
+        ? "you can't change who has access to this project: that needs Manage access, which its Project admins have (or an Administrator)"
+        : "you can't change this project's settings: that needs Manage settings, which its Project admins have (or an Administrator)"
+      : "only admins can change this scope's settings",
+  );
+}
+
+export async function canManage(
+  ctx: RequestContext,
+  scope: { id: string; kind: string },
+  permission: "manage_settings" | "manage_members" = "manage_settings",
+): Promise<boolean> {
   try {
-    await assertCanManage(ctx, scope);
+    await assertCanManage(ctx, scope, permission);
     return true;
   } catch (err) {
     if (err instanceof ForbiddenError) return false;
@@ -95,6 +181,93 @@ export async function canManage(ctx: RequestContext, scope: { id: string; kind: 
 
 export function assertAdmin(ctx: RequestContext): void {
   if (!isAdmin(ctx)) throw new ForbiddenError("admin only");
+}
+
+/**
+ * Whether the caller's own write publishes at once: a role here with "publish" (Project admins by default) while
+ * DIRECT_PUBLISH is on, and not when they asked for review. Admins' blanket rights don't count: being an admin
+ * doesn't make every write skip review, holding the role in that project does. Service identities never publish.
+ */
+export async function canPublishOwn(ctx: RequestContext, scopeId: string): Promise<boolean> {
+  if (ctx.actor.kind !== "human" || ctx.requestReview || !ctx.settings.directPublish) return false;
+  return (await permissionsIn(ctx.db, scopeId, ctx.actor.id)).has("publish");
+}
+
+/** What lets everyone signed in into a scope: reading (team-visible), and contributing until someone there holds it. */
+export interface OpenToEveryone {
+  read: boolean;
+  comment: boolean;
+  propose: boolean;
+  verify: boolean;
+}
+
+/** Everyone signed in reads a team-visible scope, and comments, proposes and verifies there until someone holds that permission. */
+export async function openToEveryone(db: Queryable, scope: { id: string; kind: string; visibility: string }): Promise<OpenToEveryone> {
+  const read = scope.visibility === "team" && scope.kind !== "personal";
+  if (!read) return { read, comment: false, propose: false, verify: false };
+  const { rows } = await db.query<{ permission: string }>(
+    "SELECT permission FROM scope_permissions WHERE scope_id = $1 AND permission IN ('comment', 'propose', 'verify') GROUP BY permission",
+    [scope.id],
+  );
+  const held = new Set(rows.map((r) => r.permission));
+  return { read, comment: !held.has("comment"), propose: !held.has("propose"), verify: !held.has("verify") };
+}
+
+export interface EffectiveInputs {
+  kind: string;
+  /** The caller's own personal space. */
+  ownPersonal: boolean;
+  readable: boolean;
+  /** The caller's permissions there from their roles (scope_permissions). */
+  rolePermissions: Iterable<string>;
+  /** Team-visible, not personal, and nobody there holds it. */
+  open: { comment: boolean; propose: boolean; verify: boolean };
+}
+
+/**
+ * What the caller can actually do in a scope, with the same rules the server enforces: hasPermission and the open
+ * contribution rule (comment, propose, verify), assertCanApprove / assertCanModerate (people only), canPublishOwn and
+ * the personal-space rule (publish: never through blanket rights), canSeeVulns (security) and assertCanManage.
+ * Pure: uses only the inputs, ctx.actor.kind, can() and ctx.settings.directPublish.
+ */
+export function effectiveFrom(ctx: RequestContext, i: EffectiveInputs): ProjectPermission[] {
+  if (!i.readable || (i.kind === "personal" && !i.ownPersonal)) return [];
+  const role = new Set(i.rolePermissions);
+  const everywhere = can(ctx, "manage_all_projects");
+  const person = ctx.actor.kind === "human";
+  const has = (p: ProjectPermission) => i.ownPersonal || everywhere || role.has(p);
+  return PROJECT_KEYS.filter((p) => {
+    switch (p) {
+      case "read":
+        return true;
+      case "comment":
+      case "propose":
+      case "verify":
+        return has(p) || i.open[p];
+      case "review":
+      case "moderate":
+        return person && has(p);
+      case "publish":
+        return person && (i.ownPersonal || (ctx.settings.directPublish && role.has("publish")));
+      case "security":
+        return can(ctx, "security_admin") || everywhere || role.has("security");
+      case "manage_members":
+      case "manage_settings":
+        return i.kind !== "personal" && (everywhere || (person && i.kind === "project" && role.has(p)));
+    }
+  });
+}
+
+/** effectiveFrom for one scope, gathering its inputs. */
+export async function effectivePermissions(ctx: RequestContext, scope: { id: string; kind: string; visibility: string }): Promise<ProjectPermission[]> {
+  const ownPersonal = scope.kind === "personal" && (await personalOwner(ctx.db, scope.id)) === ctx.actor.id;
+  return effectiveFrom(ctx, {
+    kind: scope.kind,
+    ownPersonal,
+    readable: await canReadScope(ctx, scope.id),
+    rolePermissions: await permissionsIn(ctx.db, scope.id, ctx.actor.id),
+    open: await openToEveryone(ctx.db, scope),
+  });
 }
 
 export async function canApprove(ctx: RequestContext, scopeId: string): Promise<boolean> {

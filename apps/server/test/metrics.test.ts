@@ -47,7 +47,7 @@ describe("search log and knowledge gaps", () => {
 
     const gaps = await knowledgeGaps(await admin());
     expect(gaps.gaps[0]).toMatchObject({ query: "gift card expiry rules", searches: 2, people: 2, from_agents: 1 });
-    await expect(knowledgeGaps(me)).rejects.toThrow(/admins only/);
+    await expect(knowledgeGaps(me)).rejects.toThrow(/admins and auditors only/);
     await dismissGap(await admin(), "gift card expiry rules");
     expect((await knowledgeGaps(await admin())).gaps.map((g: { query: string }) => g.query)).not.toContain("gift card expiry rules");
   });
@@ -112,7 +112,7 @@ describe("weekly digest", () => {
 describe("purge", () => {
   it("lets admins hard-delete an item with a reason, removing its content everywhere", async () => {
     const me = await admin();
-    await expect(purgeItem(await ctxFor(db, { email: "nobody@example.com", settings }), ids.rca, { reason: "secret leaked", confirm_title: "x" })).rejects.toThrow(/only admins/);
+    await expect(purgeItem(await ctxFor(db, { email: "nobody@example.com", settings }), ids.rca, { reason: "secret leaked", confirm_title: "x" })).rejects.toThrow(/needs Delete permanently/);
     const title = (await db.query("SELECT title FROM findings WHERE id = $1", [ids.rca])).rows[0].title;
     await expect(purgeItem(me, ids.rca, { reason: "secret leaked", confirm_title: "wrong" })).rejects.toThrow(/exact title/);
     await expect(purgeItem(me, ids.rca, { reason: "x", confirm_title: title })).rejects.toThrow(/reason/);

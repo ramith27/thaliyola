@@ -87,7 +87,7 @@ describe("members-only projects", () => {
     const r = await reader();
     expect((await getArticle(r, ids.contract)).title).toBe("Orders API v1");
     expect((await searchKnowledge(r, { query: "export times out", scope: "all" })).findings.map((h) => h.id)).toContain(ids.knownIssue);
-    await expect(proposeFinding(r, { scope: "order-service", type: "rca", title: "x", symptoms: "y", root_cause: "z", force_new: true })).rejects.toThrow(/not a writer/);
+    await expect(proposeFinding(r, { scope: "order-service", type: "rca", title: "x", symptoms: "y", root_cause: "z", force_new: true })).rejects.toThrow(/none of your roles here include/);
     const w = await writer();
     expect((await proposeFinding(w, { scope: "order-service", type: "rca", title: "Writer finding", symptoms: "Seen by writer", root_cause: "Known", force_new: true })).status).toBe("pending_review");
   });

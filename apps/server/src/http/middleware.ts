@@ -4,6 +4,8 @@ import type { Actor } from "../core/context.js";
 /**
  * Per-user request budget (fixed one-minute windows, in memory). Stops a
  * runaway agent loop from hammering the server; humans never get near it.
+ * Each replica counts on its own, so with N replicas behind a load balancer
+ * someone gets up to N times the budget: it's a safety valve, not a quota.
  */
 export function rateLimitPerActor(perMinute: number) {
   const windows = new Map<string, { start: number; count: number }>();
@@ -26,12 +28,14 @@ export function rateLimitPerActor(perMinute: number) {
   };
 }
 
+const PROBES = new Set(["/healthz", "/readyz", "/livez"]);
+
 /** One JSON line per request: method, path (no query string), status, duration, who. */
 export function accessLog(write: (line: string) => void = (l) => process.stdout.write(`${l}\n`)) {
   return (req: Request, res: Response, next: NextFunction) => {
     const start = process.hrtime.bigint();
     res.on("finish", () => {
-      if (req.path === "/healthz") return;
+      if (PROBES.has(req.path)) return;
       const actor = res.locals.actor as Actor | undefined;
       write(
         JSON.stringify({

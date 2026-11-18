@@ -100,7 +100,7 @@ describe("sources and the inbox", () => {
     const s = await createSource(await owner(), { kind: "rss", name: "Payments changelog", scope: "billing", config: { url: "https://example.com/feed.xml" } });
     expect(s).toMatchObject({ kind: "rss", scope: "billing", interval_minutes: 360, enabled: true, new_items: 0 });
     await expect(createSource(await owner(), { kind: "rss", name: "x", scope: "team", config: { url: "https://example.com/feed.xml" } })).rejects.toThrow(/only admins/);
-    await expect(createSource(await ctxFor(db, { email: "writer@example.com" }), { kind: "rss", name: "x", scope: "billing", config: { url: "https://example.com/a" } })).rejects.toThrow(/owners and admins/);
+    await expect(createSource(await ctxFor(db, { email: "writer@example.com" }), { kind: "rss", name: "x", scope: "billing", config: { url: "https://example.com/a" } })).rejects.toThrow(/needs Manage/);
     await expect(createSource(await owner(), { kind: "rss", name: "x", scope: "billing", config: { url: "ftp://example.com/a" } })).rejects.toThrow(/http/);
     await expect(createSource(await owner(), { kind: "slack", name: "x", scope: "billing", config: { channel: "C0123ABCD" } })).rejects.toThrow(/SLACK_BOT_TOKEN/);
     await expect(createSource(await owner(), { kind: "web", name: "x", scope: "billing", config: { url: "https://example.com" }, interval_minutes: 5 })).rejects.toThrow(/between 15/);
@@ -170,7 +170,7 @@ describe("sources and the inbox", () => {
       const p = await previewSource(await owner(), { kind: "hackernews", scope: "billing", config: { query: "postgres", min_points: "100" } });
       expect(p.items[0]).toMatchObject({ external_id: "42", title: "Postgres 18 released", url: "https://postgresql.org" });
       expect(net.calls[0]).toContain("points%3E%3D100");
-      await expect(previewSource(await ctxFor(db, { email: "writer@example.com" }), { kind: "hackernews", scope: "billing", config: { query: "x" } })).rejects.toThrow(/owners and admins/);
+      await expect(previewSource(await ctxFor(db, { email: "writer@example.com" }), { kind: "hackernews", scope: "billing", config: { query: "x" } })).rejects.toThrow(/needs Manage/);
     } finally {
       globalThis.fetch = realFetch;
     }
@@ -203,7 +203,7 @@ describe("sources and the inbox", () => {
     expect(after.tasks.map((t) => t.targets[0]!.id)).not.toContain(id);
     expect(after.tasks.map((t) => t.targets[0]!.id)).not.toContain(other);
     // Billing has writers, so people without a role there can read the inbox but not resolve items.
-    await expect(resolveInboxItem(await ctxFor(db, { email: "outsider@example.com" }), { id: other, outcome: "dismissed", note: "x" })).rejects.toThrow(/not a writer/);
+    await expect(resolveInboxItem(await ctxFor(db, { email: "outsider@example.com" }), { id: other, outcome: "dismissed", note: "x" })).rejects.toThrow(/none of your roles here include/);
 
     // The filed item's source changes: it comes back marked updated; the dismissed one stays dismissed.
     const src = (await listSources(await owner())).sources.find((x: { name: string }) => x.name === "Payments changelog") as { id: string };

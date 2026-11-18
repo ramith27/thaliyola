@@ -1,0 +1,79 @@
+/* Knowledge graph (pages/graph.tsx; GraphCanvas also renders in the static viewer). Prefix: gr-. Tokens only. */
+
+/* ============================================================ Toolbar */
+.gr-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin: 0 0 var(--space-3); }
+.gr-field { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; max-width: 100%; }
+.gr-field-label { flex: none; color: var(--text-2); font-size: var(--fs-sm); line-height: var(--lh-sm); font-weight: var(--fw-medium); }
+.gr-where { display: block; min-width: 0; max-width: 20rem; }
+.gr-highlight { display: flex; align-items: center; gap: var(--space-2); flex: 1 1 16rem; min-width: 0; max-width: 28rem; }
+.gr-match-count { flex: none; color: var(--muted); font-size: var(--fs-sm); line-height: var(--lh-sm); white-space: nowrap; }
+.gr-notes { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin: 0 0 var(--space-3); }
+.gr-truncated { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font-size: var(--fs-sm); }
+
+/* ============================================================ Canvas */
+/* The static viewer wraps GraphCanvas in `section.card.graph-card` (viewer/main.tsx). */
+.graph-card { padding: 0; overflow: hidden; }
+.gr-card { min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.graph-card > .gr-card { border: 0; border-radius: 0; }
+.gr-legend { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); color: var(--text-2); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.gr-legend[data-compact] { gap: var(--space-1) var(--space-3); padding: var(--space-2) var(--space-3); font-size: var(--fs-xs); line-height: var(--lh-xs); }
+.gr-legend-item { display: inline-flex; align-items: center; gap: var(--space-1); }
+.gr-legend-stale { fill: none; stroke: var(--text-2); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.gr-hint { margin-left: auto; color: var(--muted); font-size: var(--fs-xs); line-height: var(--lh-xs); }
+.gr-wrap {
+  position: relative; cursor: grab; touch-action: none; user-select: none; outline: none;
+  background: radial-gradient(circle, var(--border) 1px, transparent 1px) 0 0 / 22px 22px, var(--surface-2);
+}
+.gr-wrap:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
+.gr-wrap:active { cursor: grabbing; }
+.gr-wrap svg { display: block; }
+.gr-edge { stroke: var(--graph-edge); stroke-width: 1.2; }
+.gr-edge[data-active] { stroke: var(--text-2); stroke-width: 1.8; }
+.gr-edge-label { fill: var(--text-2); font-size: var(--fs-xs); paint-order: stroke; stroke: var(--surface-2); stroke-width: 4px; stroke-linejoin: round; }
+.gr-node { cursor: pointer; transition: opacity var(--duration-fast) var(--ease-standard); }
+.gr-node-label { fill: var(--text); font-size: var(--fs-xs); font-weight: var(--fw-medium); paint-order: stroke; stroke: var(--surface-2); stroke-width: 4px; stroke-linejoin: round; pointer-events: none; }
+/* Needs a check: a dashed outline (drawn by Shape) and a faded fill. */
+.gr-node-stale > rect, .gr-node-stale > circle:not(.gr-match-ring):not(.gr-focus-ring) { fill-opacity: 0.55; }
+.gr-match-ring { fill: none; stroke: var(--accent); stroke-width: 2.5; }
+.gr-focus-ring { fill: none; stroke: var(--text); stroke-width: 2; }
+.gr-dim { opacity: 0.3; }
+
+/* Details for the hovered (follows the mouse) or pinned (clicked) node. */
+.gr-panel {
+  position: absolute; left: var(--space-3); bottom: var(--space-3); display: flex; flex-direction: column; gap: var(--space-1);
+  max-width: 22rem; padding: var(--space-3); background: var(--surface-raised); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-lg); pointer-events: none;
+}
+.gr-panel[data-pinned] { pointer-events: auto; cursor: auto; user-select: text; }
+.gr-panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-2); }
+.gr-panel-kind { color: var(--muted); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.gr-panel-title { overflow-wrap: anywhere; }
+.gr-panel-meta { color: var(--muted); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.gr-panel-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
+.gr-scroll-hint {
+  position: absolute; left: 50%; top: var(--space-4); transform: translateX(-50%); padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm); background: var(--tooltip-bg); color: var(--tooltip-text); font-size: var(--fs-sm); line-height: var(--lh-sm);
+  white-space: nowrap; pointer-events: none;
+}
+.gr-zoom { position: absolute; right: var(--space-3); top: var(--space-3); display: flex; flex-direction: column; gap: var(--space-1); }
+
+/* ============================================================ List view and item pages */
+.gr-list { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-3); min-width: 0; }
+.gr-list > :not(.segmented-field) { align-self: stretch; }
+.gr-node-link { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-2); min-width: 0; }
+.gr-node-link a { overflow-wrap: anywhere; }
+.gr-kind { color: var(--muted); font-size: var(--fs-xs); line-height: var(--lh-xs); }
+.gr-relations { margin-top: var(--space-10); }
+
+/* ============================================================ Responsive */
+@media (max-width: 860px) {
+  .gr-hint { display: none; }
+  .gr-highlight { flex-basis: 100%; max-width: none; }
+  .gr-field { flex: 1 1 100%; }
+  .gr-where { flex: 1; max-width: none; }
+  /* The panel spans the top of the canvas, clear of the zoom buttons. */
+  .gr-panel { left: var(--space-2); right: calc(var(--control-md) + var(--space-5)); top: var(--space-2); bottom: auto; max-width: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gr-node { transition: none; }
+}

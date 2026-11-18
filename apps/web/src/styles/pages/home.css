@@ -1,0 +1,99 @@
+/* Home (pages/dashboard.tsx, components/checklist.tsx). Prefix: hm-. Tokens only; kit classes are arranged, never restyled. */
+
+/* ============================================================ Page flow */
+/* Desktop: search, For you, spaces and projects, glance. Phones put For you first (dashboard.tsx swaps the DOM order). */
+.hm-home { display: flex; flex-direction: column; gap: var(--space-10); min-width: 0; }
+.hm-home > * { min-width: 0; }
+
+/* ============================================================ Search */
+.hm-search .home-search { margin: 0; }
+.hm-try { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: var(--space-3) 0 0; }
+.hm-try-label { color: var(--muted); font-size: var(--fs-sm); }
+
+/* ============================================================ For you */
+.hm-for-you { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); gap: var(--space-6); align-items: start; }
+.hm-action { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.hm-action[data-wide] { grid-column: 1 / -1; }
+.hm-action-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
+.hm-action-title { margin: 0; font-size: var(--fs-lg); line-height: var(--lh-lg); font-weight: var(--fw-semibold); }
+.hm-action-count { color: var(--muted); font-weight: var(--fw-regular); }
+.hm-action-foot { display: flex; justify-content: flex-end; font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.hm-action-foot a { display: inline-flex; align-items: center; gap: var(--space-1); }
+
+.hm-attention-note { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.hm-attention-reason { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--warn); }
+/* Sits above the row's stretched title link, so the button gets the click. */
+.hm-row-action { position: relative; z-index: var(--z-raised); display: inline-flex; }
+.hm-attention-more { margin: 0; font-size: var(--fs-sm); line-height: var(--lh-sm); }
+/* Headings that take focus after an inline action (tabIndex -1): no ring for the programmatic move. */
+.hm-action-title:focus:not(:focus-visible), #hm-connect-title:focus:not(:focus-visible) { outline: none; }
+
+.hm-quiet { display: flex; align-items: center; gap: var(--space-2); margin: var(--space-4) 0 0; color: var(--muted); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.hm-quiet svg { flex: none; color: var(--ok); }
+
+/* ============================================================ Setup checklist */
+.hm-setup-slot { min-width: 0; }
+.hm-setup-body { display: flex; flex-direction: column; gap: var(--space-4); }
+.hm-setup-skeleton { min-height: 220px; }
+.hm-setup-progress { display: flex; align-items: center; gap: var(--space-3); }
+.hm-progress { display: block; flex: 1; max-width: 220px; height: 6px; border-radius: var(--radius-full); background: var(--surface-3); overflow: hidden; }
+.hm-progress-fill { display: block; height: 100%; border-radius: var(--radius-full); background: var(--accent); transition: width var(--duration-base) var(--ease-standard); }
+
+.hm-setup-next { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-radius: var(--radius); background: var(--surface-2); }
+.hm-setup-next-label { margin: 0; color: var(--muted); font-size: var(--fs-xs); line-height: var(--lh-xs); font-weight: var(--fw-semibold); }
+.hm-setup-next-detail { margin: 0; color: var(--text-2); }
+
+.hm-steps { display: flex; flex-direction: column; gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
+.hm-step { display: flex; align-items: flex-start; gap: var(--space-3); }
+.hm-step-check {
+  display: inline-flex; flex: none; align-items: center; justify-content: center; width: 18px; height: 18px; margin-top: 2px;
+  border: 1.5px solid var(--border-strong); border-radius: var(--radius-full); color: var(--on-accent);
+}
+.hm-step[data-state="done"] .hm-step-check { border-color: var(--accent); background: var(--accent); }
+.hm-step-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hm-step-title { font-weight: var(--fw-medium); overflow-wrap: anywhere; }
+.hm-step-title svg { vertical-align: -2px; }
+.hm-step[data-state="done"] .hm-step-title { color: var(--muted); text-decoration: line-through; }
+.hm-step-detail { margin: 0; color: var(--muted); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+
+/* ============================================================ Spaces and projects */
+.hm-space-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)); gap: var(--space-3); }
+.hm-project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: var(--space-4); }
+.hm-card-title { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.hm-card-title svg { flex: none; color: var(--muted); }
+.hm-project-body { display: flex; flex-direction: column; gap: var(--space-2); }
+.hm-project-desc { margin: 0; color: var(--text-2); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.hm-project-desc.muted { color: var(--muted); }
+/* "Add one" sits above the card's stretched link. */
+.hm-project-add { position: relative; z-index: var(--z-raised); }
+.hm-project-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); }
+.hm-project-subs { font-size: var(--fs-sm); line-height: var(--lh-sm); }
+
+/* ============================================================ Team knowledge at a glance */
+.hm-glance-summary { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); }
+.hm-glance-heading { margin: 0; font-size: var(--fs-xl); line-height: var(--lh-xl); font-weight: var(--fw-semibold); color: var(--text); }
+.hm-glance-counts { font-size: var(--fs-sm); line-height: var(--lh-sm); font-weight: var(--fw-regular); }
+.hm-glance[open] .hm-glance-counts { display: none; }
+.hm-glance-wrap > .hm-glance-heading { margin-bottom: var(--space-3); }
+.hm-glance-loading { display: flex; flex-direction: column; gap: var(--space-4); }
+.hm-glance-body { display: flex; flex-direction: column; gap: var(--space-5); margin-top: var(--space-4); }
+
+.hm-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--space-4); }
+.hm-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: stretch; }
+
+.hm-feed { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.hm-feed-row { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-2) 0; border-top: 1px solid var(--border); }
+.hm-feed-row:first-child { border-top: 0; padding-top: 0; }
+.hm-feed-row > .badge { flex: none; margin-top: 1px; }
+.hm-feed-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+
+/* ============================================================ Responsive */
+@media (max-width: 860px) {
+  .hm-home { gap: var(--space-8); }
+  .hm-charts { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  /* Two by two on phones; one column when two would not fit (320px). */
+  .hm-tiles { grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr)); gap: var(--space-3); }
+  .hm-progress { max-width: none; }
+}

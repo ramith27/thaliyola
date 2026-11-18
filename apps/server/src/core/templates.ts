@@ -16,7 +16,44 @@ export const ARTICLE_TEMPLATES: Record<string, string[]> = {
   ui_component: ["Purpose", "Anatomy", "States", "Variants", "Accessibility", "Do and don't"],
   ux_pattern: ["Problem", "Flow", "When to use", "Examples"],
   screen_spec: ["Purpose", "User flow", "States", "API calls"],
+  // Free-form: personal context, preferences, scratch knowledge.
+  note: [],
 };
+
+/** What people call each article and finding type (the web's labels.ts TYPE_LABELS uses the same words). */
+export const TYPE_LABELS: Record<string, string> = {
+  system: "System",
+  table: "Data table",
+  metric: "Metric",
+  runbook: "Runbook",
+  decision: "Decision",
+  project_overview: "Project overview",
+  design_doc: "Design doc",
+  tech_spec: "Technical spec",
+  api_contract: "API contract",
+  pattern: "Pattern",
+  design_tokens: "Design tokens",
+  ui_component: "UI component",
+  ux_pattern: "UX pattern",
+  screen_spec: "Screen spec",
+  note: "Note",
+  incident: "Incident",
+  rca: "Root cause analysis",
+  known_issue: "Known issue",
+  data_gotcha: "Data gotcha",
+  query_recipe: "Query recipe",
+};
+
+/** A type's label inside a sentence: "root cause analysis", "data table"; acronyms stay ("API contract", "UI component"). */
+export function typeWord(type: string): string {
+  const label = TYPE_LABELS[type] ?? type.replace(/_/g, " ");
+  return /^[A-Z]{2}/.test(label) ? label : label.charAt(0).toLowerCase() + label.slice(1);
+}
+
+/** The review queue's line for a new article or finding: "New root cause analysis: Refund webhook processed twice". */
+export function newItemSummary(type: string, title: string): string {
+  return `New ${typeWord(type)}: ${title}`;
+}
 
 export function missingSections(type: string, body: string): string[] {
   const present = new Set(splitSections(body).map((s) => s.heading.toLowerCase()));
@@ -100,4 +137,72 @@ export function templateFor(type: string, opts: { hints?: boolean } = {}): strin
 /** Removes the editor's template hints (and the blank line after each) before saving. */
 export function stripHints(markdown: string): string {
   return markdown.replace(/<!-- Hint: [\s\S]*?-->\n?\n?/g, "");
+}
+
+// ---- Writing guide ----------------------------------------------------------------------------------------
+
+/** Finding types and their three fields, with what each should hold for that kind of finding. */
+export const FINDING_GUIDES: Record<string, { field: "symptoms" | "root_cause" | "fix"; heading: string; hint: string }[]> = {
+  incident: [
+    { field: "symptoms", heading: "Symptoms", hint: "What broke and who noticed, as it first appeared: the alert, error message or complaint, and when it started." },
+    { field: "root_cause", heading: "Root cause", hint: "Why it happened, once confirmed. Say what was ruled out if the obvious suspect wasn't it." },
+    { field: "fix", heading: "Fix or workaround", hint: "What stopped the impact, what fixed it for good, and links to the PRs." },
+  ],
+  rca: [
+    { field: "symptoms", heading: "Symptoms", hint: "The impact: what users or systems saw, for how long, and how it was detected." },
+    { field: "root_cause", heading: "Root cause", hint: "The chain of causes down to the one that matters, with the evidence for each." },
+    { field: "fix", heading: "Fix or workaround", hint: "The fix, and the follow-ups that stop it happening again (with owners)." },
+  ],
+  known_issue: [
+    { field: "symptoms", heading: "Symptoms", hint: "How the issue shows up, in the words someone hitting it would search with." },
+    { field: "root_cause", heading: "Root cause", hint: "Why it happens, and whether a permanent fix is planned." },
+    { field: "fix", heading: "Fix or workaround", hint: "How to work around it today, step by step." },
+  ],
+  data_gotcha: [
+    { field: "symptoms", heading: "Symptoms", hint: "The wrong-looking number or query result, and which table or metric it came from." },
+    { field: "root_cause", heading: "Root cause", hint: "What about the data causes it: duplicates, nulls, timezones, late data, soft deletes." },
+    { field: "fix", heading: "Fix or workaround", hint: "The filter, join or query change that gives the right answer, in a code block." },
+  ],
+  query_recipe: [
+    { field: "symptoms", heading: "Symptoms", hint: "The question this query answers, phrased the way people ask it." },
+    { field: "root_cause", heading: "Root cause", hint: "Why the query is written this way: the tables, joins and filters it relies on." },
+    { field: "fix", heading: "Fix or workaround", hint: "The query itself, in a code block, with any parameters to change." },
+  ],
+};
+
+const CHECKLIST_COMMON = [
+  "The title says what it's about, in the words people search with",
+  "No secrets, tokens or personal data",
+  "Links to the source: the pull request, Slack thread, dashboard or ticket",
+];
+const CHECKLIST_ARTICLE = ["Every section is filled in, or removed if it doesn't apply", "Names an owner people can ask"];
+const CHECKLIST_FINDING = ["Symptoms read as they were first seen, not as later understood", "The root cause is confirmed, not a guess"];
+const CHECKLIST_BY_TYPE: Record<string, string> = {
+  runbook: "Each step can be followed by someone on call who has never seen this system",
+  metric: "The formula matches what the dashboards show",
+  decision: "Says what was decided and why, not only the options",
+  table: "Example queries run as written",
+  api_contract: "Request and response examples are real and current",
+  incident: "Says when it started and when it ended",
+  query_recipe: "The query runs as written",
+};
+
+export type GuideKind = "article" | "finding";
+
+/** What to write in each section of one article or finding type, and a short checklist before saving. */
+export function writingGuide(kind: GuideKind, type: string) {
+  const extra = CHECKLIST_BY_TYPE[type];
+  if (kind === "article") {
+    const headings = ARTICLE_TEMPLATES[type];
+    if (!headings) return null;
+    return {
+      kind,
+      type,
+      sections: headings.map((heading) => ({ heading, hint: SECTION_HINTS[heading] ?? "" })),
+      checklist: [...CHECKLIST_COMMON, ...(headings.length ? CHECKLIST_ARTICLE : []), ...(extra ? [extra] : [])],
+    };
+  }
+  const fields = FINDING_GUIDES[type];
+  if (!fields) return null;
+  return { kind, type, sections: fields.map(({ heading, hint, field }) => ({ heading, hint, field })), checklist: [...CHECKLIST_COMMON, ...CHECKLIST_FINDING, ...(extra ? [extra] : [])] };
 }

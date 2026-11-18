@@ -1,8 +1,9 @@
 import type { Queryable } from "../db/pool.js";
 import { splitSections } from "./chunking.js";
 import { NotFoundError, type RequestContext } from "./context.js";
-import { assertCanRead, canApprove, readableScopes } from "./permissions.js";
+import { assertCanRead, canApprove, canModerate, readableScopes } from "./permissions.js";
 import { getReadableScope } from "./scopes.js";
+import { ticketsByLink } from "./connections/tickets.js";
 
 export interface RelatedItem {
   relation: string;
@@ -44,12 +45,17 @@ export async function relatedItems(db: Queryable, id: string, readable: string[]
   return rows;
 }
 
+/** Evidence and design links; a Jira or Linear issue's carries its cached title and status (`ticket`). */
 async function sourceLinks(db: Queryable, id: string) {
   const { rows } = await db.query<{ system: string; url: string; label: string }>(
     "SELECT system, url, label FROM source_links WHERE target_id = $1 ORDER BY system, url",
     [id],
   );
-  return rows;
+  const tickets = rows.some((r) => r.system === "jira" || r.system === "linear") ? await ticketsByLink(db, id) : null;
+  return rows.map((r) => {
+    const t = tickets?.get(r.url);
+    return t ? { ...r, ticket: { key: t.key, title: t.title, status: t.status, category: t.category, checked_at: t.checked_at } } : r;
+  });
 }
 
 async function entitiesFor(db: Queryable, id: string) {
@@ -78,7 +84,7 @@ async function componentSlugs(db: Queryable, ids: string[]): Promise<string[]> {
 
 export async function getArticle(ctx: RequestContext, id: string, section?: string, opts: { skipReadCheck?: boolean } = {}) {
   const { rows } = await ctx.db.query(
-    `SELECT a.*, s.slug AS scope_slug, s.kind AS scope_kind, coalesce(u.email, u.subject) AS owner
+    `SELECT a.*, s.slug AS scope_slug, s.kind AS scope_kind, coalesce(u.email, u.subject) AS owner, u.display_name AS owner_name
        FROM articles a JOIN scopes s ON s.id = a.scope_id LEFT JOIN users u ON u.id = a.owner_id
       WHERE a.id = $1`,
     [id],
@@ -87,7 +93,7 @@ export async function getArticle(ctx: RequestContext, id: string, section?: stri
   if (!a) throw new NotFoundError(`article ${id}`);
   if (!opts.skipReadCheck) await assertCanRead(ctx, a.scope_id, `article ${id}`);
   // In the trash: only people who could restore it still see it.
-  if (a.status === "deleted" && !(await canApprove(ctx, a.scope_id))) throw new NotFoundError(`article ${id}`);
+  if (a.status === "deleted" && !(await canModerate(ctx, a.scope_id))) throw new NotFoundError(`article ${id}`);
 
   const sections = splitSections(a.body_md);
   let body: string = a.body_md;
@@ -105,6 +111,7 @@ export async function getArticle(ctx: RequestContext, id: string, section?: stri
     scope: { slug: a.scope_slug, kind: a.scope_kind },
     path: a.path,
     owner: a.owner,
+    owner_name: a.owner_name ?? null,
     tags: a.tags,
     components: await componentSlugs(ctx.db, a.component_ids),
     version: a.version,
@@ -117,12 +124,23 @@ export async function getArticle(ctx: RequestContext, id: string, section?: stri
     source_links: await sourceLinks(ctx.db, id),
     entities: await entitiesFor(ctx.db, id),
     assets: await assetsFor(ctx.db, id),
+    ...(a.type === "table" ? { synced_table: await syncedTable(ctx, id) } : {}),
   };
+}
+
+/** The synced table a table article describes (a database connection's sync wrote it), for the Data view link. */
+async function syncedTable(ctx: RequestContext, articleId: string) {
+  const { rows } = await ctx.db.query<{ id: string; key: string; connection: string; project: string }>(
+    `SELECT o.id, o.key, c.name AS connection, s.slug AS project FROM connection_objects o JOIN connections c ON c.id = o.connection_id JOIN scopes s ON s.id = c.scope_id
+      WHERE o.article_id = $1 AND o.kind IN ('table', 'view') AND ($2::uuid[] IS NULL OR s.id = ANY($2::uuid[])) ORDER BY o.removed_at NULLS FIRST LIMIT 1`,
+    [articleId, await readableScopes(ctx)],
+  );
+  return rows[0] ?? null;
 }
 
 export async function getFinding(ctx: RequestContext, id: string, opts: { skipReadCheck?: boolean } = {}) {
   const { rows } = await ctx.db.query(
-    `SELECT f.*, s.slug AS scope_slug, s.kind AS scope_kind, coalesce(u.email, u.subject) AS author
+    `SELECT f.*, s.slug AS scope_slug, s.kind AS scope_kind, coalesce(u.email, u.subject) AS author, u.display_name AS author_name
        FROM findings f JOIN scopes s ON s.id = f.scope_id LEFT JOIN users u ON u.id = f.author_id
       WHERE f.id = $1`,
     [id],
@@ -130,9 +148,9 @@ export async function getFinding(ctx: RequestContext, id: string, opts: { skipRe
   const f = rows[0];
   if (!f) throw new NotFoundError(`finding ${id}`);
   if (!opts.skipReadCheck) await assertCanRead(ctx, f.scope_id, `finding ${id}`);
-  if (f.status === "deleted" && !(await canApprove(ctx, f.scope_id))) throw new NotFoundError(`finding ${id}`);
+  if (f.status === "deleted" && !(await canModerate(ctx, f.scope_id))) throw new NotFoundError(`finding ${id}`);
   const history = await ctx.db.query(
-    `SELECT r.op, r.state, r.reason, r.created_at, r.decided_at, coalesce(u.email, u.subject) AS author
+    `SELECT r.op, r.state, r.reason, r.created_at, r.decided_at, coalesce(u.email, u.subject) AS author, u.display_name AS author_name
        FROM revisions r JOIN users u ON u.id = r.author_id
       WHERE r.target_kind = 'finding' AND r.target_id = $1 ORDER BY r.created_at`,
     [id],
@@ -149,6 +167,7 @@ export async function getFinding(ctx: RequestContext, id: string, opts: { skipRe
     tags: f.tags,
     components: await componentSlugs(ctx.db, f.component_ids),
     author: f.author,
+    author_name: f.author_name ?? null,
     version: f.version,
     last_verified_at: f.last_verified_at,
     created_at: f.created_at,

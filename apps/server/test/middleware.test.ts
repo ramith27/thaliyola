@@ -63,7 +63,7 @@ describe("request size", () => {
 
 describe("health and logging", () => {
   it("reports database and embeddings status", async () => {
-    expect(await (await fetch(`${base}/healthz`)).json()).toEqual({ ok: true, database: "ok", embeddings: "off" });
+    expect(await (await fetch(`${base}/healthz`)).json()).toEqual({ ok: true, database: "ok", embeddings: "off", version: expect.stringMatching(/^\d+\.\d+\.\d+$/), commit: expect.toBeOneOf([null, expect.any(String)]), built_at: expect.toBeOneOf([null, expect.any(String)]) });
   });
 
   it("logs one JSON line per request without query strings", async () => {

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { recordVisit } from "../components/find";
-import { I } from "../components/icons";
-import { ErrorBox, formatDate, Loading, ScopeBadge, StatusBadge, TypeBadge } from "../components/ui";
+import { entityKindLabel, plural } from "../components/labels";
+import { AsyncBlock, Badge, Button, Card, EmptyState, ItemRow, LinkChip, Page, PageHeader, RowList, Section, SkeletonRows, Skeleton } from "../components/kit";
 import { useApi } from "../hooks";
 import { href } from "../router";
 
@@ -9,78 +9,100 @@ interface Entity {
   kind: string;
   name: string;
   aliases: string[];
-  items: { kind: "article" | "finding"; id: string; title: string; type: string; status: string; scope: string; updated_at: string }[];
+  items: { kind: "article" | "finding"; id: string; title: string; type: string; status: string; scope: string; scope_kind?: string; updated_at: string }[];
   related: { kind: string; name: string; shared: number }[];
 }
 
-/** Everything the team has written about one system, table, metric or service. */
-export function EntityPage({ kind, name }: { kind: string; name: string }) {
-  const { data, error } = useApi<Entity>(`/entities/${encodeURIComponent(kind)}/${encodeURIComponent(name)}`);
-  useEffect(() => {
-    if (data) recordVisit({ kind: "entity", id: `${data.kind}:${data.name}`, title: data.name, link: href(`/entity/${data.kind}/${data.name}`) });
-  }, [data]);
-  if (error) return <ErrorBox error={error} />;
-  if (!data) return <Loading />;
-  const articles = data.items.filter((i) => i.kind === "article");
-  const findings = data.items.filter((i) => i.kind === "finding");
-  return (
-    <div className="page with-side">
-      <article>
-        <p className="breadcrumbs muted small">Entities / {data.kind}</p>
-        <h1>{data.name}</h1>
-        <div className="badges">
-          <span className="badge badge-type">{data.kind}</span>
-          {data.aliases.length > 0 && <span className="muted small">also called {data.aliases.join(", ")}</span>}
-        </div>
-        <ItemList title="Articles" icon="doc" items={articles} />
-        <ItemList title="Findings" icon="bolt" items={findings} />
-        {!data.items.length && <p className="muted">Nothing you can read mentions {data.name} yet.</p>}
-      </article>
-      <aside className="side">
-        <section className="side-block">
-          <h3>Often mentioned with</h3>
-          {!data.related.length && <p className="muted small">No other entities yet.</p>}
-          <ul className="plain">
-            {data.related.map((r) => (
-              <li key={`${r.kind}:${r.name}`}>
-                <a href={href(`/entity/${r.kind}/${r.name}`)}>{r.name}</a> <span className="muted small">{r.kind}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-        <section className="side-block">
-          <h3>Search</h3>
-          <p className="small">
-            <a href={href("/search", { q: data.name })}>Search everything for “{data.name}”</a>
-          </p>
-        </section>
-      </aside>
-    </div>
-  );
-}
+const entityHref = (kind: string, name: string) => `#/entity/${encodeURIComponent(kind)}/${encodeURIComponent(name)}`;
 
-function ItemList({ title, icon, items }: { title: string; icon: "doc" | "bolt"; items: Entity["items"] }) {
-  if (!items.length) return null;
+/** Everything the team has written about one topic: a system, table, metric or service. */
+export function EntityPage({ kind, name }: { kind: string; name: string }) {
+  const result = useApi<Entity>(`/entities/${encodeURIComponent(kind)}/${encodeURIComponent(name)}`);
+  const { data } = result;
+  useEffect(() => {
+    if (data) recordVisit({ kind: "entity", id: `${data.kind}:${data.name}`, title: data.name, link: entityHref(data.kind, data.name) });
+  }, [data]);
+
+  const title = data?.name ?? name;
+  const kindLabel = entityKindLabel(data?.kind ?? kind);
+  const articles = data?.items.filter((i) => i.kind === "article") ?? [];
+  const findings = data?.items.filter((i) => i.kind === "finding") ?? [];
+
+  const rail = (
+    <Card title="Often mentioned with" padding="sm">
+      {result.error ? (
+        <p className="muted small">Couldn't load related topics.</p>
+      ) : !data ? (
+        <Skeleton width="70%" />
+      ) : data.related.length ? (
+        <ul className="br-topic-links" aria-label="Often mentioned with">
+          {data.related.map((r) => (
+            <li key={`${r.kind}:${r.name}`}>
+              <LinkChip href={entityHref(r.kind, r.name)} hint={entityKindLabel(r.kind)}>
+                {r.name}
+              </LinkChip>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted small">No other topics yet.</p>
+      )}
+    </Card>
+  );
+
   return (
-    <section>
-      <h2>
-        {title} <span className="muted small">{items.length}</span>
-      </h2>
-      <ul className="hits">
-        {items.map((i) => (
-          <li key={i.id} className="hit">
-            <div className="hit-head">
-              <I name={icon} size={16} /> <a href={href(`/${i.kind}/${i.id}`)}>{i.title}</a>
-            </div>
-            <div className="badges">
-              <TypeBadge type={i.type} />
-              <ScopeBadge scope={i.scope} />
-              {i.status !== "published" && <StatusBadge status={i.status} />}
-              <span className="muted small">updated {formatDate(i.updated_at)}</span>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <Page width="content" rail={rail} railLabel="Related topics">
+      <PageHeader
+        title={title}
+        crumbs={[{ label: "Topics" }, { label: kindLabel }]}
+        eyebrow="Topic"
+        status={<Badge>{kindLabel}</Badge>}
+        description={data && data.aliases.length > 0 ? `Also called ${data.aliases.join(", ")}` : undefined}
+        meta={data && data.items.length ? <span>{[findings.length ? plural(findings.length, "finding") : "", articles.length ? plural(articles.length, "article") : ""].filter(Boolean).join(" · ")}</span> : undefined}
+        // The page's one action; in `primary` so phones keep it visible instead of folding it into ⋯.
+        primary={
+          <Button icon="search" href={href("/search", { q: title })}>
+            Search everything<span className="sr-only"> for “{title}”</span>
+          </Button>
+        }
+      />
+      <AsyncBlock
+        result={result}
+        label="Loading the topic"
+        skeleton={<SkeletonRows count={4} />}
+        errorTitle="This topic didn't load"
+        isEmpty={(d) => d.items.length === 0}
+        empty={
+          <EmptyState
+            icon="hash"
+            title={`Nothing you can read mentions ${title} yet`}
+            description="Topics come from the articles and findings that mention them. Use Search everything above to look further."
+          />
+        }
+      >
+        {() => (
+          <>
+            {articles.length > 0 && (
+              <Section title="Articles" count={articles.length}>
+                <RowList label="Articles">
+                  {articles.map((i) => (
+                    <ItemRow key={i.id} item={{ ...i, scope: { slug: i.scope, kind: i.scope_kind } }} />
+                  ))}
+                </RowList>
+              </Section>
+            )}
+            {findings.length > 0 && (
+              <Section title="Findings" count={findings.length}>
+                <RowList label="Findings">
+                  {findings.map((i) => (
+                    <ItemRow key={i.id} item={{ ...i, scope: { slug: i.scope, kind: i.scope_kind } }} />
+                  ))}
+                </RowList>
+              </Section>
+            )}
+          </>
+        )}
+      </AsyncBlock>
+    </Page>
   );
 }

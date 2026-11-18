@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { applyTheme } from "./theme";
 import "@fontsource-variable/inter";
-import "./styles.css";
+import "./styles/index.css";
 
 applyTheme();
 

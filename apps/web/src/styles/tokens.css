@@ -1,0 +1,158 @@
+/* ============================================================
+   Thaliyola UI: design tokens (SPEC §3). The only file with raw colours.
+   Light on :root; dark via the OS setting (unless light is forced) or an
+   explicit dark choice. The two dark blocks must stay identical (tested).
+   Every legacy token name is kept so older CSS keeps working.
+   ============================================================ */
+:root {
+  color-scheme: light;
+  /* Surfaces */
+  --bg: #ffffff;               /* page canvas, top bar */
+  --bg-sidebar: #f7f8fa;       /* sidebar, phone drawer */
+  --surface: #ffffff;          /* cards, inputs, rows */
+  --surface-raised: #ffffff;   /* menus, popovers, dialogs, toasts */
+  --surface-2: #f5f6f8;        /* table headers, code, wells, segmented track, graph canvas */
+  --surface-3: #eff1f4;        /* hover */
+  --surface-pressed: #e7eaef;  /* pressed / active */
+  /* Text */
+  --text: #14161a;
+  --text-2: #3b414b;
+  --muted: #5b6270;            /* meta, helper text, placeholders, chart ticks */
+  --text-disabled: #858c99;    /* disabled labels only */
+  /* Lines */
+  --border: #e4e7ec;           /* hairlines, card edges (decorative) */
+  --border-strong: #cfd4dc;    /* secondary button borders, hover borders */
+  --border-control: #77818f;   /* input, checkbox, switch boundaries (≥3:1) */
+  /* Accent */
+  --accent: #3d5bd6;
+  --accent-hover: #3249c0;
+  --accent-soft: #eef1fd;      /* selected nav, selected rows, info callouts */
+  --accent-soft-hover: #e1e7fc;
+  --accent-border: #c5cff6;    /* selected chip border, info callout border */
+  --accent-text: #3550c8;      /* links, active nav label */
+  --on-accent: #ffffff;
+  --focus: #3d5bd6;            /* solid focus ring */
+  --ring: color-mix(in srgb, var(--focus) 30%, transparent); /* decorative halo only, never focus */
+  /* State */
+  --ok: #17703f;  --ok-soft: #e8f5ee;  --ok-border: #b9dfc9;
+  --warn: #875200; --warn-soft: #fcf3e0; --warn-border: #ecd39b;
+  --danger: #c0302f; --danger-soft: #fdeeee; --danger-border: #f3c4c3;
+  --danger-solid: #c43a3a; --danger-solid-hover: #b02f2f; --on-danger: #ffffff;
+  /* Content */
+  --mark: #fdf0b0;
+  --code: #f5f6f8;
+  --scrim: rgb(15 17 21 / 0.4);
+  --tooltip-bg: #1f2329; --tooltip-text: #f4f5f7;
+  --avatar-1: #4458c9; --avatar-2: #0f7563; --avatar-3: #7c4dcc; --avatar-4: #b03a68;   /* white initials */
+  --avatar-5: #985613; --avatar-6: #2f7a35; --avatar-7: #2d6a9f; --avatar-8: #5d6472;
+  --avatar-service: #5d6472;
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgb(16 18 24 / 0.05);
+  --shadow: 0 1px 3px rgb(16 18 24 / 0.06), 0 6px 16px rgb(16 18 24 / 0.08);
+  --shadow-lg: 0 2px 8px rgb(16 18 24 / 0.08), 0 24px 64px rgb(16 18 24 / 0.18);
+  /* Shape */
+  --radius-sm: 6px;      /* buttons, inputs, chips, menu items */
+  --radius: 10px;        /* cards, menus, popovers, callouts, toasts */
+  --radius-lg: 14px;     /* dialogs, sheets, gate card */
+  --radius-full: 999px;  /* avatars, counts, badges, switches */
+  /* Type */
+  --font: "Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --fs-xs: 0.75rem;     --lh-xs: 1rem;        /* 12/16 badges, captions, kbd, table headers, group labels */
+  --fs-sm: 0.8125rem;   --lh-sm: 1.125rem;    /* 13/18 meta, helper text, breadcrumbs */
+  --fs-md: 0.875rem;    --lh-md: 1.25rem;     /* 14/20 UI default */
+  --fs-lg: 1rem;        --lh-lg: 1.5rem;      /* 16/24 reading text (markdown 16/26), dialog body */
+  --fs-xl: 1.125rem;    --lh-xl: 1.625rem;    /* 18/26 section and dialog titles */
+  --fs-2xl: 1.375rem;   --lh-2xl: 1.75rem;    /* 22/28 page titles */
+  --fs-3xl: 1.75rem;    --lh-3xl: 2.25rem;    /* 28/36 document titles, Home greeting, stat values */
+  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600;
+  --tracking-tight: -0.011em; --tracking-tighter: -0.02em;
+  /* Space (4px base) */
+  --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem; --space-5: 1.25rem;
+  --space-6: 1.5rem; --space-8: 2rem; --space-10: 2.5rem; --space-12: 3rem; --space-16: 4rem;
+  /* Sizes */
+  --control-sm: 2rem; --control-md: 2.25rem; --control-lg: 2.75rem;   /* 32 / 36 / 44 */
+  --sidebar-w: 248px; --rail-w: 17.5rem; --topbar-h: 3.25rem; --tabbar-h: 3.75rem;
+  --w-reading: 45rem; --w-form: 42.5rem; --w-content: 67.5rem; --w-wide: 82.5rem;
+  --page-pad: 2rem;     /* 1.5rem at ≤1100px, 1rem at ≤860px (set in layout.css media queries) */
+  /* Layers */
+  --z-raised: 1; /* controls lifted above a stretched link inside a row or card; stays under the top bar */
+  --z-sticky: 20; --z-sidebar: 30; --z-dropdown: 40; --z-overlay: 50; --z-modal: 60;
+  --z-popover: 70; --z-toast: 80; --z-tooltip: 90;
+  /* Motion */
+  --duration-fast: 120ms; --duration-base: 160ms; --duration-slow: 220ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1); --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  /* Breakpoints (documentation only; media queries use the literal values) */
+  --bp-sm: 480px; --bp-md: 640px; --bp-nav: 860px; --bp-rail: 1100px; --bp-wide: 1280px;
+  /* Charts: categorical slots from the validated dataviz palette (unchanged) */
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a;
+  /* Status palette (fixed, not themed) */
+  --status-good: #0ca30c; --status-warning: #fab219; --status-serious: #ec835a; --status-critical: #d03b3b;
+  /* Severity: always shown as dot + word (+ score) */
+  --sev-critical: #d03b3b; --sev-high: #e8590c; --sev-medium: #b7791f; --sev-low: var(--neutral-mark);
+  --neutral-mark: #7f8896;
+  /* Chart chrome */
+  --grid: #eceef2; --axis: #c9ced6; --tick: var(--muted); --spark: #b6c2d3;
+  --graph-edge: #828a98;
+}
+@media (pointer: coarse) {
+  :root { --control-sm: 2.5rem; --control-md: 2.75rem; --control-lg: 3rem; }   /* 40 / 44 / 48 */
+}
+
+/* Dark: the OS setting, unless the person picked light. Keep identical to the [data-theme="dark"] block below. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0e1014; --bg-sidebar: #0b0c0f;
+    --surface: #15171c; --surface-raised: #1b1e24;
+    --surface-2: #1a1d23; --surface-3: #20242b; --surface-pressed: #282c34;
+    --text: #eceef1; --text-2: #c5cad2; --muted: #9ba3ae; --text-disabled: #727a86;
+    --border: #262a31; --border-strong: #363b45; --border-control: #6c7482;
+    --accent: #4462dd; --accent-hover: #4b68df; --accent-soft: #1b2344; --accent-soft-hover: #232c52;
+    --accent-border: #2e3b70; --accent-text: #9db0ff; --on-accent: #ffffff;
+    --focus: #8ea2ff;
+    --ok: #5fcf91; --ok-soft: #11261a; --ok-border: #1f4a31;
+    --warn: #f0bb4c; --warn-soft: #29200e; --warn-border: #5a4413;
+    --danger: #ff8b83; --danger-soft: #2e1717; --danger-border: #6a2b2b;
+    --danger-solid: #c43a3a; --danger-solid-hover: #b33434; --on-danger: #ffffff;
+    --mark: #4a3c0c; --code: #1a1d23;
+    --scrim: rgb(0 0 0 / 0.6);
+    --tooltip-bg: #2c3038; --tooltip-text: #eceef1;
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow: 0 0 0 1px var(--border), 0 8px 24px rgb(0 0 0 / 0.5);
+    --shadow-lg: 0 0 0 1px var(--border-strong), 0 24px 64px rgb(0 0 0 / 0.6);
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70;
+    --sev-critical: #d03b3b; --sev-high: #ec835a; --sev-medium: #fab219;
+    --neutral-mark: #7f8896;
+    --grid: #22262d; --axis: #363b45; --spark: #3b4a63;
+    --graph-edge: #68707e;
+  }
+}
+/* Dark: an explicit choice. Keep identical to the media-query block above. */
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0e1014; --bg-sidebar: #0b0c0f;
+    --surface: #15171c; --surface-raised: #1b1e24;
+    --surface-2: #1a1d23; --surface-3: #20242b; --surface-pressed: #282c34;
+    --text: #eceef1; --text-2: #c5cad2; --muted: #9ba3ae; --text-disabled: #727a86;
+    --border: #262a31; --border-strong: #363b45; --border-control: #6c7482;
+    --accent: #4462dd; --accent-hover: #4b68df; --accent-soft: #1b2344; --accent-soft-hover: #232c52;
+    --accent-border: #2e3b70; --accent-text: #9db0ff; --on-accent: #ffffff;
+    --focus: #8ea2ff;
+    --ok: #5fcf91; --ok-soft: #11261a; --ok-border: #1f4a31;
+    --warn: #f0bb4c; --warn-soft: #29200e; --warn-border: #5a4413;
+    --danger: #ff8b83; --danger-soft: #2e1717; --danger-border: #6a2b2b;
+    --danger-solid: #c43a3a; --danger-solid-hover: #b33434; --on-danger: #ffffff;
+    --mark: #4a3c0c; --code: #1a1d23;
+    --scrim: rgb(0 0 0 / 0.6);
+    --tooltip-bg: #2c3038; --tooltip-text: #eceef1;
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow: 0 0 0 1px var(--border), 0 8px 24px rgb(0 0 0 / 0.5);
+    --shadow-lg: 0 0 0 1px var(--border-strong), 0 24px 64px rgb(0 0 0 / 0.6);
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70;
+    --sev-critical: #d03b3b; --sev-high: #ec835a; --sev-medium: #fab219;
+    --neutral-mark: #7f8896;
+    --grid: #22262d; --axis: #363b45; --spark: #3b4a63;
+    --graph-edge: #68707e;
+}
+:root[data-theme="light"] { color-scheme: light; }

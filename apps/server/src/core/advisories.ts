@@ -5,9 +5,11 @@ import { ForbiddenError, NotFoundError, ValidationError, type RequestContext } f
 import { emitChanged } from "./events.js";
 import { notify, reviewersFor, slack } from "./notify.js";
 import { cvss3Score, severityFromLabel, severityFromScore, SEVERITIES, type Severity } from "./osv.js";
-import { canManage, isAdmin, readableScopes, roleIn } from "./permissions.js";
+import { can, canManage, hasPermission, readableScopes } from "./permissions.js";
+import { permissionsIn } from "./roles.js";
 import { redact } from "./redaction.js";
 import { getReadableScope } from "./scopes.js";
+import { WHO_SEES_DETAILS } from "./security.js";
 
 /**
  * The latest critical vulnerabilities worldwide, not just those in uploaded
@@ -625,7 +627,7 @@ async function matchAll(db: Queryable, advisories: Row[], scopeIds: string[] | n
   return out;
 }
 
-/** New critical (or actively exploited) advisories: one notification per affected project to its writers, owners and admins. */
+/** New critical (or actively exploited) advisories: one notification per affected project to those who see its vulnerabilities and its reviewers. */
 async function notifyAffected(db: Db, settings: Settings, opts: { recentDays: number; only?: string[] }) {
   const { rows } = await db.query<Row>(
     `SELECT * FROM advisories WHERE NOT hidden AND covered_by IS NULL AND (severity = 'critical' OR kev)
@@ -649,7 +651,7 @@ async function notifyAffected(db: Db, settings: Settings, opts: { recentDays: nu
     }
   let sent = 0;
   for (const [scopeId, g] of perScope) {
-    const writers = (await db.query<{ user_id: string }>("SELECT DISTINCT user_id FROM scope_roles WHERE scope_id = $1 AND role IN ('writer', 'owner')", [scopeId])).rows.map((r) => r.user_id);
+    const writers = (await db.query<{ user_id: string }>("SELECT user_id FROM scope_permissions WHERE scope_id = $1 AND permission = 'security'", [scopeId])).rows.map((r) => r.user_id);
     const recipients = [...new Set([...writers, ...(await reviewersFor(db, settings, scopeId))])];
     const first = g.items[0]!;
     const title =
@@ -662,6 +664,7 @@ async function notifyAffected(db: Db, settings: Settings, opts: { recentDays: nu
       body: g.items.slice(0, 8).map((i) => `${i.a.title} (${i.because.join(", ")})`).join("\n"),
       link: `#/security?project=${g.slug}`,
       targetId: g.items.length === 1 ? first.a.id : null,
+      scopeId,
     });
     for (const i of g.items) await db.query("INSERT INTO advisory_notices (advisory_id, scope_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", [i.a.id, scopeId]);
     sent++;
@@ -714,7 +717,7 @@ export async function latestAdvisories(
   const { rows } = await ctx.db.query<Row>(
     `SELECT * FROM advisories WHERE published_at > now() - make_interval(days => $1) AND ($2 OR NOT hidden) AND (severity = 'critical' OR kev OR manual)
       ORDER BY published_at DESC LIMIT 600`,
-    [days, !!opts.include_hidden && isAdmin(ctx)],
+    [days, !!opts.include_hidden && can(ctx, "security_admin")],
   );
   for (const r of rows) r.published_at = new Date(r.published_at).toISOString();
   const readable = await readableScopes(ctx);
@@ -724,9 +727,9 @@ export async function latestAdvisories(
     "SELECT advisory_id, scope_id, status, note, updated_at FROM advisory_responses WHERE advisory_id = ANY($1::uuid[])",
     [rows.map((r) => r.id)],
   );
-  const writerScopes = isAdmin(ctx)
+  const writerScopes = can(ctx, "security_admin") || can(ctx, "manage_all_projects")
     ? null
-    : new Set((await ctx.db.query<{ scope_id: string }>("SELECT DISTINCT scope_id FROM scope_roles WHERE user_id = $1 AND role IN ('writer', 'owner')", [ctx.actor.id])).rows.map((r) => r.scope_id));
+    : new Set((await ctx.db.query<{ scope_id: string }>("SELECT scope_id FROM scope_permissions WHERE user_id = $1 AND permission = 'security'", [ctx.actor.id])).rows.map((r) => r.scope_id));
 
   // Fold: alert ← covered rows; otherwise group by product, issuer and hour.
   const byId = new Map(rows.map((r) => [r.id, r]));
@@ -807,7 +810,7 @@ export async function publishAdvisory(
   ctx: RequestContext,
   input: { name?: string; title: string; summary: string; cve_ids?: string[]; severity?: Severity; cvss_score?: number; technologies?: string[]; packages?: { ecosystem: string; name: string }[]; url?: string },
 ) {
-  if (!isAdmin(ctx)) throw new ForbiddenError("only admins publish security alerts");
+  if (!can(ctx, "security_admin")) throw new ForbiddenError("only admins and security leads publish security alerts");
   const cves = [...new Set((input.cve_ids ?? []).map((c) => c.trim().toUpperCase()).filter(Boolean))];
   const bad = cves.find((c) => !/^CVE-\d{4}-\d{4,}$/.test(c));
   if (bad) throw new ValidationError(`${bad} isn't a CVE id (CVE-2026-12345)`);
@@ -845,7 +848,7 @@ export async function publishAdvisory(
 }
 
 export async function hideAdvisory(ctx: RequestContext, id: string, hidden = true) {
-  if (!isAdmin(ctx)) throw new ForbiddenError("only admins hide advisories");
+  if (!can(ctx, "security_admin")) throw new ForbiddenError("only admins and security leads hide advisories");
   const { rowCount } = await ctx.db.query("UPDATE advisories SET hidden = $2 WHERE id = $1", [id, hidden]);
   if (!rowCount) throw new NotFoundError(`advisory ${id}`);
   emitChanged();
@@ -855,9 +858,8 @@ export async function hideAdvisory(ctx: RequestContext, id: string, hidden = tru
 export async function setAdvisoryResponse(ctx: RequestContext, input: { advisory_id: string; project: string; status: Response; note?: string }) {
   if (!RESPONSES.includes(input.status)) throw new ValidationError(`status is one of ${RESPONSES.join(", ")}`);
   const scope = await getReadableScope(ctx, input.project);
-  if (!isAdmin(ctx)) {
-    const role = await roleIn(ctx.db, scope.id, ctx.actor.id);
-    if (role !== "writer" && role !== "owner") throw new ForbiddenError("the project's writers, owners and admins record its response");
+  if (!can(ctx, "security_admin") && !(await hasPermission(ctx, scope.id, "security"))) {
+    throw new ForbiddenError(`${WHO_SEES_DETAILS} record its response`);
   }
   const { rowCount } = await ctx.db.query("SELECT 1 FROM advisories WHERE id = $1", [input.advisory_id]);
   if (!rowCount) throw new NotFoundError(`advisory ${input.advisory_id}`);
@@ -875,9 +877,8 @@ export async function setAdvisoryResponse(ctx: RequestContext, input: { advisory
 export async function setProjectTechnologies(ctx: RequestContext, project: string, technologies: string[]) {
   const scope = await getReadableScope(ctx, project);
   if (scope.kind !== "project") throw new ValidationError("technologies belong to projects");
-  if (!(await canManage(ctx, scope))) {
-    const role = await roleIn(ctx.db, scope.id, ctx.actor.id);
-    if (role !== "writer") throw new ForbiddenError("the project's writers, owners and admins set its technologies");
+  if (!(await canManage(ctx, scope)) && !(await hasPermission(ctx, scope.id, "propose"))) {
+    throw new ForbiddenError("the project's Contributors and Project admins, and Administrators, set its technologies");
   }
   const list = normaliseTechnologies(technologies).slice(0, 40);
   await ctx.db.query("UPDATE scopes SET technologies = $2 WHERE id = $1", [scope.id, list]);

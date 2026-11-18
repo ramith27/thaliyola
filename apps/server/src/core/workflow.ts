@@ -1,10 +1,10 @@
 import { audit } from "./audit.js";
-import { NotFoundError, ValidationError, type RequestContext } from "./context.js";
+import { nameOf, NotFoundError, ValidationError, type RequestContext } from "./context.js";
 import { editArticle, editFinding } from "./direct.js";
 import { notify, reviewersFor, track } from "./notify.js";
-import { assertCanApprove, assertCanRead, canApprove } from "./permissions.js";
+import { assertCanApprove, assertCanComment, assertCanRead, canApprove } from "./permissions.js";
 import { redact } from "./redaction.js";
-import { approveRevision, getRevision } from "./review.js";
+import { approveRevision, getRevision, rejectRevision } from "./review.js";
 import { findItem } from "./writes.js";
 
 /**
@@ -21,10 +21,12 @@ const revisionHeader = async (ctx: RequestContext, id: string) => {
   return rows[0];
 };
 
+/** Comments with their author: `author` as shown before (name, else email), and `author_name` and `author_email` apart. */
 export async function listComments(ctx: RequestContext, revisionId: string) {
   await getRevision(ctx, revisionId); // read check
   const { rows } = await ctx.db.query(
-    `SELECT c.id, c.body, c.created_at, coalesce(u.display_name, u.email, u.subject) AS author, c.author_id = $2 AS mine
+    `SELECT c.id, c.body, c.created_at, coalesce(u.display_name, u.email, u.subject) AS author, u.display_name AS author_name,
+            coalesce(u.email, u.subject) AS author_email, c.author_id = $2 AS mine
        FROM revision_comments c JOIN users u ON u.id = c.author_id
       WHERE c.revision_id = $1 ORDER BY c.created_at`,
     [revisionId, ctx.actor.id],
@@ -39,19 +41,20 @@ export async function addComment(ctx: RequestContext, revisionId: string, body: 
   if (!text) throw new ValidationError("comment is empty");
   if (text.length > 5000) throw new ValidationError("comment is too long (5000 characters at most)");
   const r = await revisionHeader(ctx, revisionId);
+  await assertCanComment(ctx, r.scope_id);
   const { rows } = await ctx.db.query(
     "INSERT INTO revision_comments (revision_id, author_id, body) VALUES ($1, $2, $3) RETURNING id, body, created_at",
     [revisionId, ctx.actor.id, text],
   );
   await audit(ctx.db, ctx.actor.id, "comment_revision", revisionId);
   const commenters = (await ctx.db.query<{ author_id: string }>("SELECT DISTINCT author_id FROM revision_comments WHERE revision_id = $1", [revisionId])).rows;
-  const who = ctx.actor.email ?? "Someone";
+  const who = nameOf(ctx.actor);
   track(
     notify(
       ctx.db,
       ctx.settings,
       [r.author_id, r.assignee_id ?? "", ...commenters.map((c) => c.author_id)],
-      { kind: "comment", title: `Comment on: ${r.summary}`, body: `${who}: ${text.slice(0, 500)}`, link: `#/review/${revisionId}`, targetId: revisionId },
+      { kind: "comment", title: `Comment on: ${r.summary}`, body: `${who}: ${text.slice(0, 500)}`, link: `#/review/${revisionId}`, targetId: revisionId, scopeId: r.scope_id },
       { exclude: ctx.actor.id },
     ).catch((err) => console.error(`[notify] ${(err as Error).message}`)),
   );
@@ -86,7 +89,7 @@ export async function setAssignee(ctx: RequestContext, revisionId: string, userI
       notify(ctx.db, ctx.settings, [userId], {
         kind: "assigned",
         title: `Assigned to you: ${r.summary}`,
-        body: `${ctx.actor.email ?? "Someone"} asked you to review this.`,
+        body: `${nameOf(ctx.actor)} asked you to review this.`,
         link: `#/review/${revisionId}`,
         targetId: revisionId,
       }).catch((err) => console.error(`[notify] ${(err as Error).message}`)),
@@ -110,6 +113,22 @@ export async function bulkApprove(ctx: RequestContext, ids: string[]) {
   return { approved: results.filter((r) => r.ok).length, results };
 }
 
+/** Rejects several proposals with one reason; each is checked on its own, like bulkApprove. */
+export async function bulkReject(ctx: RequestContext, ids: string[], reason: string) {
+  if (ids.length > 100) throw new ValidationError("reject at most 100 at once");
+  if (!reason.trim()) throw new ValidationError("give a reason; the authors see it");
+  const results: { id: string; ok: boolean; error?: string }[] = [];
+  for (const id of ids) {
+    try {
+      await rejectRevision(ctx, id, reason.trim());
+      results.push({ id, ok: true });
+    } catch (err) {
+      results.push({ id, ok: false, error: (err as Error).message });
+    }
+  }
+  return { rejected: results.filter((r) => r.ok).length, results };
+}
+
 // ---- History ----------------------------------------------------------------
 
 async function readableItem(ctx: RequestContext, id: string) {
@@ -121,11 +140,20 @@ async function readableItem(ctx: RequestContext, id: string) {
 export async function listVersions(ctx: RequestContext, id: string) {
   const item = await readableItem(ctx, id);
   const { rows } = await ctx.db.query(
-    `SELECT v.version, v.title, v.summary, v.created_at, coalesce(a.display_name, a.email, a.subject) AS author, coalesce(p.display_name, p.email) AS approver
+    `SELECT v.version, v.title, v.summary, v.created_at, coalesce(a.display_name, a.email, a.subject) AS author, coalesce(p.display_name, p.email) AS approver,
+            v.content->'tags' AS tags
        FROM item_versions v LEFT JOIN users a ON a.id = v.author_id LEFT JOIN users p ON p.id = v.approver_id
       WHERE v.target_id = $1 ORDER BY v.version DESC`,
     [id],
   );
+  // Each version's tags, and which it added or removed against the version before it (older snapshots have none).
+  for (let i = 0; i < rows.length; i++) {
+    const tags = Array.isArray(rows[i].tags) ? (rows[i].tags as string[]) : null;
+    const prev = rows[i + 1] && Array.isArray(rows[i + 1].tags) ? (rows[i + 1].tags as string[]) : null;
+    rows[i].tags = tags;
+    rows[i].tags_added = tags && prev ? tags.filter((t) => !prev.includes(t)) : [];
+    rows[i].tags_removed = tags && prev ? prev.filter((t) => !tags.includes(t)) : [];
+  }
   return { kind: item.kind, id, title: item.title, current_version: item.version, can_restore: await canApprove(ctx, item.scope_id), versions: rows };
 }
 
@@ -150,7 +178,7 @@ export async function restoreVersion(ctx: RequestContext, id: string, version: n
   if (version === item.version) throw new ValidationError(`version ${version} is already the current one`);
   const summary = `Restore version ${version} of ${item.title}`;
   if (item.kind === "article") {
-    return editArticle(ctx, { id, version: item.version, summary, text: old.content.body_md, title: old.title });
+    return editArticle(ctx, { id, version: item.version, summary, text: old.content.body_md, title: old.title, ...(Array.isArray(old.content.tags) ? { tags: old.content.tags } : {}) });
   }
   const { symptoms, root_cause, fix, tags } = old.content;
   return editFinding(ctx, { id, version: item.version, summary, patch: { title: old.title, symptoms, root_cause, fix: fix ?? undefined, tags } });

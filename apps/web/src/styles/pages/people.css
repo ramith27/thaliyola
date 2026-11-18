@@ -1,0 +1,221 @@
+/* People, teams, roles, account and system settings (SPEC §6.9). Prefix: pp-. Kit components are arranged, never restyled. */
+
+/* ---- Shared layout ------------------------------------------------------------------------------------- */
+.pp-stack { display: flex; flex-direction: column; gap: var(--space-8); }
+.pp-stack > * { margin-top: 0; margin-bottom: 0; }
+.pp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.pp-inline-note { margin: var(--space-2) 0 0; color: var(--muted); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.pp-subheading { margin: 0 0 var(--space-2); font-size: var(--fs-md); line-height: var(--lh-md); font-weight: var(--fw-semibold); color: var(--text); }
+.pp-card-text { margin: 0 0 var(--space-2); color: var(--text-2); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.pp-card-text:last-child { margin-bottom: 0; }
+.pp-chips { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.pp-mono { font-family: var(--mono); }
+.pp-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--space-4); }
+.pp-panel { margin-top: var(--space-6); }
+.pp-panel[hidden] { display: none; }
+.pp-meta-links a { color: var(--accent-text); }
+
+/* ---- Forms (dialogs, sheets and gates) ----------------------------------------------------------------- */
+.pp-form { display: flex; flex-direction: column; gap: var(--space-4); }
+.pp-form > * { margin: 0; }
+.pp-form-narrow { max-width: var(--w-form); }
+.pp-form-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }
+.pp-form-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--space-2); }
+.pp-gate-form { display: flex; flex-direction: column; gap: var(--space-4); }
+.pp-gate-hint { margin: 0; color: var(--muted); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.pp-checks { display: flex; flex-direction: column; gap: var(--space-2); margin: 0; padding: 0; border: 0; min-width: 0; }
+.pp-perm-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2) var(--space-4); margin: 0; padding: 0; border: 0; min-width: 0; }
+.pp-perm-list > legend { margin-bottom: var(--space-2); }
+
+/* ---- RolePicker v2: an input-styled trigger and a checklist popover (bottom sheet on phones) ------------ */
+.pp-role-picker { display: inline-flex; max-width: 100%; min-width: 0; }
+.pp-role-picker-trigger {
+  display: inline-flex; align-items: center; gap: var(--space-2); min-width: min(10rem, 100%); max-width: 22rem; min-height: var(--control-md);
+  padding: 0 var(--space-2) 0 var(--space-3); border: 1px solid var(--border-control); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-md); text-align: left; cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+.pp-role-picker-trigger:hover { border-color: var(--border-strong); }
+.pp-role-picker-trigger[aria-expanded="true"] { border-color: var(--focus); box-shadow: 0 0 0 1px var(--focus); }
+.pp-role-picker-trigger:disabled { background: var(--surface-2); color: var(--text-disabled); border-color: var(--border); cursor: not-allowed; }
+.pp-role-picker-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-role-picker-value[data-empty] { color: var(--muted); }
+.pp-role-picker-trigger:disabled .pp-role-picker-value { color: var(--text-disabled); }
+.pp-role-picker-chevron { flex: none; color: var(--muted); }
+.field .pp-role-picker, .field .pp-role-picker-trigger { width: 100%; max-width: none; }
+
+.pp-role-menu { width: 26rem; max-width: calc(100vw - 2 * var(--space-4)); }
+.pp-role-menu-title { margin: 0 0 var(--space-2); font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--text); }
+.pp-role-menu-list { display: flex; flex-direction: column; gap: 2px; }
+.pp-role-option { padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); }
+.pp-role-option:hover { background: var(--surface-2); }
+.pp-role-option[data-state="on"] { background: var(--accent-soft); }
+.pp-role-menu-blocked { display: flex; align-items: center; gap: var(--space-1); margin: var(--space-2) 0 0; color: var(--danger); font-size: var(--fs-sm); }
+.pp-role-menu-foot { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-3); padding-top: var(--space-2); border-top: 1px solid var(--border); }
+.pp-role-menu-foot > span { margin-right: auto; }
+
+/* ---- Roles and access ----------------------------------------------------------------------------------- */
+.pp-model-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-6); }
+.pp-model-grid > .card { margin: 0; }
+.pp-lookup { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2); }
+.pp-lookup > .field { margin: 0; }
+.pp-lookup + .field-error { margin: var(--space-2) 0 0; }
+.pp-lookup-input { flex: 1 1 18rem; min-width: 0; }
+.pp-role-cell { display: flex; flex-direction: column; gap: var(--space-1); }
+.pp-role-name { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.pp-role-id { color: var(--muted); font-size: var(--fs-xs); font-family: var(--mono); }
+.pp-role-for p { margin: 0 0 var(--space-2); color: var(--text-2); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.pp-role-for p.pp-admin-all { margin: 0; overflow-wrap: anywhere; }
+.pp-admin-all > svg { color: var(--accent-text); vertical-align: -2px; }
+.pp-held { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); font-size: var(--fs-sm); }
+.pp-matrix-block { margin-top: var(--space-6); }
+.pp-holders { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-2); }
+.pp-holders-who { display: block; color: var(--text-2); font-size: var(--fs-sm); }
+
+/* The permission matrix stays a plain two-axis table; only its wrap scrolls sideways (ADDENDUM-roles §5). */
+.pp-perm-wrap { margin: 0; border: 1px solid var(--border); border-radius: var(--radius); }
+.pp-perm-matrix { width: 100%; }
+.pp-perm-matrix th, .pp-perm-matrix td { text-align: center; }
+.pp-perm-matrix th:first-child, .pp-perm-matrix td:first-child { text-align: left; width: 20rem; min-width: 14rem; }
+.pp-perm-label, .pp-perm-desc { white-space: normal; }
+.pp-perm-desc { display: block; margin-top: 2px; color: var(--muted); font-size: var(--fs-xs); font-weight: var(--fw-regular); line-height: var(--lh-xs); }
+.pp-perm-yes { color: var(--ok); vertical-align: middle; }
+.pp-perm-no { color: var(--text-disabled); }
+
+/* ---- Account and access ---------------------------------------------------------------------------------- */
+.pp-identity { display: inline-flex; align-items: center; gap: var(--space-3); }
+.pp-identity-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pp-identity-email { color: var(--text); font-size: var(--fs-md); font-weight: var(--fw-medium); }
+.pp-identity-name-row { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.pp-identity-sub { color: var(--muted); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.pp-identity-role { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.pp-access { display: flex; flex-direction: column; gap: var(--space-6); }
+.pp-access > * { margin-top: 0; margin-bottom: 0; }
+.pp-access-part > .meta-line, .pp-access-part > p { margin: 0; }
+.pp-project-cell { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.pp-how { margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); line-height: var(--lh-sm); }
+
+/* ---- People ---------------------------------------------------------------------------------------------- */
+.pp-person-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.pp-person-line { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.pp-person-sub { display: flex; flex-direction: column; color: var(--muted); font-size: var(--fs-sm); line-height: var(--lh-sm); overflow-wrap: anywhere; }
+.pp-config-lock { display: inline-flex; align-items: center; gap: var(--space-1); }
+.pp-access-link { font-size: var(--fs-sm); }
+.pp-requests { margin: var(--space-3) 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.pp-request { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4); padding: var(--space-2) 0; border-top: 1px solid var(--border); }
+.pp-request-who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pp-request-meta { color: var(--muted); font-size: var(--fs-sm); }
+.pp-request-email { color: var(--muted); font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-request-actions { display: inline-flex; flex-wrap: wrap; gap: var(--space-2); }
+.pp-sent { font-size: var(--fs-sm); }
+
+/* ---- Teams ----------------------------------------------------------------------------------------------- */
+.pp-team-card { margin: 0; }
+.pp-team-badge { display: flex; margin-bottom: var(--space-2); }
+.pp-team-meta { margin: 0 0 var(--space-1); color: var(--muted); font-size: var(--fs-sm); }
+.pp-team-projects { margin: 0; font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--text-2); }
+.pp-filter { max-width: 24rem; }
+.pp-place { display: flex; min-width: 0; }
+.pp-lead { font-weight: var(--fw-medium); color: var(--accent-text); overflow-wrap: anywhere; }
+
+/* ---- System settings ------------------------------------------------------------------------------------- */
+.pp-settings { display: flex; flex-direction: column; }
+.pp-setting { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-4) 0; border-top: 1px solid var(--border); }
+.pp-setting:first-child { border-top: 0; padding-top: 0; }
+.pp-setting[data-state="dirty"] { padding-left: var(--space-3); box-shadow: inset 3px 0 0 var(--accent); }
+.pp-setting-control { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2); }
+.pp-setting-control > .field { flex: 1 1 18rem; max-width: 32rem; margin: 0; }
+.pp-setting-source { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); color: var(--muted); font-size: var(--fs-sm); }
+.pp-number { display: flex; align-items: center; gap: var(--space-2); max-width: 14rem; }
+.pp-number-unit { color: var(--muted); font-size: var(--fs-sm); white-space: nowrap; }
+.pp-tile-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-4); }
+.pp-tile-grid > .card { margin: 0; }
+
+/* ---- Responsive ------------------------------------------------------------------------------------------ */
+@media (max-width: 640px) {
+  .pp-form-row, .pp-perm-list { grid-template-columns: minmax(0, 1fr); }
+  .pp-role-picker-trigger { max-width: 100%; min-width: 0; }
+  .pp-role-menu { width: auto; max-width: none; }
+  .pp-tile-grid { grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); }
+  .pp-perm-matrix th:first-child, .pp-perm-matrix td:first-child { min-width: 10rem; }
+}
+/* DataTable card mode: a picker or select gets the card's full width under its label, so it neither sticks out nor clips. */
+@media (max-width: 760px) {
+  .data-table td:has(> .pp-role-picker), .data-table td:has(> .pp-place) { flex-wrap: wrap; }
+  .data-table td:has(> .pp-role-picker)::before, .data-table td:has(> .pp-place)::before { width: 100%; }
+  .data-table td > .pp-role-picker, .data-table td > .pp-place { flex: 1 1 100%; width: 100%; }
+  .data-table td > .pp-role-picker .pp-role-picker-trigger { width: 100%; max-width: none; }
+  .data-table td > .pp-place .select { flex: 1; }
+}
+@media (pointer: coarse) {
+  .pp-role-picker-trigger { min-height: var(--control-md); }
+  .pp-role-option { padding: var(--space-2); }
+}
+.pp-model-disclosure { margin-bottom: var(--space-4); }
+
+/* Admin › Service accounts */
+.pp-sa-list { display: grid; gap: var(--space-5); }
+.pp-sa-title { display: inline-flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.pp-sa-meta { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.pp-sa-actions { display: flex; align-items: center; gap: var(--space-2); }
+.pp-sa-heading { margin: var(--space-5) 0 var(--space-2); font-size: var(--fs-sm); }
+.pp-sa-heading:first-child { margin-top: 0; }
+.pp-sa-empty { margin: 0 0 var(--space-3); color: var(--muted); }
+.pp-sa-projects { list-style: none; margin: 0 0 var(--space-3); padding: 0; display: grid; gap: var(--space-2); }
+.pp-sa-projects li { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-3); }
+.pp-sa-roles { color: var(--muted); }
+
+/* Tokens: status plus the "Unused 90+ days" flag (Account › API tokens, Admin › Service accounts) */
+.pp-token-status { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); }
+
+/* Admin › Audit log */
+.pp-audit-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); flex: 1 1 auto; min-width: 0; }
+.pp-audit-filters > .select { width: 12rem; }
+.pp-audit-person { width: 13rem; }
+.pp-audit-person .person-input, .pp-audit-person .input { width: 100%; min-width: 0; }
+.pp-audit-date { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--muted); font-size: var(--fs-sm); }
+.pp-audit-date .input { width: 9.25rem; }
+.pp-audit-when { white-space: nowrap; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.pp-audit-system { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--muted); }
+.pp-audit-action { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.pp-audit-target { display: inline-flex; flex-direction: column; gap: 0; min-width: 0; overflow-wrap: anywhere; }
+.pp-audit-kind { color: var(--muted); font-size: var(--fs-xs); }
+.pp-audit-none { color: var(--muted); }
+.pp-audit-details { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.pp-audit-raw summary { cursor: pointer; color: var(--accent-text); font-size: var(--fs-xs); width: max-content; }
+.pp-audit-raw pre {
+  margin: var(--space-1) 0 0; padding: var(--space-2); max-width: 32rem; max-height: 16rem; overflow: auto;
+  background: var(--code); border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: var(--mono); font-size: var(--fs-xs);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+@media (max-width: 860px) {
+  .pp-audit-filters { flex-direction: column; align-items: stretch; }
+  .pp-audit-filters > .select, .pp-audit-person, .pp-audit-date .input { width: 100%; min-width: 0; }
+  .pp-audit-date { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-1); }
+  .pp-audit-raw pre { max-width: 100%; }
+}
+
+/* ---- System presets: Looser / Default / Stricter, each listing exactly what it changes ------------------- */
+.pp-presets-card { margin-bottom: var(--space-6); }
+.pp-preset-heading { display: inline-flex; align-items: center; gap: var(--space-2); }
+.pp-presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.pp-preset { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.pp-preset[data-current] { border-color: var(--ok-border); background: var(--ok-soft); }
+.pp-preset-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.pp-preset-name { margin: 0; font-size: var(--fs-lg); line-height: var(--lh-lg); font-weight: var(--fw-semibold); }
+.pp-preset-description { margin: 0; color: var(--text-2); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.pp-preset-label { margin: var(--space-1) 0 0; color: var(--muted); font-size: var(--fs-xs); line-height: var(--lh-xs); font-weight: var(--fw-medium); }
+.pp-preset-changes { display: flex; flex-direction: column; gap: var(--space-1); margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.pp-preset-changes li { display: flex; flex-direction: column; min-width: 0; }
+.pp-preset-setting { color: var(--text); overflow-wrap: anywhere; }
+.pp-preset-values { color: var(--text-2); font-variant-numeric: tabular-nums; }
+.pp-preset-foot { margin-top: auto; padding-top: var(--space-2); }
+@media (max-width: 1100px) {
+  .pp-presets { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Admin › System › Skills for Claude: the delivery mode as a segmented control, and the section's footer. */
+.pp-segmented-setting { display: flex; flex-direction: column; gap: var(--space-2); }
+.pp-segmented-setting p { margin: 0; max-width: var(--w-reading); line-height: var(--lh-sm); }
+.pp-skills-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--border); }
+.pp-skills-foot p { margin: 0; flex: 1 1 20rem; }

@@ -1,0 +1,132 @@
+/* Review: queue, Needs a check, Suggestions, New projects and the proposal page (pages/review.tsx). Prefix: rv-. */
+
+/* ---- Shared ---------------------------------------------------------------------------------------- */
+.rv-muted { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
+.rv-note { color: var(--muted); font-size: var(--fs-sm); }
+/* Controls inside a row sit above the row's whole-row title link. */
+.rv-above { position: relative; z-index: var(--z-raised); }
+/* Each list gets its own stacking context, so the z-index above (and the kit's row gutter, row actions and card
+   actions, which use the same value) can't paint over the sticky top bar. FilterBar and BulkBar stay outside it. */
+.rv-list, .rv-request-list, .rv-dupes { isolation: isolate; }
+.rv-failures { margin: 0; padding-left: var(--space-5); }
+.rv-failures li + li { margin-top: var(--space-1); }
+.rv-done { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--ok); font-size: var(--fs-sm); }
+
+/* ---- Queue ----------------------------------------------------------------------------------------- */
+.rv-filter-fields { display: flex; flex-direction: column; gap: var(--space-3); }
+.rv-listhead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4); margin: 0 0 var(--space-2); padding: 0 var(--space-4); }
+.rv-listhead .key-hint { margin: 0; }
+.rv-selectall { display: inline-flex; align-items: center; gap: var(--space-3); min-height: var(--control-sm); color: var(--text-2); font-size: var(--fs-sm); cursor: pointer; }
+.rv-selectall input { width: 16px; height: 16px; margin: 0 4px; accent-color: var(--accent); }
+.rv-list { margin-bottom: var(--space-4); }
+.rv-group { list-style: none; }
+.rv-group:first-child { overflow: hidden; border-top-left-radius: var(--radius); border-top-right-radius: var(--radius); }
+.rv-gutter-spacer { display: inline-block; width: 24px; }
+/* Group headers without a select-all line up with those that have one. */
+.rv-list[data-gutter] .group-header:not(:has(> .list-row-gutter))::before { content: ""; flex: none; width: 24px; }
+.rv-scope-link { color: inherit; }
+.rv-scope-link:hover { color: var(--text); }
+.rv-age { display: inline-flex; align-items: center; gap: var(--space-1); }
+.rv-age[data-late] { color: var(--warn); font-weight: var(--fw-medium); }
+.rv-badge-tip { display: inline-flex; align-items: center; gap: 2px; }
+.rv-meta { color: var(--muted); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.rv-reason { margin: var(--space-1) 0 0; color: var(--text-2); font-size: var(--fs-sm); }
+.rv-preview { margin-top: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); cursor: auto; }
+.rv-preview-foot { margin: var(--space-2) 0 0; font-size: var(--fs-sm); }
+
+/* ---- Proposal page --------------------------------------------------------------------------------- */
+.rv-decision {
+  position: sticky; top: var(--topbar-h); z-index: var(--z-sticky); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--space-2) var(--space-4); margin: 0 0 var(--space-4); padding: var(--space-3) 0; border-bottom: 1px solid var(--border); background: var(--bg);
+}
+.rv-decision-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.rv-decision .key-hint { margin: 0; }
+.rv-decision-spacer { display: none; }
+.rv-assignee { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2) var(--space-3); min-height: var(--control-md); margin: 0 0 var(--space-6); }
+.rv-assignee .field { width: 18rem; max-width: 100%; margin: 0; }
+.rv-assign-me { min-height: var(--control-md); }
+.rv-proposed-by { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); }
+.rv-edit-fields { display: flex; flex-direction: column; gap: var(--space-4); max-width: var(--w-reading); }
+.rv-explain { margin: var(--space-3) 0; color: var(--text-2); max-width: 72ch; }
+.rv-title-change { margin: 0 0 var(--space-3); }
+.rv-title-change del { color: var(--danger); }
+.rv-title-change ins { color: var(--ok); text-decoration: none; font-weight: var(--fw-medium); }
+.rv-field-diffs { display: flex; flex-direction: column; gap: var(--space-5); }
+.rv-field-label { margin: 0 0 var(--space-2); font-size: var(--fs-md); font-weight: var(--fw-semibold); }
+.rv-change + .rv-change { margin-top: var(--space-3); }
+.rv-change-title { margin: 0 0 var(--space-2); font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--text-2); }
+.rv-item-preview { margin-top: var(--space-4); max-width: var(--w-reading); }
+.rv-preview-body { max-height: 28rem; overflow: auto; }
+
+/* Discussion */
+.rv-comments { list-style: none; margin: 0 0 var(--space-5); padding: 0; display: flex; flex-direction: column; gap: var(--space-3); max-width: var(--w-reading); }
+.rv-comment { padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.rv-comment[data-mine] { background: var(--surface-2); }
+.rv-comment-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); color: var(--muted); font-size: var(--fs-sm); }
+.rv-comment-body .markdown { font-size: var(--fs-md); }
+.rv-comment-body .markdown > :last-child { margin-bottom: 0; }
+.rv-composer { max-width: var(--w-reading); margin-top: var(--space-4); }
+.rv-composer-actions { display: flex; justify-content: flex-end; margin-top: var(--space-2); }
+
+/* ---- Needs a check --------------------------------------------------------------------------------- */
+.rv-progress { margin: 0 0 var(--space-3); color: var(--text-2); font-size: var(--fs-sm); }
+
+/* ---- Suggestions ----------------------------------------------------------------------------------- */
+.rv-agent-tasks { margin-bottom: var(--space-2); }
+.rv-refresh { display: flex; justify-content: flex-end; margin: 0 0 var(--space-3); }
+.rv-done-week { margin: 0 0 var(--space-3); }
+.rv-task-kinds { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: var(--space-1) var(--space-4); margin: 0 0 var(--space-4); padding: 0; }
+.rv-task-count { display: inline-block; min-width: 2rem; font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
+.rv-recent { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); font-size: var(--fs-sm); }
+.rv-recent li { display: flex; flex-direction: column; gap: 2px; color: var(--muted); }
+.rv-recent li > span:first-child { color: var(--text); }
+.rv-dupes { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 26rem), 1fr)); gap: var(--space-3); }
+.rv-dupe-pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.rv-dupe-side { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; overflow-wrap: anywhere; }
+.rv-dupe-side a { font-weight: var(--fw-medium); }
+.rv-dupe-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); margin-top: var(--space-3); }
+
+/* ---- New projects ---------------------------------------------------------------------------------- */
+.rv-intro { margin: 0 0 var(--space-4); color: var(--text-2); max-width: 72ch; }
+.rv-requests-bar { margin: 0 0 var(--space-4); }
+.rv-request-list { display: flex; flex-direction: column; gap: var(--space-3); }
+.rv-request-title { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); }
+.rv-slug { font-family: var(--mono); font-size: var(--fs-sm); font-weight: var(--fw-regular); color: var(--muted); }
+.rv-request-desc { margin: 0 0 var(--space-3); }
+.rv-repos { list-style: none; margin: 0; padding: 0; overflow-wrap: anywhere; }
+.rv-quote { margin: var(--space-3) 0; padding: 0 0 0 var(--space-3); border-left: 3px solid var(--border-strong); color: var(--text-2); }
+.rv-request-meta { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
+.rv-request-note { margin: var(--space-2) 0 0; color: var(--text-2); font-size: var(--fs-sm); }
+.rv-request-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+@media (max-width: 860px) {
+  /* The decision bar sits at the bottom of the screen on phones (the tab bar is hidden on this page). */
+  .rv-decision {
+    position: fixed; top: auto; left: 0; right: 0; bottom: 0; margin: 0; padding: var(--space-2) var(--page-pad) calc(var(--space-2) + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border); border-bottom: 0; background: var(--surface-raised); box-shadow: var(--shadow);
+  }
+  .rv-decision-spacer { display: block; height: calc(2 * var(--control-md) + var(--space-12)); }
+  .rv-listhead { padding: 0 var(--space-2); }
+}
+@media (max-width: 640px) {
+  .rv-dupe-pair { grid-template-columns: 1fr; }
+  .rv-decision-actions { width: 100%; }
+  .rv-decision-actions .btn { flex: 1 1 auto; }
+}
+
+/* ---- Split view pane (≥ 1280px): the proposal under the cursor ---------------------------------------- */
+.rv-pane { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.rv-pane-head { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.rv-pane-where { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin: 0; color: var(--muted); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.rv-pane-title { margin: 0; font-size: var(--fs-xl); line-height: var(--lh-xl); font-weight: var(--fw-semibold); overflow-wrap: anywhere; }
+.rv-pane-target { margin: 0; color: var(--text-2); }
+.rv-pane-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.rv-pane-error { display: flex; align-items: flex-start; gap: var(--space-1); margin: 0; color: var(--danger); font-size: var(--fs-sm); font-weight: var(--fw-medium); }
+
+/* An article edit's tag changes (added and removed), and "via Claude" next to a decision. */
+.rv-tags-change { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); margin: 0 0 var(--space-2); }
+.rv-tags-label { color: var(--muted); margin-right: var(--space-1); }
+.rv-tag { padding: 1px 8px; border-radius: var(--radius-full); border: 1px solid var(--border); text-decoration: none; font-size: var(--fs-sm); }
+.rv-tag-added { background: var(--ok-soft); border-color: var(--ok-border); color: var(--ok); }
+.rv-tag-removed { background: var(--danger-soft); border-color: var(--danger-border); color: var(--danger); text-decoration: line-through; }
+.rv-tags-only { margin: 0; }

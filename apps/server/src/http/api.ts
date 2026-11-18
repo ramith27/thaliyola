@@ -1,12 +1,24 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
 import type { Settings } from "../config.js";
-import { adminAddComponent, adminCreateProject, adminSetMember, adminUpdateScope, listMembers, removeComponent, updateComponent } from "../core/admin.js";
+import {
+  adminAddComponent,
+  adminCreateProject,
+  adminUpdateScope,
+  changeMemberRoles,
+  listManagedProjects,
+  listMembers,
+  removeComponent,
+  setProjectsVisibility,
+  updateComponent,
+} from "../core/admin.js";
+import { personAccess, roleHolders } from "../core/access.js";
 import { moveItems } from "../core/move.js";
 import { resolveRepo } from "../core/scopes.js";
-import { createTeam, createTeamProject, deleteTeam, getTeam, listAccess, listTeams, setTeamMember, setTeamRole, updateTeam } from "../core/teams.js";
+import { changeTeamRoles, createTeam, createTeamProject, deleteTeam, getTeam, listAccess, listTeams, setTeamMember, updateTeam } from "../core/teams.js";
 import { ASSET_MIME_TYPES, deleteAsset, getAsset, uploadAsset } from "../core/assets.js";
-import { audit } from "../core/audit.js";
+import { audit, inAuditRequest } from "../core/audit.js";
+import { auditCsv, listAudit, type AuditFilters } from "../core/audit-log.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError, type Actor, type RequestContext } from "../core/context.js";
 import { editArticle, editFinding, newArticle, newFinding } from "../core/direct.js";
 import { ask, getEntity, listFavourites, searchEntities, setFavourite } from "../core/discover.js";
@@ -19,6 +31,7 @@ import { taskSummary } from "../core/tasks.js";
 import { eventStream } from "../core/events.js";
 import { agentsMdBlock, claimsFor, docsStatus, resolveClaims, updateDocSettings } from "../core/docs.js";
 import { approveProjectRequest, createOrRequestProject, declineProjectRequest, listProjectRequests } from "../core/project-requests.js";
+import { approveUser, declineUser, findPeople, listAccessRequests, NAME_MAX, setMyName } from "../core/users.js";
 import { SOURCE_KINDS } from "../core/connectors.js";
 import { designVersions, exportTokens, getDesignSystem, listDesignSystems, recordDesignDecision, restoreDesignVersion, updateDesignSystem } from "../core/design.js";
 import {
@@ -34,9 +47,14 @@ import {
   registerSession,
   setListening,
 } from "../core/sessions.js";
-import { getReadableScope } from "../core/scopes.js";
+import { getReadableScope, personalScope } from "../core/scopes.js";
 import { hideAdvisory, latestAdvisories, publishAdvisory, setAdvisoryResponse, setProjectTechnologies, stackOf, TECHNOLOGIES } from "../core/advisories.js";
 import { beginDependencyScan, detectProjectStack, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, securityOverview, updateVulnerability, uploadWithAuth } from "../core/security.js";
+import { connectionKinds, createConnection, deleteConnection, getConnection, listConnections, syncConnection, testConnection, testDraft, updateConnection } from "../core/connections/manage.js";
+import { describeColumns, getApi, getTable, listCalls, listChanges, projectData } from "../core/connections/data.js";
+import { createRoute, deleteRoute, listRoutes, sendDigestNow, updateRoute } from "../core/connections/routes.js";
+import { createTicket, linkTicket, listTickets } from "../core/connections/tickets.js";
+import { canSeal } from "../core/secrets.js";
 import { createSource, deleteSource, getInboxItem, listInbox, listSources, previewSource, reopenInboxItem, resolveInboxItem, runSourceNow, updateSource } from "../core/sources.js";
 import { deleteItem, deleteProject, emptyItem, emptyProject, listTrash, restoreItem, restoreProject } from "../core/trash.js";
 import { listPurges, purgeItem } from "../core/purge.js";
@@ -44,21 +62,58 @@ import { insights, knowledgeGraph } from "../core/insights.js";
 import { listSuggestions } from "../core/suggestions.js";
 import { browseKb, getArticle, getFinding } from "../core/items.js";
 import { ackNotice, listImpactNotices } from "../core/notices.js";
-import { isAdmin, readableScopes } from "../core/permissions.js";
+import { can, effectiveFrom, isAdmin, readableScopes } from "../core/permissions.js";
+import { applySystemPreset, getSystemSettings, PRESET_NAMES, updateSystemSettings } from "../core/system.js";
+import { setProjectParent } from "../core/hierarchy.js";
+import { canSeeAccess, createRole, deleteRole, inRoleOrder, listRoles, namesOf, ORG_PERMISSIONS, orgRolesOf, roleChangeFrom, rolesCatalog, updateRole } from "../core/roles.js";
 import { getProjectContext, projectPages } from "../core/projects.js";
-import { approveRevision, getRevision, listReviewQueue, rejectRevision } from "../core/review.js";
+import { approveRevision, getRevision, listReviewQueue, rejectRevision, REVIEW_CATEGORIES, reviewFacets } from "../core/review.js";
 import { searchKnowledge } from "../core/search.js";
-import { addSourceLinkTo, LINK_KINDS, linkEntries, promoteFinding, shareToLibrary, verifyEntry } from "../core/writes.js";
-import { ARTICLE_TEMPLATES, templateFor } from "../core/templates.js";
-import { addComment, bulkApprove, getVersion, listComments, listReviewers, listVersions, restoreVersion, setAssignee } from "../core/workflow.js";
+import { addSourceLinkTo, LINEAGE_KINDS, LINK_KINDS, linkEntries, promoteFinding, shareToLibrary, unlinkEntries, verifyEntry } from "../core/writes.js";
+import { ARTICLE_TEMPLATES, templateFor, writingGuide } from "../core/templates.js";
+import { createView, deleteView, listViews, saveViews, updateView, VIEW_AREA_NAMES } from "../core/views.js";
+import { addComment, bulkApprove, bulkReject, getVersion, listComments, listReviewers, listVersions, restoreVersion, setAssignee } from "../core/workflow.js";
 import type { Embedder } from "../core/embeddings.js";
 import type { Db } from "../db/pool.js";
+import { createServiceAccount, createServiceToken, listServiceAccounts, revokeServiceToken, rotateServiceToken, setServiceAccountDisabled } from "../core/service-accounts.js";
 import { mcpCatalog } from "../mcp/catalog.js";
+import {
+  addFeature,
+  AREA_KEYS,
+  AUDIENCE_KEYS,
+  AUDIENCES,
+  canManageReleases,
+  createRelease,
+  deleteFeature,
+  deleteRelease,
+  FEATURE_AREAS,
+  FEATURE_KINDS,
+  getRelease,
+  KIND_KEYS,
+  listFeatures,
+  listReleases,
+  markReleasesSeen,
+  publishRelease,
+  readFeature,
+  reorderFeatures,
+  unpublishRelease,
+  updateFeature,
+  updateRelease,
+  whatsNewStatus,
+} from "../core/releases.js";
+import { buildInfo } from "../core/version.js";
+import { skillRoutes } from "./skills.js";
+import { deliveryState } from "../core/skills/delivery.js";
+import { syncDirOf } from "../core/skills/types.js";
 
 const ARTICLE_TYPES = Object.keys(ARTICLE_TEMPLATES) as [string, ...string[]];
 const FINDING_TYPES = ["incident", "rca", "known_issue", "data_gotcha", "query_recipe"] as const;
 const STATUSES = ["draft", "published", "possibly_stale", "superseded", "rejected"] as const;
 const uuid = z.string().uuid();
+/** Role inputs: keys, names or aliases ("writer", "Contributor", "project admins"). */
+const roleList = z.array(z.string().max(100)).max(20);
+/** "organisation" and "organization" are accepted for org roles. */
+const roleKind = z.enum(["org", "project", "organisation", "organization"]).transform((k) => (k === "project" ? "project" : "org") as "project" | "org");
 const list = z
   .string()
   .optional()
@@ -68,7 +123,7 @@ const entities = z.array(z.object({ kind: z.enum(["system", "table", "metric", "
 const sourceLinks = z
   .array(
     z.object({
-      system: z.enum(["slack", "sentry", "trello", "pr", "figma", "dashboard", "repo", "other"]),
+      system: z.enum(["slack", "sentry", "trello", "pr", "figma", "dashboard", "repo", "jira", "linear", "other"]),
       url: z.string().url().refine((u) => /^https?:\/\//.test(u), "must be http(s)"),
       label: z.string().optional(),
     }),
@@ -134,6 +189,7 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
     onWrite,
     actor: res.locals.actor as Actor,
     project: req.header("x-thaliyola-project") || undefined,
+    ...(res.locals.apiToken === true ? { viaToken: true } : {}),
   });
 
   /** Wraps a route: builds the context, audits the call, returns JSON. */
@@ -141,27 +197,144 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
     (name: string, fn: (ctx: RequestContext, req: Request) => Promise<unknown>) => async (req: Request, res: Response, next: NextFunction) => {
       try {
         const ctx = ctxOf(req, res);
-        const result = await fn(ctx, req);
-        const target = typeof req.params.id === "string" && uuid.safeParse(req.params.id).success ? req.params.id : null;
-        await audit(db, ctx.actor.id, `api:${name}`, target);
+        // One audit request: a change the core function records hides this wrapper row on the Audit log page.
+        const result = await inAuditRequest("api", async () => {
+          const out = await fn(ctx, req);
+          const target = typeof req.params.id === "string" && uuid.safeParse(req.params.id).success ? req.params.id : null;
+          await audit(db, ctx.actor.id, `api:${name}`, target, { wrapper: true });
+          return out;
+        });
         res.json(result);
       } catch (err) {
         next(err);
       }
     };
 
+  /** Audit log filters from the query string (the same for the page and the CSV). */
+  const auditFilters = (req: Request): AuditFilters => {
+    const q = z
+      .object({
+        person: z.string().max(320).optional(),
+        action: z.string().max(80).optional(),
+        target: uuid.optional(),
+        from: z.string().max(40).optional(),
+        to: z.string().max(40).optional(),
+        reads: z.enum(["true", "false", "1", "0"]).optional(),
+        cursor: z.string().max(20).optional(),
+        limit: z.coerce.number().int().min(1).max(200).optional(),
+      })
+      .parse(req.query);
+    return { ...q, reads: q.reads === "true" || q.reads === "1" };
+  };
+
   router.get(
     "/me",
-    handle("me", async (ctx) => ({
-      id: ctx.actor.id,
-      email: ctx.actor.email,
-      kind: ctx.actor.kind,
-      admin: isAdmin(ctx),
-      local_account: ctx.actor.subject.startsWith("local:"),
-      must_change_password: !!ctx.actor.mustChangePassword,
-      auth_mode: settings.authMode,
-    })),
+    handle("me", async (ctx) => {
+      const admin = isAdmin(ctx);
+      const roles = await orgRolesOf(ctx.db, settings, ctx.actor.id);
+      const byConfig = !!ctx.actor.email && settings.adminEmails.includes(ctx.actor.email.toLowerCase());
+      return {
+        id: ctx.actor.id,
+        email: ctx.actor.email,
+        name: ctx.actor.name ?? null,
+        kind: ctx.actor.kind,
+        admin,
+        // Organisation permissions (Administrators: all of them) and the organisation roles that grant them ("admin" first).
+        permissions: admin ? Object.keys(ORG_PERMISSIONS) : (ctx.actor.permissions ?? []),
+        roles,
+        role_names: namesOf(await listRoles(ctx.db, "org"), roles),
+        administrator_source: admin ? (byConfig ? "ADMIN_EMAILS" : "account") : null,
+        can_see_access: canSeeAccess(ctx),
+        local_account: ctx.actor.subject.startsWith("local:"),
+        must_change_password: !!ctx.actor.mustChangePassword,
+        auth_mode: settings.authMode,
+        default_project_visibility: settings.defaultProjectVisibility,
+        // Thaliyola's version, and the newest published release against the last one this person saw.
+        build: buildInfo(),
+        whats_new: await whatsNewStatus(ctx.db, ctx.actor.id),
+        skills: await (async () => {
+          const d = await deliveryState(ctx);
+          return { delivery: d.mode, send_to_claude: d.send_to_claude, state: d.state };
+        })(),
+      };
+    }),
   );
+  router.get("/version", handle("get_version", async () => buildInfo()));
+  // Skills for Claude (http/skills.ts).
+  skillRoutes(router, { db, handle, ctxOf });
+  // Your own account: the display name others see (null or "" clears it).
+  router.patch(
+    "/account",
+    handle("update_account", (ctx, req) =>
+      setMyName(ctx, z.object({ display_name: z.string().max(NAME_MAX * 2).nullable() }).parse(req.body).display_name),
+    ),
+  );
+  // Everything one person can reach and why: yourself, or (Manage people, Manage roles, Read every project) anyone.
+  router.get("/account/access", handle("my_access", (ctx) => personAccess(ctx, ctx.actor.id)));
+  router.get("/users/:id/access", handle("person_access", (ctx, req) => personAccess(ctx, uuid.parse(req.params.id))));
+
+  // Service accounts and their tokens, for other systems (AutoCode, CI): people with Manage people create them here.
+  // Project roles are given in each project's Members and access with the identifier service:<name>.
+  router.get("/service-accounts", handle("list_service_accounts", (ctx) => listServiceAccounts(ctx)));
+  router.post(
+    "/service-accounts",
+    handle("create_service_account", (ctx, req) =>
+      createServiceAccount(ctx, z.object({ name: z.string().min(1).max(60), display_name: z.string().max(100).optional() }).parse(req.body)),
+    ),
+  );
+  router.patch(
+    "/service-accounts/:id",
+    handle("update_service_account", (ctx, req) => setServiceAccountDisabled(ctx, uuid.parse(req.params.id), z.object({ disabled: z.boolean() }).parse(req.body).disabled)),
+  );
+  router.post(
+    "/service-accounts/:id/tokens",
+    handle("create_service_token", (ctx, req) =>
+      createServiceToken(
+        ctx,
+        uuid.parse(req.params.id),
+        z.object({ name: z.string().min(1).max(100), expires_in_days: z.number().int().min(1).max(3650).optional() }).parse(req.body),
+      ),
+    ),
+  );
+  router.post(
+    "/service-accounts/:id/tokens/:tokenId/rotate",
+    handle("rotate_service_token", (ctx, req) =>
+      rotateServiceToken(ctx, uuid.parse(req.params.id), uuid.parse(req.params.tokenId), z.object({ grace: z.enum(["none", "1d", "7d"]) }).parse(req.body).grace),
+    ),
+  );
+  router.delete(
+    "/service-accounts/:id/tokens/:tokenId",
+    handle("revoke_service_token", (ctx, req) => revokeServiceToken(ctx, uuid.parse(req.params.id), uuid.parse(req.params.tokenId))),
+  );
+
+  // Admin › Audit log (Administrators and Auditors: Read every project and See usage). Filters: person, action,
+  // target, from / to (dates or times), reads (include page views and searches); cursor pagination; CSV download.
+  router.get("/audit", handle("audit", (ctx, req) => listAudit(ctx, auditFilters(req))));
+  router.get("/audit.csv", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const ctx = ctxOf(req, res);
+      const filters = auditFilters(req);
+      const lines = auditCsv(ctx, filters);
+      // The permission check runs on the first line, before anything is sent.
+      const first = await lines.next();
+      await audit(db, ctx.actor.id, "api:export_audit", null, { details: { filters: { ...filters, cursor: undefined, limit: undefined } } });
+      res.set({
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="thaliyola-audit-${new Date().toISOString().slice(0, 10)}.csv"`,
+        "Cache-Control": "no-store",
+      });
+      if (!first.done) res.write(first.value);
+      for await (const chunk of lines) res.write(chunk);
+      res.end();
+    } catch (err) {
+      if (res.headersSent) {
+        console.error(`[audit] CSV export failed: ${(err as Error).message}`);
+        res.end();
+        return;
+      }
+      next(err);
+    }
+  });
 
   // Everything a newly signed-in person needs to connect their tools.
   router.get(
@@ -169,13 +342,14 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
     handle("connect_info", async (ctx, req) => {
       const origin = settings.publicUrl ?? `${req.protocol}://${req.header("host")}`;
       const readable = await readableScopes(ctx);
-      const memberships = await ctx.db.query(
+      const memberships = await ctx.db.query<{ roles: string[] }>(
         `SELECT s.slug, s.name, s.kind,
-                (array_agg(m.role ORDER BY CASE m.role WHEN 'owner' THEN 3 WHEN 'writer' THEN 2 ELSE 1 END DESC))[1] AS role
-           FROM scope_roles m JOIN scopes s ON s.id = m.scope_id
-          WHERE m.user_id = $1 GROUP BY s.id ORDER BY s.kind, s.name`,
+                (array_agg(m.role ORDER BY ro.position))[1] AS role, array_agg(DISTINCT m.role) AS roles
+           FROM scope_roles m JOIN scopes s ON s.id = m.scope_id JOIN roles ro ON ro.key = m.role
+          WHERE m.user_id = $1 AND s.kind <> 'personal' AND s.status <> 'deleted' GROUP BY s.id ORDER BY s.kind, s.name`,
         [ctx.actor.id],
       );
+      const projectRoles = await listRoles(ctx.db, "project");
       const projects = await ctx.db.query(
         `SELECT s.slug, s.name, s.visibility,
                 coalesce((SELECT json_agg(c.slug ORDER BY c.slug) FROM components c WHERE c.scope_id = s.id), '[]') AS components
@@ -193,11 +367,37 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
         origin,
         auth_mode: settings.authMode,
         oauth_enabled: settings.authMode === "local" && !!settings.publicUrl,
-        account: { email: ctx.actor.email, admin: isAdmin(ctx), kind: ctx.actor.kind },
-        memberships: memberships.rows,
+        account: { email: ctx.actor.email, name: ctx.actor.name ?? null, admin: isAdmin(ctx), kind: ctx.actor.kind },
+        memberships: memberships.rows.map((m) => {
+          const roles = inRoleOrder(projectRoles, m.roles);
+          return { ...m, roles, role_names: namesOf(projectRoles, roles) };
+        }),
         projects: projects.rows,
         has_connected: tokens.rows[0]!.n > 0 || connections.rows[0]!.n > 0,
         catalog: await mcpCatalog(ctx),
+        skills: await (async () => {
+          const d = await deliveryState(ctx);
+          const seen = (await ctx.db.query<{ at: string }>("SELECT at FROM skill_sync_seen WHERE user_id = $1", [ctx.actor.id])).rows[0];
+          const base = origin.replace(/\/+$/, "");
+          return {
+            delivery: d.mode,
+            state: d.state,
+            message: d.message,
+            send_to_claude: d.send_to_claude,
+            script_url: `${base}/skills-sync.py`,
+            sync_command: `curl -fsSL ${base}/connect.sh | sh -s -- --skills`,
+            run_command: 'python3 -I "$HOME/.config/thaliyola/skills-sync.py"',
+            hook_snippet: {
+              hooks: {
+                SessionStart: [
+                  { matcher: "startup", hooks: [{ type: "command", command: 'python3 -I "$HOME/.config/thaliyola/skills-sync.py" --quiet --max-age 300 --budget 20', timeout: 30 }] },
+                ],
+              },
+            },
+            folder_example: syncDirOf("example-skill"),
+            last_sync_at: seen?.at ?? null,
+          };
+        })(),
       };
     }),
   );
@@ -219,19 +419,56 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
   router.get(
     "/scopes",
     handle("list_scopes", async (ctx) => {
+      // Everyone has a personal space from their first visit, so it's there to open.
+      if (ctx.actor.kind === "human") await personalScope(ctx);
       const readable = await readableScopes(ctx);
-      const { rows } = await ctx.db.query(
-        `SELECT s.id, s.kind, s.slug, s.name, s.description, s.status, s.visibility,
-                coalesce((SELECT json_agg(json_build_object('slug', c.slug, 'kind', c.kind, 'repo_url', c.repo_url, 'description', c.description) ORDER BY c.slug)
+      // One query for every scope; what the caller can actually do there (effective_permissions) is worked out from it
+      // with the same rules the server enforces (effectiveFrom).
+      const { rows } = await ctx.db.query<{
+        kind: string;
+        my_roles: string[];
+        my_permissions: string[];
+        own_personal: boolean;
+        open_comment: boolean;
+        open_propose: boolean;
+        open_verify: boolean;
+      }>(
+        `SELECT s.id, s.kind, s.slug, s.name, s.description, s.status, s.visibility, (SELECT p.slug FROM scopes p WHERE p.id = s.parent_id) AS parent,
+                coalesce((SELECT json_agg(json_build_object('slug', c.slug, 'kind', c.kind, 'repo_url', c.repo_url, 'description', c.description,
+                                                   -- What a project git connection last read about it (no connection id).
+                                                   'git', CASE WHEN c.repo_info IS NOT NULL THEN (c.repo_info - 'connection' - 'languages') || jsonb_build_object('synced_at', c.repo_synced_at) END) ORDER BY c.slug)
                             FROM components c WHERE c.scope_id = s.id), '[]') AS components,
-                (SELECT r.role FROM scope_roles r WHERE r.scope_id = s.id AND r.user_id = $2
-                  ORDER BY CASE r.role WHEN 'owner' THEN 3 WHEN 'writer' THEN 2 ELSE 1 END DESC LIMIT 1) AS my_role,
-                ($3 OR (s.kind = 'project' AND EXISTS (SELECT 1 FROM scope_roles r WHERE r.scope_id = s.id AND r.user_id = $2 AND r.role = 'owner'))) AS can_manage
+                (SELECT r.role FROM scope_roles r JOIN roles ro ON ro.key = r.role WHERE r.scope_id = s.id AND r.user_id = $2 ORDER BY ro.position LIMIT 1) AS my_role,
+                ARRAY(SELECT r.role FROM scope_roles r JOIN roles ro ON ro.key = r.role WHERE r.scope_id = s.id AND r.user_id = $2
+                       GROUP BY r.role, ro.position ORDER BY ro.position) AS my_roles,
+                ARRAY(SELECT p.permission FROM scope_permissions p WHERE p.scope_id = s.id AND p.user_id = $2 ORDER BY 1) AS my_permissions,
+                (s.kind <> 'personal' AND ($3 OR (s.kind = 'project' AND EXISTS (SELECT 1 FROM scope_permissions p WHERE p.scope_id = s.id AND p.user_id = $2 AND p.permission IN ('manage_settings', 'manage_members'))))) AS can_manage,
+                (s.kind = 'personal' AND s.owner_id = $2) AS own_personal,
+                (s.visibility = 'team' AND s.kind <> 'personal' AND NOT EXISTS (SELECT 1 FROM scope_permissions q WHERE q.scope_id = s.id AND q.permission = 'comment')) AS open_comment,
+                (s.visibility = 'team' AND s.kind <> 'personal' AND NOT EXISTS (SELECT 1 FROM scope_permissions q WHERE q.scope_id = s.id AND q.permission = 'propose')) AS open_propose,
+                (s.visibility = 'team' AND s.kind <> 'personal' AND NOT EXISTS (SELECT 1 FROM scope_permissions q WHERE q.scope_id = s.id AND q.permission = 'verify')) AS open_verify
            FROM scopes s WHERE s.status = 'active' AND ($1::uuid[] IS NULL OR s.id = ANY($1))
-          ORDER BY CASE s.kind WHEN 'team' THEN 0 WHEN 'library' THEN 1 ELSE 2 END, s.name`,
-        [readable, ctx.actor.id, isAdmin(ctx) && ctx.actor.kind === "human"],
+          ORDER BY CASE s.kind WHEN 'team' THEN 0 WHEN 'library' THEN 1 WHEN 'personal' THEN 2 ELSE 3 END, s.name`,
+        [readable, ctx.actor.id, can(ctx, "manage_all_projects")],
       );
-      return { scopes: rows, article_types: ARTICLE_TYPES, finding_types: FINDING_TYPES };
+      const projectRoles = await listRoles(ctx.db, "project");
+      const scopes = rows.map(({ own_personal, open_comment, open_propose, open_verify, ...s }) => {
+        const effective = effectiveFrom(ctx, {
+          kind: s.kind,
+          ownPersonal: own_personal,
+          readable: true,
+          rolePermissions: s.my_permissions,
+          open: { comment: open_comment, propose: open_propose, verify: open_verify },
+        });
+        return {
+          ...s,
+          my_role_names: namesOf(projectRoles, s.my_roles),
+          effective_permissions: effective,
+          can_manage_members: effective.includes("manage_members"),
+          can_manage_settings: effective.includes("manage_settings"),
+        };
+      });
+      return { scopes, article_types: ARTICLE_TYPES, finding_types: FINDING_TYPES };
     }),
   );
   router.get(
@@ -473,7 +710,7 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
   );
   router.post("/questions/:id/cancel", handle("cancel_question", (ctx, req) => cancelQuestion(ctx, uuid.parse(req.params.id))));
 
-  // Vulnerabilities (details for project writers, owners and admins).
+  // Vulnerabilities (details for the project's Contributors and Project admins, Security leads and Administrators).
   const SEVERITY = ["critical", "high", "medium", "low", "unknown"] as const;
   const STATUS = ["open", "acknowledged", "fixed", "accepted", "false_positive"] as const;
   const statusEnum = z.enum(STATUS);
@@ -593,6 +830,70 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
     }),
   );
 
+  // Connections: a project's databases, APIs, git hosts, Slack and Trello. Secrets go in, never out.
+  const connectionFields = {
+    name: z.string().max(80).optional(),
+    config: z.record(z.string(), z.union([z.string().max(2000), z.number(), z.null()])).optional(),
+    secret: z.record(z.string(), z.union([z.string().max(20_000), z.null()])).optional(),
+    options: z.record(z.string(), z.unknown()).optional(),
+    interval_minutes: z.number().int().optional(),
+    enabled: z.boolean().optional(),
+    component: z.string().max(100).nullable().optional(),
+    spec: z.string().max(1_000_000).nullable().optional(),
+  };
+  const newConnection = z.object({ kind: z.string().max(40), ...connectionFields });
+  router.get(
+    "/connection-kinds",
+    handle("connection_kinds", async (ctx) => ({ kinds: connectionKinds(ctx.settings), enabled: ctx.settings.connections?.enabled ?? false, key_set: canSeal(ctx.settings.connections?.keys) })),
+  );
+  router.get("/projects/:slug/connections", handle("list_connections", (ctx, req) => listConnections(ctx, String(req.params.slug))));
+  router.post("/projects/:slug/connections", handle("create_connection", (ctx, req) => createConnection(ctx, String(req.params.slug), newConnection.parse(req.body))));
+  router.post(
+    "/projects/:slug/connections/test",
+    handle("test_connection_draft", (ctx, req) => testDraft(ctx, String(req.params.slug), newConnection.extend({ id: uuid.optional() }).parse(req.body))),
+  );
+  router.get("/connections/:id", handle("get_connection", (ctx, req) => getConnection(ctx, uuid.parse(req.params.id))));
+  router.patch("/connections/:id", handle("update_connection", (ctx, req) => updateConnection(ctx, uuid.parse(req.params.id), z.object(connectionFields).parse(req.body))));
+  router.delete("/connections/:id", handle("delete_connection", (ctx, req) => deleteConnection(ctx, uuid.parse(req.params.id))));
+  router.post("/connections/:id/test", handle("test_connection", (ctx, req) => testConnection(ctx, uuid.parse(req.params.id))));
+  router.post("/connections/:id/sync", handle("sync_connection", (ctx, req) => syncConnection(ctx, uuid.parse(req.params.id))));
+  const limitQ = z.object({ limit: z.coerce.number().int().min(1).max(500).optional() });
+  router.get("/connections/:id/changes", handle("connection_changes", (ctx, req) => listChanges(ctx, uuid.parse(req.params.id), limitQ.parse(req.query).limit)));
+  router.get("/connections/:id/calls", handle("connection_calls", (ctx, req) => listCalls(ctx, uuid.parse(req.params.id), limitQ.parse(req.query).limit)));
+  // Notification routes: which kinds of notifications also go to a Slack or Trello connection, team-wide or per project.
+  const routeKinds = z.array(z.string().max(40)).max(20);
+  const digest = z.enum(["off", "daily", "weekly"]);
+  router.get("/notification-routes", handle("list_notification_routes", (ctx) => listRoutes(ctx, null)));
+  router.get("/projects/:slug/notification-routes", handle("list_notification_routes", (ctx, req) => listRoutes(ctx, String(req.params.slug))));
+  router.post(
+    "/notification-routes",
+    handle("create_notification_route", (ctx, req) =>
+      createRoute(ctx, z.object({ project: z.string().max(100).nullable().optional(), connection_id: uuid, kinds: routeKinds.optional(), digest: digest.optional() }).parse(req.body)),
+    ),
+  );
+  router.patch(
+    "/notification-routes/:id",
+    handle("update_notification_route", (ctx, req) => updateRoute(ctx, uuid.parse(req.params.id), z.object({ kinds: routeKinds.optional(), digest: digest.optional() }).parse(req.body))),
+  );
+  router.delete("/notification-routes/:id", handle("delete_notification_route", (ctx, req) => deleteRoute(ctx, uuid.parse(req.params.id))));
+  router.post("/notification-routes/:id/digest", handle("send_digest", (ctx, req) => sendDigestNow(ctx, uuid.parse(req.params.id))));
+  // The project's Data view: synced tables, the data dictionary and schema history.
+  router.get("/projects/:slug/data", handle("project_data", (ctx, req) => projectData(ctx, String(req.params.slug))));
+  router.get("/tables/:id", handle("get_table", (ctx, req) => getTable(ctx, uuid.parse(req.params.id), { choices: true })));
+  // One API: its endpoints from the synced OpenAPI spec, their history and its article.
+  router.get("/apis/:id", handle("get_api", (ctx, req) => getApi(ctx, uuid.parse(req.params.id))));
+  router.put(
+    "/tables/:id/notes",
+    handle("describe_columns", (ctx, req) =>
+      describeColumns(ctx, {
+        table_id: uuid.parse(req.params.id),
+        notes: z
+          .object({ notes: z.array(z.object({ column: z.string().min(1).max(300), description: z.string().max(1000).optional(), pii: z.boolean().optional() })).min(1).max(200) })
+          .parse(req.body).notes,
+      }),
+    ),
+  );
+
   // Team sources and the inbox.
   const sourceKind = z.enum(SOURCE_KINDS);
   const sourceConfig = z.record(z.string(), z.union([z.string(), z.number()])).default({});
@@ -682,6 +983,8 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
             description: z.string().max(2000).optional(),
             repos: z.array(z.object({ slug: z.string(), kind: z.enum(["backend", "frontend", "mobile", "data", "infra", "other"]), repo_url: repoUrl.optional(), description: z.string().max(500).optional() })).max(30).optional(),
             reason: z.string().max(1000).optional(),
+            visibility: z.enum(["team", "members"]).optional(),
+            parent: z.string().optional(),
           })
           .parse(req.body),
       ),
@@ -697,6 +1000,10 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
     "/project-requests/:id/decline",
     handle("decline_project_request", (ctx, req) => declineProjectRequest(ctx, uuid.parse(req.params.id), z.object({ note: z.string().max(1000) }).parse(req.body).note)),
   );
+  // People who signed in on their own and wait for an admin (any one admin decides).
+  router.get("/access-requests", handle("list_access_requests", async (ctx) => ({ requests: await listAccessRequests(ctx) })));
+  router.post("/access-requests/:id/approve", handle("approve_access", (ctx, req) => approveUser(ctx, uuid.parse(req.params.id))));
+  router.post("/access-requests/:id/decline", handle("decline_access", (ctx, req) => declineUser(ctx, uuid.parse(req.params.id))));
   router.get("/projects/:slug/docs", handle("docs_status", (ctx, req) => docsStatus(ctx, String(req.params.slug))));
   router.put(
     "/projects/:slug/docs-settings",
@@ -761,6 +1068,15 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
       return { type, sections: ARTICLE_TEMPLATES[type], body_md: templateFor(type, { hints: req.query.hints === "true" }) };
     }),
   );
+  // What to write in each section of an article or finding type, and a short checklist (the editor's writing guide).
+  router.get(
+    "/writing-guide/:kind/:type",
+    handle("get_writing_guide", async (_ctx, req) => {
+      const kind = z.enum(["article", "finding"]).parse(req.params.kind);
+      const type = kind === "article" ? z.enum(ARTICLE_TYPES).parse(req.params.type) : z.enum(FINDING_TYPES).parse(req.params.type);
+      return writingGuide(kind, type);
+    }),
+  );
   router.get("/projects/:slug/pages", handle("project_pages", (ctx, req) => projectPages(ctx, String(req.params.slug))));
   router.get(
     "/projects/:slug/context",
@@ -783,6 +1099,11 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
   router.post(
     "/links",
     handle("link_entries", (ctx, req) => linkEntries(ctx, z.object({ from: z.string(), to: z.string(), relation: z.enum(LINK_KINDS) }).parse(req.body))),
+  );
+  // Lineage links (a repository reads or writes a table) can be removed again; other links can't.
+  router.delete(
+    "/links",
+    handle("unlink_entries", (ctx, req) => unlinkEntries(ctx, z.object({ from: z.string(), to: z.string(), relation: z.enum(LINEAGE_KINDS) }).parse(req.body))),
   );
   router.post(
     "/promote",
@@ -833,9 +1154,26 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
     "/articles/:id",
     handle("edit_article", (ctx, req) => {
       const body = z
-        .object({ version: z.number().int().min(1), summary: z.string().min(1).max(300), body_md: z.string(), title: z.string().max(200).optional() })
+        .object({
+          version: z.number().int().min(1),
+          summary: z.string().min(1).max(300),
+          body_md: z.string().optional(),
+          title: z.string().max(200).optional(),
+          tags: z.array(z.string().max(60)).max(30).optional(),
+          add_tags: z.array(z.string().max(60)).max(30).optional(),
+          remove_tags: z.array(z.string().max(60)).max(30).optional(),
+        })
         .parse(req.body);
-      return editArticle(ctx, { id: uuid.parse(req.params.id), version: body.version, summary: body.summary, text: body.body_md, title: body.title });
+      return editArticle(ctx, {
+        id: uuid.parse(req.params.id),
+        version: body.version,
+        summary: body.summary,
+        text: body.body_md,
+        title: body.title,
+        tags: body.tags,
+        add_tags: body.add_tags,
+        remove_tags: body.remove_tags,
+      });
     }),
   );
   router.post(
@@ -921,9 +1259,30 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
     "/items/:id/links",
     handle("add_source_link", (ctx, req) => {
       const body = z
-        .object({ system: z.enum(["slack", "sentry", "trello", "pr", "figma", "dashboard", "repo", "other"]), url: z.string().url(), label: z.string().max(200).optional() })
+        .object({ system: z.enum(["slack", "sentry", "trello", "pr", "figma", "dashboard", "repo", "jira", "linear", "other"]), url: z.string().url(), label: z.string().max(200).optional() })
         .parse(req.body);
       return addSourceLinkTo(ctx, uuid.parse(req.params.id), body);
+    }),
+  );
+  // Jira and Linear tickets of a finding or article: cached status (refreshed when old), create one, link one.
+  router.get(
+    "/items/:id/tickets",
+    handle("list_tickets", (ctx, req) => listTickets(ctx, uuid.parse(req.params.id), { refresh: req.query.refresh !== "0" })),
+  );
+  router.post(
+    "/items/:id/tickets",
+    handle("create_ticket", (ctx, req) => {
+      const body = z
+        .object({ connection: z.string().max(200).optional(), title: z.string().max(250).optional(), description: z.string().max(8000).optional() })
+        .parse(req.body ?? {});
+      return createTicket(ctx, { item: uuid.parse(req.params.id), ...body });
+    }),
+  );
+  router.post(
+    "/items/:id/tickets/link",
+    handle("link_ticket", (ctx, req) => {
+      const body = z.object({ url: z.string().min(1).max(2000), connection: z.string().max(200).optional() }).parse(req.body);
+      return linkTicket(ctx, { item: uuid.parse(req.params.id), ...body });
     }),
   );
   router.post(
@@ -936,22 +1295,36 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
 
   // ---- Review --------------------------------------------------------------
 
+  const reviewQuery = z.object({
+    scope: z.string().optional(),
+    state: z.enum(["pending", "approved", "rejected"]).optional(),
+    category: z.enum(Object.keys(REVIEW_CATEGORIES) as [keyof typeof REVIEW_CATEGORIES]).optional(),
+    kind: z.enum(["article", "finding"]).optional(),
+    type: z.string().max(40).optional(),
+    author: z.enum(["people", "agents", "me"]).optional(),
+    q: z.string().max(200).optional(),
+    sort: z.enum(["oldest", "newest"]).optional(),
+    mine: z.enum(["true", "false"]).optional(),
+    assigned: z.enum(["true", "false", "to_review", "me", "none"]).optional(),
+    facets: z.enum(["true", "false"]).optional(),
+    limit: z.coerce.number().int().min(1).max(200).optional(),
+  });
   router.get(
     "/revisions",
     handle("list_revisions", async (ctx, req) => {
-      const q = z
-        .object({
-          scope: z.string().optional(),
-          state: z.enum(["pending", "approved", "rejected"]).optional(),
-          mine: z.enum(["true", "false"]).optional(),
-          assigned: z.enum(["true", "false"]).optional(),
-          limit: z.coerce.number().int().min(1).max(200).optional(),
-        })
-        .parse(req.query);
-      return { revisions: await listReviewQueue(ctx, { ...q, mine: q.mine === "true", assigned: q.assigned === "true" }) };
+      const q = reviewQuery.parse(req.query);
+      const filters = { ...q, mine: q.mine === "true", assigned: q.assigned === "true" ? ("me" as const) : q.assigned === "false" ? undefined : q.assigned };
+      return { revisions: await listReviewQueue(ctx, filters), ...(q.facets === "true" ? { facets: await reviewFacets(ctx, filters) } : {}) };
     }),
   );
   router.get("/revisions/:id", handle("get_revision", (ctx, req) => getRevision(ctx, uuid.parse(req.params.id))));
+  router.post(
+    "/revisions/bulk-reject",
+    handle("bulk_reject", (ctx, req) => {
+      const body = z.object({ ids: z.array(uuid).min(1).max(100), reason: z.string().min(1).max(2000) }).parse(req.body);
+      return bulkReject(ctx, body.ids, body.reason);
+    }),
+  );
   router.post(
     "/revisions/bulk-approve",
     handle("bulk_approve", (ctx, req) => bulkApprove(ctx, z.object({ ids: z.array(uuid).min(1).max(100) }).parse(req.body).ids)),
@@ -998,6 +1371,123 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
 
   // ---- Admin ---------------------------------------------------------------
 
+  router.get("/system/settings", handle("get_system_settings", (ctx) => getSystemSettings(ctx)));
+  router.patch(
+    "/system/settings",
+    handle("update_system_settings", (ctx, req) => updateSystemSettings(ctx, z.record(z.string(), z.unknown()).parse(req.body))),
+  );
+  router.post("/system/presets/:name", handle("apply_system_preset", (ctx, req) => applySystemPreset(ctx, z.enum(PRESET_NAMES).parse(req.params.name))));
+
+  // ---- Saved views (each person's own) ----------------------------------------
+
+  const viewFilters = z.record(z.string().max(40), z.string().max(300).nullable()).refine((f) => Object.keys(f).length <= 20, "at most 20 filters");
+  router.get("/views", handle("list_views", (ctx, req) => listViews(ctx, z.enum(VIEW_AREA_NAMES).parse(req.query.area))));
+  router.post(
+    "/views",
+    handle("create_view", (ctx, req) =>
+      createView(ctx, z.object({ area: z.enum(VIEW_AREA_NAMES), name: z.string().max(200), filters: viewFilters, is_default: z.boolean().optional() }).parse(req.body)),
+    ),
+  );
+  router.patch(
+    "/views/:id",
+    handle("update_view", (ctx, req) =>
+      updateView(ctx, uuid.parse(req.params.id), z.object({ name: z.string().max(200).optional(), filters: viewFilters.optional(), is_default: z.boolean().optional() }).parse(req.body)),
+    ),
+  );
+  router.delete("/views/:id", handle("delete_view", (ctx, req) => deleteView(ctx, uuid.parse(req.params.id))));
+  // Manage views: renames, deletes and the default in one transaction.
+  router.post(
+    "/views/manage",
+    handle("save_views", (ctx, req) => {
+      const body = z
+        .object({
+          area: z.enum(VIEW_AREA_NAMES),
+          rename: z.array(z.object({ id: uuid, name: z.string().max(200) })).max(100).optional(),
+          delete: z.array(uuid).max(100).optional(),
+          default: uuid.nullable().optional(),
+        })
+        .parse(req.body);
+      const { area, ...changes } = body;
+      return saveViews(ctx, area, changes);
+    }),
+  );
+
+  // ---- Releases and the feature catalog (What's new) -------------------------------
+
+  const versionParam = z.string().max(20);
+  const releaseBody = z.object({
+    version: z.string().max(20),
+    title: z.string().max(400).optional(),
+    summary: z.string().max(16_000).optional(),
+    released_on: z.string().max(20).nullable().optional(),
+  });
+  const featureBody = z.object({
+    title: z.string().max(400),
+    area: z.enum(AREA_KEYS),
+    kind: z.enum(KIND_KEYS).optional(),
+    description: z.string().max(40_000).optional(),
+    how_to: z.string().max(40_000).optional(),
+    app_route: z.string().max(600).nullable().optional(),
+    docs_url: z.string().max(1000).nullable().optional(),
+    audience: z.enum(AUDIENCE_KEYS).optional(),
+    tags: z.array(z.string().max(80)).max(40).optional(),
+  });
+  const vocabulary = () => ({ areas: FEATURE_AREAS, kinds: FEATURE_KINDS, audiences: AUDIENCES });
+  router.get(
+    "/releases",
+    handle("list_releases", async (ctx, req) => ({
+      ...(await listReleases(ctx, { features: z.enum(["true", "false"]).optional().parse(req.query.features) === "true" })),
+      ...vocabulary(),
+    })),
+  );
+  router.post("/releases", handle("create_release", (ctx, req) => createRelease(ctx, releaseBody.parse(req.body))));
+  // A page view, not a change: "list_releases" is a read on the Audit log (hidden unless asked for).
+  router.post("/releases/seen", handle("list_releases:seen", (ctx, req) => markReleasesSeen(ctx, z.object({ version: versionParam.optional() }).parse(req.body ?? {}).version)));
+  router.get("/releases/:version", handle("get_release", async (ctx, req) => ({ ...(await getRelease(ctx, versionParam.parse(req.params.version))), can_manage: canManageReleases(ctx) })));
+  router.patch("/releases/:version", handle("update_release", (ctx, req) => updateRelease(ctx, versionParam.parse(req.params.version), releaseBody.partial().parse(req.body))));
+  router.delete("/releases/:version", handle("delete_release", (ctx, req) => deleteRelease(ctx, versionParam.parse(req.params.version))));
+  router.post("/releases/:version/publish", handle("publish_release", (ctx, req) => publishRelease(ctx, versionParam.parse(req.params.version))));
+  router.post("/releases/:version/unpublish", handle("unpublish_release", (ctx, req) => unpublishRelease(ctx, versionParam.parse(req.params.version))));
+  router.post("/releases/:version/features", handle("create_feature", (ctx, req) => addFeature(ctx, versionParam.parse(req.params.version), featureBody.parse(req.body))));
+  router.put(
+    "/releases/:version/features/order",
+    handle("reorder_features", (ctx, req) => reorderFeatures(ctx, versionParam.parse(req.params.version), z.object({ ids: z.array(uuid).max(500) }).parse(req.body).ids)),
+  );
+  router.get(
+    "/features",
+    handle("list_features", async (ctx, req) => {
+      const q = z
+        .object({
+          area: z.enum(AREA_KEYS).optional(),
+          kind: z.enum(KIND_KEYS).optional(),
+          q: z.string().max(200).optional(),
+          drafts: z.enum(["true", "false"]).optional(),
+        })
+        .parse(req.query);
+      return { ...(await listFeatures(ctx, { area: q.area, kind: q.kind, query: q.q, drafts: q.drafts === "true" })), can_manage: canManageReleases(ctx), ...vocabulary() };
+    }),
+  );
+  router.get("/features/:id", handle("get_feature", (ctx, req) => readFeature(ctx, uuid.parse(req.params.id))));
+  router.patch(
+    "/features/:id",
+    handle("update_feature", (ctx, req) => updateFeature(ctx, uuid.parse(req.params.id), featureBody.partial().extend({ release: versionParam.optional() }).parse(req.body))),
+  );
+  router.delete("/features/:id", handle("delete_feature", (ctx, req) => deleteFeature(ctx, uuid.parse(req.params.id))));
+
+  router.put(
+    "/projects/:slug/parent",
+    handle("set_project_parent", (ctx, req) =>
+      setProjectParent(ctx, String(req.params.slug), z.object({ parent: z.string().nullable() }).parse(req.body).parent),
+    ),
+  );
+  router.get("/projects/manage", handle("list_managed_projects", (ctx) => listManagedProjects(ctx)));
+  router.post(
+    "/projects/visibility",
+    handle("set_projects_visibility", (ctx, req) => {
+      const body = z.object({ projects: z.array(z.string()).min(1).max(200), visibility: z.enum(["team", "members"]) }).parse(req.body);
+      return setProjectsVisibility(ctx, body.projects, body.visibility);
+    }),
+  );
   router.post(
     "/projects",
     handle("admin_create_project", (ctx, req) =>
@@ -1013,6 +1503,8 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
               .max(30)
               .optional(),
             starter: z.boolean().optional(),
+            visibility: z.enum(["team", "members"]).optional(),
+            parent: z.string().optional(),
           })
           .parse(req.body),
       ),
@@ -1046,25 +1538,54 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
     ),
   );
   router.get("/scopes/:slug/members", handle("list_members", (ctx, req) => listMembers(ctx, String(req.params.slug))));
+  // Someone's direct roles in a project: `roles` replaces them all ([] removes them), `add` / `remove` change only those;
+  // `role` (one role, or null to remove) is the older form. `email` may also be the identifier shown for an account without one.
+  const roleChangeBody = { roles: roleList.optional(), add: roleList.optional(), remove: roleList.optional(), role: z.string().max(100).nullable().optional() };
   router.put(
     "/scopes/:slug/members",
-    handle("admin_set_member", (ctx, req) => {
-      const body = z.object({ email: z.string(), role: z.enum(["reader", "writer", "owner"]).nullable() }).parse(req.body);
-      return adminSetMember(ctx, String(req.params.slug), body.email, body.role);
+    handle("admin_set_member", async (ctx, req) => {
+      const body = z.object({ email: z.string().max(320), ...roleChangeBody }).parse(req.body);
+      const res = await changeMemberRoles(ctx, String(req.params.slug), body.email, roleChangeFrom(body));
+      return body.roles === undefined && body.role !== undefined ? { ...res, role: body.role } : res;
     }),
   );
 
   // ---- Project access, teams, repositories, moving ---------------------------
 
-  const role = z.enum(["reader", "writer", "owner"]);
   router.get("/scopes/:slug/access", handle("list_access", (ctx, req) => listAccess(ctx, String(req.params.slug))));
   router.put(
     "/scopes/:slug/teams",
-    handle("set_team_role", (ctx, req) => {
-      const body = z.object({ team: z.string(), role: role.nullable() }).parse(req.body);
-      return setTeamRole(ctx, String(req.params.slug), body.team, body.role);
+    handle("set_team_role", async (ctx, req) => {
+      const body = z.object({ team: z.string().max(100), ...roleChangeBody }).parse(req.body);
+      const res = await changeTeamRoles(ctx, String(req.params.slug), body.team, roleChangeFrom(body));
+      return body.roles === undefined && body.role !== undefined ? { ...res, role: body.role } : res;
     }),
   );
+
+  // ---- Roles ----------------------------------------------------------------
+
+  // `:key` is a role's key or name ("Contributor"); kind accepts "organisation" / "organization" for org roles.
+  router.get("/roles", handle("list_roles", (ctx) => rolesCatalog(ctx)));
+  router.get("/roles/:key/holders", handle("role_holders", (ctx, req) => roleHolders(ctx, String(req.params.key))));
+  const roleBody = z.object({
+    key: z.string().max(40).optional(),
+    kind: roleKind,
+    name: z.string().min(1).max(100),
+    description: z.string().max(500).optional(),
+    permissions: z.array(z.string().max(60)).max(30),
+  });
+  router.post("/roles", handle("create_role", (ctx, req) => createRole(ctx, roleBody.parse(req.body))));
+  router.patch(
+    "/roles/:key",
+    handle("update_role", (ctx, req) =>
+      updateRole(
+        ctx,
+        String(req.params.key),
+        z.object({ name: z.string().min(1).max(100).optional(), description: z.string().max(500).optional(), permissions: z.array(z.string().max(60)).max(30).optional() }).parse(req.body),
+      ),
+    ),
+  );
+  router.delete("/roles/:key", handle("delete_role", (ctx, req) => deleteRole(ctx, String(req.params.key))));
   router.patch(
     "/projects/:slug/components/:component",
     handle("update_component", (ctx, req) =>
@@ -1084,6 +1605,13 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
     ),
   );
   router.delete("/projects/:slug/components/:component", handle("remove_component", (ctx, req) => removeComponent(ctx, String(req.params.slug), String(req.params.component))));
+  // People to pick when adding someone to a project or team (names and emails of active accounts).
+  router.get(
+    "/people",
+    handle("find_people", async (ctx, req) => ({
+      people: await findPeople(ctx, typeof req.query.q === "string" ? req.query.q.slice(0, 100) : "", Number(req.query.limit) || 20),
+    })),
+  );
   router.get("/teams", handle("list_teams", async (ctx) => ({ teams: await listTeams(ctx) })));
   router.post(
     "/teams",
@@ -1098,6 +1626,7 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
   router.put(
     "/teams/:slug/members",
     handle("set_team_member", (ctx, req) => {
+      // An omitted role keeps their current one (a new member joins as a member).
       const body = z.object({ email: z.string().max(320), member: z.boolean(), role: z.enum(["member", "lead"]).optional() }).parse(req.body);
       return setTeamMember(ctx, String(req.params.slug), body.email, body.member, body.role);
     }),
@@ -1118,7 +1647,10 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
               .max(30)
               .optional(),
             starter: z.boolean().optional(),
-            team_role: z.enum(["reader", "writer", "owner"]).optional(),
+            visibility: z.enum(["team", "members"]).optional(),
+            team_roles: roleList.optional(),
+            // Deprecated: one role; use team_roles.
+            team_role: z.string().max(100).optional(),
             owners: z.array(z.string().max(320)).max(50).optional(),
           })
           .parse(req.body),

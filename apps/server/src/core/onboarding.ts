@@ -1,10 +1,14 @@
+import { agentCallSql } from "./audit.js";
 import type { RequestContext } from "./context.js";
 import { isAdmin } from "./permissions.js";
 
 export interface Step {
   key: string;
   title: string;
+  /** Plain words; environment variable names and server configuration go in `technical`. */
   detail: string;
+  /** A technical detail for whoever runs the server, shown behind "Technical details"; null when there is none. */
+  technical?: string | null;
   done: boolean;
   link: string;
 }
@@ -23,8 +27,8 @@ export async function onboarding(ctx: RequestContext): Promise<{ steps: Step[]; 
   const connected =
     (await one("SELECT 1 FROM api_tokens WHERE user_id = $1 AND revoked_at IS NULL", [me])) ||
     (await one("SELECT 1 FROM oauth_tokens WHERE user_id = $1 AND revoked_at IS NULL", [me])) ||
-    // Any MCP tool call (web UI calls are logged as api:*).
-    (await one("SELECT 1 FROM audit_log WHERE actor_id = $1 AND tool NOT LIKE 'api:%' AND tool NOT IN ('login', 'accept_invitation', 'change_password', 'approve_revision', 'reject_revision') LIMIT 1", [me]));
+    // Any MCP tool call.
+    (await one(`SELECT 1 FROM audit_log l WHERE l.actor_id = $1 AND ${agentCallSql("l")} LIMIT 1`, [me]));
   const prefs = (await db.query<{ prefs: Record<string, unknown> }>("SELECT prefs FROM users WHERE id = $1", [me])).rows[0]?.prefs ?? {};
 
   const steps: Step[] = [];
@@ -48,7 +52,8 @@ export async function onboarding(ctx: RequestContext): Promise<{ steps: Step[]; 
     steps.push({
       key: "email",
       title: "Set up email",
-      detail: "Reviewers get proposals by email with a one-click approve link. Set MAIL_TRANSPORT=smtp and SMTP_URL on the server.",
+      detail: "Reviewers get proposals by email with a one-click approve link. An administrator turns it on where the server runs.",
+      technical: "Set MAIL_TRANSPORT=smtp and SMTP_URL in the server's environment, then restart it.",
       done: ctx.settings.mailTransport !== "off",
       link: "https://github.com/ramith27/thaliyola#notifications",
     });
@@ -74,5 +79,5 @@ export async function onboarding(ctx: RequestContext): Promise<{ steps: Step[]; 
     done: (await one("SELECT 1 FROM watches WHERE user_id = $1", [me])) || (await one("SELECT 1 FROM favourites WHERE user_id = $1", [me])),
     link: "#/",
   });
-  return { steps, dismissed: prefs.onboarding_dismissed === true };
+  return { steps: steps.map((s) => ({ ...s, technical: s.technical ?? null })), dismissed: prefs.onboarding_dismissed === true };
 }

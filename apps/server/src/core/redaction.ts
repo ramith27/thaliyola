@@ -27,6 +27,7 @@ const RULES: Rule[] = [
   { kind: "jwt", pattern: /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g },
   { kind: "aws_key", pattern: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g },
   { kind: "github_token", pattern: /\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})\b/g },
+  { kind: "gitlab_token", pattern: /\bglpat-[A-Za-z0-9_-]{20,}\b/g },
   { kind: "slack_token", pattern: /\bxox[abposr]-[A-Za-z0-9-]{10,}\b/g },
   { kind: "api_key", pattern: /\b(?:sk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}|(?:sk|rk|pk)_live_[A-Za-z0-9]{16,}|AIza[0-9A-Za-z_-]{35})\b/g },
   {
@@ -54,16 +55,49 @@ export interface Redaction {
   count: number;
 }
 
-export function redact(text: string): { text: string; redactions: Redaction[] } {
+/** `keep`: kinds left as they are (e.g. people's email addresses in a notification that names them). */
+export function redact(text: string, opts: { keep?: string[] } = {}): { text: string; redactions: Redaction[] } {
   const counts = new Map<string, number>();
   let out = text;
   for (const rule of RULES) {
+    if (opts.keep?.includes(rule.kind)) continue;
     out = out.replace(rule.pattern, (match: string, ...rest: unknown[]) => {
       counts.set(rule.kind, (counts.get(rule.kind) ?? 0) + 1);
       return rule.replace ? rule.replace(match, ...(rest as string[])) : marker(rule.kind);
     });
   }
   return { text: out, redactions: [...counts].map(([kind, count]) => ({ kind, count })) };
+}
+
+export interface SecretHit {
+  kind: string;
+  /** 1-based line of the match. */
+  line: number;
+  /** Offset of the match in the text. */
+  index: number;
+  /** The matched text (callers decide what to show; never log it). */
+  match: string;
+}
+
+/**
+ * Where the redaction rules match, without changing anything: for content that must stay byte-exact (skill files),
+ * so the caller can refuse or flag it. Each rule runs on the original text, so one secret may match two rules.
+ */
+export function findSecrets(text: string): SecretHit[] {
+  const hits: SecretHit[] = [];
+  for (const rule of RULES) {
+    for (const m of text.matchAll(new RegExp(rule.pattern.source, rule.pattern.flags.includes("g") ? rule.pattern.flags : `${rule.pattern.flags}g`))) {
+      const index = m.index ?? 0;
+      hits.push({ kind: rule.kind, line: lineAt(text, index), index, match: m[0] });
+    }
+  }
+  return hits.sort((a, b) => a.index - b.index);
+}
+
+function lineAt(text: string, index: number): number {
+  let line = 1;
+  for (let i = text.indexOf("\n"); i !== -1 && i < index; i = text.indexOf("\n", i + 1)) line++;
+  return line;
 }
 
 /** Redacts each string field of a record; merges the counts. */

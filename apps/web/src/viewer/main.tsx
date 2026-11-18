@@ -1,7 +1,7 @@
 import { StrictMode, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "@fontsource-variable/inter";
-import "../styles.css";
+import "../styles/index.css";
 import { setStaticAssets } from "../components/assets";
 import { Markdown, TypeBadge } from "../components/ui";
 import { GraphCanvas } from "../pages/graph";
