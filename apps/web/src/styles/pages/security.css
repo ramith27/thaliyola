@@ -203,3 +203,4 @@ a.sc-tag:hover { background: var(--surface-3); }
 @media (prefers-reduced-motion: reduce) {
   .sc-advisory { transition: none; }
 }
+.sc-licences li { margin: 0.3rem 0; overflow-wrap: anywhere; }

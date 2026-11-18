@@ -49,10 +49,10 @@ describe("MCP over streamable HTTP", () => {
     const client = await connect({ authorization: "Bearer secret-token" });
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
-      "ack_notice", "add_person", "add_source", "add_source_link", "answer_question", "approve_skill_import", "ask_session", "assign_skill", "browse_kb", "call_api", "check_design_drift", "claim_work", "complete_task", "create_article",
+      "ack_notice", "add_person", "add_source", "add_source_link", "answer_question", "approve_skill_import", "ask_session", "assign_skill", "browse_kb", "call_api", "check_design_drift", "check_licenses", "claim_work", "complete_task", "create_article",
       "create_project", "create_ticket", "decide_access_request", "decide_project_request", "decline_question", "delete_role", "delete_team", "describe_columns", "docs_begin", "docs_finish",
       "docs_inspect_claims", "docs_next_page", "docs_skip_page", "docs_submit_page", "docs_submit_plan", "find_people", "get_agents_md_block", "get_answer", "get_article", "get_article_template", "get_asset",
-      "get_design_system", "get_finding", "get_guide", "get_inbox_item", "get_person_access", "get_personal_context", "get_project_access", "get_project_context", "get_proposal", "get_skill", "get_skill_file",
+      "get_design_system", "get_finding", "get_guide", "get_inbox_item", "get_person_access", "get_personal_context", "get_project_access", "get_project_context", "get_proposal", "get_sbom", "get_skill", "get_skill_file",
       "get_skill_version", "get_table_schema", "get_tasks", "get_version", "get_vulnerability", "handoff_session", "latest_advisories", "link_entries", "link_ticket", "list_api_endpoints", "list_audit_log", "list_claims", "list_connections",
       "list_features", "list_impact_notices", "list_inbox", "list_people", "list_project_requests", "list_projects", "list_review_queue", "list_roles", "list_sessions", "list_skill_reviews",
       "list_skill_sources", "list_skills", "list_stale_entries", "list_suggestions", "list_teams", "list_vulnerabilities", "move_entry", "promote_finding", "propose_article_edit", "propose_finding",
@@ -148,7 +148,7 @@ describe("MCP over streamable HTTP", () => {
   it("offers workflow prompts", async () => {
     const client = await connect({ authorization: "Bearer secret-token" });
     const { prompts } = await client.listPrompts();
-    expect(prompts.map((p) => p.name).sort()).toEqual(["capture", "capture-design", "check-design", "curate", "document-repo", "draft-from-paste", "explore-data", "investigate", "listen", "manage-access", "review-stale", "security-check", "start-coding", "sync-figma-design", "triage-inbox", "update-docs"]);
+    expect(prompts.map((p) => p.name).sort()).toEqual(["capture", "capture-design", "check-design", "curate", "document-repo", "draft-from-paste", "explore-data", "fix-vulnerabilities", "investigate", "listen", "manage-access", "review-stale", "security-check", "start-coding", "sync-figma-design", "triage-inbox", "update-docs"]);
     const p = await client.getPrompt({ name: "start-coding", arguments: { project: "order-service", component: "frontend" } });
     const text = (p.messages[0]!.content as { text: string }).text;
     expect(text).toContain('get_project_context with component "frontend"');

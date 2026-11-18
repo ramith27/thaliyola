@@ -36,6 +36,7 @@ import { getDesignSystem, recordDesignDecision, tokensSchema, updateDesignSystem
 import { answerQuestion, askSession, declineQuestion, getAnswer, handoffSession, listSessions, registerSession, waitForQuestions } from "../core/sessions.js";
 import { claimWork, listClaims, releaseWork } from "../core/coordination.js";
 import { checkDesignDrift } from "../core/design-drift.js";
+import { exportSbom, licenceReport } from "../core/sbom.js";
 import { beginDependencyScan, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, updateVulnerability } from "../core/security.js";
 import { createOrRequestProject, decideProjectRequest, listProjectRequests } from "../core/project-requests.js";
 import { setProjectParent } from "../core/hierarchy.js";
@@ -1659,6 +1660,28 @@ export function buildMcpServer(callerCtx: RequestContext, opts: { skills?: Skill
     (args) => run("decline_question", args.id, () => declineQuestion(ctx, args)),
   );
 
+  server.registerTool(
+    "get_sbom",
+    {
+      title: "Software bill of materials",
+      description:
+        "A project's (or one repository's) dependencies as CycloneDX 1.5 JSON, from the scanned lockfiles, with its open vulnerabilities; licenses: true adds each version's licence from deps.dev. " +
+        "For the project's Contributors, Project admins, Security leads and Administrators. The same is a download on the Security page.",
+      inputSchema: { project: z.string(), component: z.string().optional().describe("One repository"), licenses: z.boolean().optional() },
+      annotations: { readOnlyHint: true },
+    },
+    ({ project, component, licenses }) => run("get_sbom", null, () => exportSbom(ctx, project, { component, licenses })),
+  );
+  server.registerTool(
+    "check_licenses",
+    {
+      title: "Check dependency licences",
+      description: "The licences of a project's dependencies (from deps.dev), with copyleft (strong: GPL, AGPL, SSPL…; weak: LGPL, MPL, EPL…) and unknown ones flagged. Not legal advice.",
+      inputSchema: { project: z.string(), component: z.string().optional() },
+      annotations: { readOnlyHint: true },
+    },
+    ({ project, component }) => run("check_licenses", null, () => licenceReport(ctx, project, { component })),
+  );
   server.registerTool(
     "handoff_session",
     {

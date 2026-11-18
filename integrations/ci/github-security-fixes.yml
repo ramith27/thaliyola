@@ -1,0 +1,39 @@
+# .github/workflows/thaliyola-security-fixes.yml: every Monday, open one pull request per vulnerable dependency
+# that has a fixed version (critical, high and actively exploited), with the tests run, and link each PR on its
+# vulnerability in Thaliyola. People review and merge the PRs; the next scan closes what they fixed.
+# Secrets: ANTHROPIC_API_KEY, THALIYOLA_TOKEN (a bot with Contributor in the project:
+#   sudo thaliyola-admin create-token --service security-bot --name "Security fixes" --in <project>).
+# Settings → Actions → General: allow GitHub Actions to create pull requests.
+name: Security fixes (Thaliyola)
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+concurrency:
+  group: thaliyola-security-fixes
+  cancel-in-progress: false
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install -g @anthropic-ai/claude-code
+      - name: Fix vulnerable dependencies
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          THALIYOLA_TOKEN: ${{ secrets.THALIYOLA_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "thaliyola-security-bot"
+          git config user.email "security-bot@users.noreply.github.com"
+          claude mcp add --transport http thaliyola https://thaliyola.example.com/mcp --header "Authorization: Bearer $THALIYOLA_TOKEN"
+          claude -p "/mcp__thaliyola__fix-vulnerabilities high pr yes" --allowedTools "mcp__thaliyola,Read,Edit,Write,Glob,Grep,Bash"

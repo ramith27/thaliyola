@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { api, type ScopeInfo } from "../api";
+import { api, getToken, type ScopeInfo } from "../api";
 import { useBoot } from "../components/boot";
 import { pickFilters, SavedViews } from "../components/saved-views";
 import { ChartCard, LineChart, StatTile } from "../components/charts";
@@ -627,6 +627,7 @@ function OverviewTab({
           );
         }}
       </AsyncBlock>
+      {project && <DependencyExports project={project} />}
     </div>
   );
 }
@@ -2335,5 +2336,93 @@ function ProjectSecurityBody({ data, feed, project, component }: { data: Overvie
       )}
       <RunWithClaude title="Scan with Claude" command={CLAUDE_FULL} variants={SCAN_VARIANTS} description="Open the repository in Claude Code and run this. Leave out full to scan dependencies only." />
     </div>
+  );
+}
+
+interface LicenceReport {
+  dependencies: number;
+  by_licence: { license: string; packages: number }[];
+  flagged: { repository: string; package: string; version: string; licenses: string[]; risk: "strong_copyleft" | "weak_copyleft" | "unknown" }[];
+  counts: { strong_copyleft: number; weak_copyleft: number; unknown: number };
+  note: string;
+}
+
+const RISK_TEXT = { strong_copyleft: "Strong copyleft", weak_copyleft: "Weak copyleft", unknown: "Unknown licence" } as const;
+
+/** A project's SBOM download and licence check (for those who see its vulnerability details). */
+function DependencyExports({ project }: { project: string }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [licences, setLicences] = useState<LicenceReport | null>(null);
+  async function sbom(withLicences: boolean) {
+    setBusy(withLicences ? "sbom-l" : "sbom");
+    try {
+      const token = getToken();
+      const res = await fetch(`/api/scopes/${encodeURIComponent(project)}/sbom${withLicences ? "?licenses=true" : ""}`, { headers: token ? { authorization: `Bearer ${token}` } : {}, credentials: "same-origin" });
+      if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `HTTP ${res.status}`);
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? `${project}-sbom.cdx.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (e) {
+      toast.error(e, { title: "Couldn't export the SBOM" });
+    } finally {
+      setBusy(null);
+    }
+  }
+  async function check() {
+    setBusy("licences");
+    try {
+      setLicences(await api<LicenceReport>(`/scopes/${encodeURIComponent(project)}/licenses`));
+    } catch (e) {
+      toast.error(e, { title: "Couldn't check licences" });
+    } finally {
+      setBusy(null);
+    }
+  }
+  return (
+    <Section
+      title="Dependencies"
+      description="Everything the scanned lockfiles list, as a CycloneDX software bill of materials with its open vulnerabilities, and a licence check (licences from deps.dev)."
+      actions={
+        <>
+          <Button size="sm" onClick={() => sbom(false)} disabled={!!busy}>
+            {busy === "sbom" ? "Exporting…" : "Download SBOM"}
+          </Button>
+          <Button size="sm" onClick={() => sbom(true)} disabled={!!busy}>
+            {busy === "sbom-l" ? "Looking up licences…" : "SBOM with licences"}
+          </Button>
+          <Button size="sm" variant="primary" onClick={check} disabled={!!busy}>
+            {busy === "licences" ? "Checking…" : "Check licences"}
+          </Button>
+        </>
+      }
+    >
+      {licences && (
+        <div className="sc-stack">
+          <p className="sc-muted">
+            {licences.dependencies} dependencies: {licences.counts.strong_copyleft} strong copyleft, {licences.counts.weak_copyleft} weak copyleft, {licences.counts.unknown} unknown.{" "}
+            {licences.by_licence
+              .slice(0, 6)
+              .map((l) => `${l.license} ${l.packages}`)
+              .join(" · ")}
+          </p>
+          {licences.flagged.length > 0 && (
+            <ul className="plain sc-licences">
+              {licences.flagged.slice(0, 100).map((f) => (
+                <li key={`${f.repository}-${f.package}-${f.version}`}>
+                  <Badge tone={f.risk === "strong_copyleft" ? "danger" : f.risk === "weak_copyleft" ? "warning" : "neutral"}>{RISK_TEXT[f.risk]}</Badge> <code>{f.package}</code> {f.version}
+                  {f.repository ? ` · ${f.repository}` : ""}
+                  {f.licenses.length ? ` · ${f.licenses.join(", ")}` : ""}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="sc-muted small">{licences.note}</p>
+        </div>
+      )}
+    </Section>
   );
 }

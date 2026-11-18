@@ -37,6 +37,7 @@ import { designVersions, exportTokens, getDesignSystem, listDesignSystems, recor
 import { answerQuestion, askSession, cancelQuestion, declineQuestion, endSession, getAnswer, handoffSession, hookCheck, listQuestions, listSessions, registerSession, setListening } from "../core/sessions.js";
 import { checkPath, claimWork, listClaims, releaseWork, touchPath } from "../core/coordination.js";
 import { checkDesignDrift, latestDrift } from "../core/design-drift.js";
+import { exportSbom, licenceReport } from "../core/sbom.js";
 import { getReadableScope, personalScope } from "../core/scopes.js";
 import { hideAdvisory, latestAdvisories, publishAdvisory, setAdvisoryResponse, setProjectTechnologies, stackOf, TECHNOLOGIES } from "../core/advisories.js";
 import { beginDependencyScan, detectProjectStack, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, securityOverview, updateVulnerability, uploadWithAuth } from "../core/security.js";
@@ -830,6 +831,22 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
       ),
     ),
   );
+  // SBOM (CycloneDX 1.5) and the licence check, for those who see the project's vulnerability details.
+  router.get("/scopes/:slug/sbom", async (req, res, next) => {
+    try {
+      const ctx = ctxOf(req, res);
+      const q = z.object({ component: z.string().optional(), licenses: z.enum(["true", "false"]).optional() }).parse(req.query);
+      const bom = await exportSbom(ctx, String(req.params.slug), { component: q.component, licenses: q.licenses === "true" });
+      await audit(db, ctx.actor.id, "api:export_sbom", null, { wrapper: true });
+      res
+        .set("Content-Type", "application/vnd.cyclonedx+json; charset=utf-8")
+        .set("Content-Disposition", `attachment; filename="${String(req.params.slug).replace(/[^\w-]/g, "")}${q.component ? `-${q.component.replace(/[^\w-]/g, "")}` : ""}-sbom.cdx.json"`)
+        .send(JSON.stringify(bom, null, 2));
+    } catch (err) {
+      next(err);
+    }
+  });
+  router.get("/scopes/:slug/licenses", handle("check_licenses", (ctx, req) => licenceReport(ctx, String(req.params.slug), z.object({ component: z.string().optional() }).parse(req.query))));
   router.post(
     "/dependencies/upload-link",
     handle("scan_dependencies", (ctx, req) =>

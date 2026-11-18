@@ -247,7 +247,7 @@ describe("over MCP", () => {
     const names = prompts.map((p) => p.name);
     expect(names).toContain("skill-s-team");
     expect(names).not.toContain("skill-s-project");
-    expect(names.filter((n) => !n.startsWith("skill-")).sort()).toEqual(["capture", "capture-design", "check-design", "curate", "document-repo", "draft-from-paste", "explore-data", "investigate", "listen", "manage-access", "review-stale", "security-check", "start-coding", "sync-figma-design", "triage-inbox", "update-docs"]);
+    expect(names.filter((n) => !n.startsWith("skill-")).sort()).toEqual(["capture", "capture-design", "check-design", "curate", "document-repo", "draft-from-paste", "explore-data", "fix-vulnerabilities", "investigate", "listen", "manage-access", "review-stale", "security-check", "start-coding", "sync-figma-design", "triage-inbox", "update-docs"]);
     const p = await c.getPrompt({ name: "skill-s-team", arguments: { request: "check the orders" } });
     const text = (p.messages[0]!.content as { text: string }).text;
     expect(text.startsWith(SKILL_NOTE)).toBe(true);
