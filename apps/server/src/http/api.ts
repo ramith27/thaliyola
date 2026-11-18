@@ -36,6 +36,7 @@ import { SOURCE_KINDS } from "../core/connectors.js";
 import { designVersions, exportTokens, getDesignSystem, listDesignSystems, recordDesignDecision, restoreDesignVersion, updateDesignSystem } from "../core/design.js";
 import { answerQuestion, askSession, cancelQuestion, declineQuestion, endSession, getAnswer, handoffSession, hookCheck, listQuestions, listSessions, registerSession, setListening } from "../core/sessions.js";
 import { checkPath, claimWork, listClaims, releaseWork, touchPath } from "../core/coordination.js";
+import { checkDesignDrift, latestDrift } from "../core/design-drift.js";
 import { getReadableScope, personalScope } from "../core/scopes.js";
 import { hideAdvisory, latestAdvisories, publishAdvisory, setAdvisoryResponse, setProjectTechnologies, stackOf, TECHNOLOGIES } from "../core/advisories.js";
 import { beginDependencyScan, detectProjectStack, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, securityOverview, updateVulnerability, uploadWithAuth } from "../core/security.js";
@@ -562,6 +563,9 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
       ),
     ),
   );
+  // Design drift: CI or an agent reports what the code uses; the latest report shows on the Design page.
+  router.post("/scopes/:slug/design/drift", handle("check_design_drift", (ctx, req) => checkDesignDrift(ctx, String(req.params.slug), req.body)));
+  router.get("/scopes/:slug/design/drift", handle("design_drift", async (ctx, req) => ({ drift: await latestDrift(ctx, String(req.params.slug)) })));
   router.get("/scopes/:slug/design/versions", handle("design_versions", (ctx, req) => designVersions(ctx, String(req.params.slug))));
   router.post(
     "/scopes/:slug/design/restore",

@@ -146,6 +146,44 @@ ${text}
   );
 
   server.registerPrompt(
+    "check-design",
+    {
+      title: "Check the code against the design system",
+      description: "Find where the code has drifted from the recorded design system (changed values, hard-coded colours), record the report, and offer fixes.",
+      argsSchema: { fix: z.string().optional().describe("'yes' to replace hard-coded colours with tokens after showing the plan") },
+    },
+    ({ fix }) =>
+      user(`Check this repository against its design system in Thaliyola.
+
+1. git remote get-url origin and git rev-parse HEAD; get_project_context with repo to find the project, then get_design_system for it. If it has none, say so and suggest capture-design; stop.
+2. Read what the code defines, the same way capture-design does: CSS custom properties (:root and dark-mode blocks), SCSS/LESS variables, tailwind.config.*, theme files, font imports. Collect colours (name, value, dark value), spacing, radii, shadows, breakpoints and fonts by role, with the names the code uses.
+3. Find hard-coded colours in components and styles (hex, rgb(), hsl() written directly instead of a token or variable); skip the files that define the tokens, generated files, vendored code and tests. Record value, file and line.
+4. check_design_drift with the project, those tokens (only the kinds you actually looked at), the hard-coded colours, source "<repo>@<sha>" and head_sha.
+5. Report: values that differ (code vs recorded, and which looks right), tokens missing from the code or not yet recorded, and the hard-coded colours grouped by the token they should use, with paths.
+6. ${fix === "yes" ? "Show the replacement plan (file: value → token), then replace hard-coded colours that match a token exactly or nearly with that token, in the code's own style (CSS variable, Tailwind class or theme reference). Leave off-palette colours and changed values for me to decide. Run the project's lint or build afterwards." : "Ask whether to replace the hard-coded colours with their tokens (rerun with fix yes), and whether the recorded values or the code should change where they differ. Don't change anything yet."}`),
+  );
+
+  server.registerPrompt(
+    "sync-figma-design",
+    {
+      title: "Sync the design system with Figma",
+      description: "Compare a Figma file's variables and styles with the project's design system in Thaliyola, then update whichever side you choose. Needs the Figma connector.",
+      argsSchema: {
+        figma_url: z.string().describe("The Figma file (or frame) URL"),
+        direction: z.string().optional().describe("'from-figma' (default: Figma is the source) or 'to-figma'"),
+      },
+    },
+    ({ figma_url, direction }) =>
+      user(`Sync this project's design system in Thaliyola with Figma: ${figma_url}
+
+1. get_project_context (with the git remote, if in a repository) to find the project, then get_design_system for it.
+2. With the Figma connector, read the file's variables and styles (colour variables with their light and dark modes, text styles, spacing and radius variables, effect styles). If the Figma tools aren't available, say the Figma connector is needed and stop.
+3. Match them to the recorded tokens by name (Figma "Color/Primary" or "colors/primary" ↔ primary) and list: same, different (both values), only in Figma, only in Thaliyola.
+4. ${direction === "to-figma" ? "Thaliyola is the source: show the changes to make in Figma (variables to add or update, with values for each mode), and make them with the Figma tools only after I confirm." : "Figma is the source: show the plan, then after I confirm call update_design_system with the Figma values (colours with dark values from the dark mode, roles kept from what's recorded), source set to the Figma URL and a note. Don't remove tokens that are only in Thaliyola unless I say so."}
+5. Record a design decision (record_design_decision) only if I state why something changed. Summarise what changed on each side.`),
+  );
+
+  server.registerPrompt(
     "listen",
     {
       title: "Listen for questions from other sessions",

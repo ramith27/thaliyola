@@ -25,3 +25,6 @@
 .design-editor textarea, .decision-form textarea, .decision-form input, .design-editor input, .design-editor select { width: 100%; }
 .version-list li { padding: 0.2rem 0; }
 @media (max-width: 860px) { .swatches { grid-template-columns: minmax(0, 1fr); } }
+.drift-panel { margin: 0.5rem 0 1.25rem; }
+.drift-details h3 { font-size: 0.9rem; margin: 0.8rem 0 0.3rem; }
+.drift-details li { margin: 0.2rem 0; overflow-wrap: anywhere; }

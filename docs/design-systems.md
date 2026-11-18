@@ -70,6 +70,27 @@ Anyone who can read a project can read its design. A project can only be based o
 
 The same exports are buttons on the Design page and at `GET /api/scopes/:slug/design/export?format=…`.
 
+## Checking the code against the design (drift)
+
+The recorded design is only useful while the code still matches it. A **drift check** compares what the code really uses with the project's effective design system and keeps the report:
+
+- **Values that differ:** a colour, spacing, radius, shadow, breakpoint or font the code defines differently (light and dark separately). `4px` and `0.25rem` count as the same, and so does a font stack that still starts from the recorded font.
+- **Not on both sides:** tokens recorded but not in the code, and tokens in the code but not recorded. Only the kinds the check looked at are compared.
+- **Hard-coded colours:** colours written directly in components and styles instead of a token, each with the token it matches exactly, the one it's probably meant to be (close in colour), or "not in the palette".
+
+Two ways to run it:
+
+| | How |
+|---|---|
+| In CI, on every merge | The CI templates on Connect (and in [`integrations/ci`](https://github.com/ramith27/thaliyola/tree/main/integrations/ci)) include `curl -fsS <server>/design-drift.mjs -o /tmp/d.mjs && THALIYOLA_URL=<server> node /tmp/d.mjs`. The script has no dependencies: it reads CSS custom properties (light and dark blocks) and finds hex and `rgb()`/`hsl()` colours in source files, then sends them. `--project <slug>` when the repository isn't added to a project, `--dir src,styles` to limit where it looks, `--fail-on-drift` to fail the build. It never fails the build otherwise. Its token needs Contributor in the project. |
+| With Claude | `/mcp__thaliyola__check-design` reads the design the same way capture-design does (Tailwind and theme files too), records the report and offers fixes; `check-design yes` replaces hard-coded colours with their tokens after showing the plan. |
+
+The latest report shows as **Code vs design** on the Design page, and `get_project_context` tells coding agents about it ("don't add more hard-coded colours"). API: `POST /api/scopes/:slug/design/drift` (tokens, hardcoded, source, head_sha), `GET /api/scopes/:slug/design/drift`; MCP: `check_design_drift`. The last 20 reports per project are kept.
+
+## Figma
+
+`/mcp__thaliyola__sync-figma-design <figma url> [from-figma|to-figma]` compares a Figma file's variables and styles (colour variables with light and dark modes, text styles, spacing and radius variables, effects) with the project's design system, lists what's the same, different, or only on one side, and after you confirm updates Thaliyola from Figma (`source` set to the Figma URL) or Figma from Thaliyola. It needs the Figma connector in the same Claude client; Thaliyola itself never calls Figma.
+
 ## Contrast checks
 
 Text, muted, primary, accent and status colours are checked against the `background` colour (or `surface`) in light mode and, where both have dark values, in dark mode. Anything under WCAG AA's 4.5:1 is flagged on the page and in the result of every `update_design_system`. Only hex and `rgb()` values can be measured; `oklch()`, `hsl()` and `var()` values are skipped.
@@ -105,5 +126,8 @@ Text, muted, primary, accent and status colours are checked against the `backgro
 | `update_design_system` | Merge, replace or remove tokens; set rules, `based_on`, `source` and a note |
 | `record_design_decision` | A design decision (context, options, choice, consequences) as a decision article tagged `design` |
 | prompt `capture-design` | Captures an app's design from its code (optionally `based_on`) |
+| `check_design_drift` | Compares the code's tokens and hard-coded colours with the system; keeps the report |
+| prompt `check-design` | Runs the drift check from the code, optionally fixing hard-coded colours |
+| prompt `sync-figma-design` | Syncs with a Figma file, either way |
 
 API: `GET/PUT /api/scopes/:slug/design`, `GET /api/scopes/:slug/design/export?format=`, `GET /api/scopes/:slug/design/versions`, `POST /api/scopes/:slug/design/restore`, `POST /api/scopes/:slug/design/decisions`, `GET /api/design-systems` (every system you can read, for choosing a base).

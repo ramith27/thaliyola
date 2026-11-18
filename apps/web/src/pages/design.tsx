@@ -132,6 +132,8 @@ export function DesignPage({ slug }: { slug: string }) {
           </Notice>
         )}
 
+        {!empty && <DriftPanel scope={data.scope} />}
+
         {!!t.colors?.length && (
           <section>
             <h2>Colour</h2>
@@ -518,6 +520,106 @@ function DesignEditor({ design, onSaved }: { design: Design; onSaved: () => void
             ))}
           </ul>
         </details>
+      )}
+    </section>
+  );
+}
+
+interface Drift {
+  changed: { kind: string; name: string; stored: string; code: string; mode?: "dark" }[];
+  missing_in_code: { kind: string; name: string; stored: string }[];
+  new_in_code: { kind: string; name: string; code: string }[];
+  hardcoded: { value: string; file: string; line?: number; count?: number; suggestion: string; nearest: { name: string; distance: number } | null }[];
+  counts: { changed: number; missing_in_code: number; new_in_code: number; hardcoded: number; off_palette: number };
+  differences: number;
+  source: string;
+  checked_at: string;
+  checked_by: string | null;
+}
+
+/** The latest code-vs-design check (from CI or an agent's check-design), or how to run one. */
+function DriftPanel({ scope }: { scope: string }) {
+  const { data, reload } = useApi<{ drift: Drift | null }>(`/scopes/${encodeURIComponent(scope)}/design/drift`);
+  useLiveRefresh(reload);
+  const [open, setOpen] = useState(false);
+  if (!data) return null;
+  const d = data.drift;
+  if (!d)
+    return (
+      <section className="drift-panel">
+        <h2>Code vs design</h2>
+        <p className="muted small">
+          Not checked yet. Run <code>/mcp__thaliyola__check-design</code> in the app's repository, or add the design check to CI (<a href={href("/guide")}>Guide</a> → Design systems).
+        </p>
+      </section>
+    );
+  const c = d.counts;
+  return (
+    <section className="drift-panel">
+      <h2>Code vs design</h2>
+      {d.differences === 0 ? (
+        <Notice kind="ok">The code matched this design system when it was last checked, {formatDate(d.checked_at)}.</Notice>
+      ) : (
+        <Notice kind="warn">
+          At the last check ({formatDate(d.checked_at)}{d.checked_by ? ` by ${d.checked_by}` : ""}): <strong>{c.changed}</strong> values differ from the code, <strong>{c.hardcoded}</strong> hard-coded colours
+          ({c.off_palette} off the palette), {c.missing_in_code} recorded but not in the code, {c.new_in_code} in the code but not recorded.{" "}
+          <button className="btn btn-small btn-ghost" onClick={() => setOpen((o) => !o)}>
+            {open ? "Hide details" : "Show details"}
+          </button>
+        </Notice>
+      )}
+      {open && d.differences > 0 && (
+        <div className="drift-details small">
+          {d.changed.length > 0 && (
+            <>
+              <h3>Different in the code</h3>
+              <ul className="plain">
+                {d.changed.map((x) => (
+                  <li key={`${x.kind}-${x.name}-${x.mode ?? ""}`}>
+                    {x.kind} <strong>{x.name}</strong>
+                    {x.mode ? " (dark)" : ""}: recorded <code>{x.stored}</code>, code <code>{x.code}</code>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {d.hardcoded.length > 0 && (
+            <>
+              <h3>Hard-coded colours</h3>
+              <ul className="plain">
+                {d.hardcoded.slice(0, 50).map((h) => (
+                  <li key={`${h.file}-${h.value}`}>
+                    <code>
+                      {h.file}
+                      {h.line ? `:${h.line}` : ""}
+                    </code>{" "}
+                    <code>{h.value}</code>
+                    {h.count && h.count > 1 ? ` ×${h.count}` : ""} → {h.suggestion}
+                  </li>
+                ))}
+                {d.hardcoded.length > 50 && <li className="muted">and {d.hardcoded.length - 50} more</li>}
+              </ul>
+            </>
+          )}
+          {(d.new_in_code.length > 0 || d.missing_in_code.length > 0) && (
+            <>
+              <h3>Not on both sides</h3>
+              <ul className="plain">
+                {d.new_in_code.slice(0, 30).map((x) => (
+                  <li key={`n-${x.kind}-${x.name}`}>
+                    In the code only: {x.kind} <code>{x.name}</code> <code>{x.code}</code>
+                  </li>
+                ))}
+                {d.missing_in_code.slice(0, 30).map((x) => (
+                  <li key={`m-${x.kind}-${x.name}`}>
+                    Recorded only: {x.kind} <strong>{x.name}</strong> <code>{x.stored}</code>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {d.source && <p className="muted">From {d.source}</p>}
+        </div>
       )}
     </section>
   );

@@ -26,6 +26,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Check the code against the design system
+        env:
+          THALIYOLA_TOKEN: ${{ secrets.THALIYOLA_TOKEN }}
+        run: curl -fsS https://thaliyola.example.com/design-drift.mjs -o /tmp/thaliyola-design-drift.mjs && THALIYOLA_URL=https://thaliyola.example.com node /tmp/thaliyola-design-drift.mjs || true
       - run: npm install -g @anthropic-ai/claude-code
       - name: Update documentation
         env:

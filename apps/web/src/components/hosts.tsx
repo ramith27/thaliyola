@@ -191,8 +191,15 @@ export function dependencyUpload(mcpUrl: string) {
   );
 }
 
+/** Compares the code's design tokens and hard-coded colours with the project's design system (never fails the build). */
+export function designCheck(mcpUrl: string) {
+  const base = mcpUrl.replace(/\/mcp$/, "");
+  return `curl -fsS ${base}/design-drift.mjs -o /tmp/thaliyola-design-drift.mjs && THALIYOLA_URL=${base} node /tmp/thaliyola-design-drift.mjs || true`;
+}
+
 export function ciTemplates(mcpUrl: string) {
   const deps = dependencyUpload(mcpUrl);
+  const design = designCheck(mcpUrl);
   const setup = `claude mcp add --transport http thaliyola ${mcpUrl} --header "Authorization: Bearer $THALIYOLA_TOKEN"`;
   const runDocs = `claude -p "/mcp__thaliyola__update-docs" --allowedTools "${ALLOWED}"`;
   return [
@@ -224,6 +231,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Check the code against the design system
+        env:
+          THALIYOLA_TOKEN: \${{ secrets.THALIYOLA_TOKEN }}
+        run: ${design}
       - run: npm install -g @anthropic-ai/claude-code
       - name: Update documentation
         env:
@@ -249,6 +260,7 @@ jobs:
   script:
     - |
       ${deps}
+    - ${design}
     - npm install -g @anthropic-ai/claude-code
     - '${setup}'
     - '${runDocs}'
@@ -270,6 +282,7 @@ jobs:
           script:
             - |
               ${deps}
+            - ${design}
             - npm install -g @anthropic-ai/claude-code
             - '${setup}'
             - '${runDocs}'
@@ -286,7 +299,7 @@ export function CiDocs({ mcpUrl }: { mcpUrl: string }) {
   return (
     <div className="tl-stack">
       <p className="muted small">
-        After the first <code>/mcp__thaliyola__document-repo</code>, a CI job can keep the docs and the security dashboard current on every merge.
+        After the first <code>/mcp__thaliyola__document-repo</code>, a CI job can keep the docs, the security dashboard and the design check current on every merge.
       </p>
       <ul className="tl-list small">
         <li>

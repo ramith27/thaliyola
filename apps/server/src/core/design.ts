@@ -323,6 +323,27 @@ export async function designSummary(ctx: RequestContext, slug: string) {
     based_on: d.based_on?.slug ?? null,
     design_decisions: d.decisions.filter((x: { type: string }) => x.type === "decision").slice(0, 8).map((x: { id: string; title: string }) => ({ id: x.id, title: x.title })),
     hint: "Use these tokens rather than new values; get_design_system has the full system (spacing, type scale, components, rules) and exports as CSS or Tailwind.",
+    ...(await driftLine(ctx, slug)),
+  };
+}
+
+/** The latest drift check, in one line for the project context. */
+async function driftLine(ctx: RequestContext, slug: string) {
+  const r = (
+    await ctx.db.query<{ differences: number; counts: Record<string, number>; checked_at: Date }>(
+      `SELECT d.differences, d.report->'counts' AS counts, d.checked_at FROM design_drift_reports d JOIN scopes s ON s.id = d.scope_id
+        WHERE s.slug = $1 ORDER BY d.checked_at DESC LIMIT 1`,
+      [slug],
+    )
+  ).rows[0];
+  if (!r) return {};
+  const c = r.counts ?? {};
+  const day = new Date(r.checked_at).toISOString().slice(0, 10);
+  return {
+    drift:
+      r.differences === 0
+        ? `The code matched the design system at the last check (${day}).`
+        : `Last check (${day}): ${c.changed ?? 0} values differ from the code, ${c.hardcoded ?? 0} hard-coded colours (${c.off_palette ?? 0} off the palette). Don't add more; check_design_drift has details.`,
   };
 }
 
