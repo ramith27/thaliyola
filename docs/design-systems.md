@@ -2,6 +2,8 @@
 
 Every project, and the Team and Library spaces, can hold a **design system**: the colours, fonts, spacing and rules its UI is built from, stored as structured tokens. Projects share a design by being **based on** another system, usually the Library's. They inherit everything from it and override only what differs.
 
+![A project's design system: overridden colours (primary, accent) and colours inherited from the Library, with contrast checks](images/design.png)
+
 ## How a project gets a design
 
 There are three ways, and they combine:
@@ -35,6 +37,8 @@ The **effective** design of a project is built from the farthest base inwards. E
 | Icons, voice, accessibility notes | The nearest system that sets them wins. |
 | Rules (principles) | All layers are shown, the project's own rules first, then the base's. |
 | Design decisions | Decisions tagged `design`, and component, UX pattern, screen and token pages from every layer, are listed together. |
+
+On the Design page, each colour says where it comes from: *from Library* when inherited, *Order service v2 override* when the project replaced it.
 
 What this means in practice:
 - **Change the Library, and every project based on it changes**: the next `get_design_system`, export or page view uses the new values. The Library's Design page lists the projects that use it.

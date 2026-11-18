@@ -4,6 +4,8 @@ A Claude session can ask another session a question and get the answer back. The
 
 Thaliyola only stores questions and answers and wakes up waiting sessions. Every answer comes from a Claude session or a person; the server never answers anything itself.
 
+![The Sessions page: who can be asked (listening or busy), and asking from the browser](images/sessions.png)
+
 ## Set up (Claude Code)
 
 1. Install the Thaliyola plugin with its environment variables (see [`integrations/README.md`](../integrations/README.md)):

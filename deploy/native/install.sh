@@ -48,7 +48,14 @@ if [ -z "$(psql_su "-c \"SELECT 1 FROM pg_roles WHERE rolname = '$DB_USER'\"")" 
   psql_su "-c \"CREATE ROLE $DB_USER LOGIN PASSWORD '$NEW_PASSWORD'\""
 fi
 if [ -z "$(psql_su "-c \"SELECT 1 FROM pg_database WHERE datname = '$DB_NAME'\"")" ]; then
-  psql_su "-c \"CREATE DATABASE $DB_NAME OWNER $DB_USER\""
+  # Always UTF-8: the server's default template may be SQL_ASCII, and Thaliyola needs UTF-8 (normalize(), redaction).
+  # The C locale works with any encoding and every distribution.
+  psql_su "-c \"CREATE DATABASE $DB_NAME OWNER $DB_USER ENCODING 'UTF8' LC_COLLATE 'C' LC_CTYPE 'C' TEMPLATE template0\""
+fi
+ENCODING="$(psql_su "-c \"SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname = '$DB_NAME'\"")"
+if [ "$ENCODING" != "UTF8" ]; then
+  echo "Database $DB_NAME uses $ENCODING; Thaliyola needs UTF8. Convert it first (see docs/install.md#the-database-must-be-utf-8)." >&2
+  exit 1
 fi
 # pgvector needs a superuser to install; the app's migrations then find it present.
 psql_su "-d $DB_NAME -c \"CREATE EXTENSION IF NOT EXISTS vector\""

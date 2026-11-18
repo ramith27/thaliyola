@@ -6,9 +6,15 @@ A shared team knowledge base exposed as a remote [MCP](https://modelcontextproto
 
 The server holds no LLM. Clients (Claude Code, claude.ai, scheduled agents) do the reasoning; Thaliyola stores, searches, validates and versions. Agent-written content goes through human review before it is published.
 
-| Dashboard | Knowledge graph | Project view for a frontend session |
+| Home | Knowledge graph | Project |
 |---|---|---|
-| ![Dashboard](docs/images/dashboard.png) | ![Knowledge graph](docs/images/graph.png) | ![Project view](docs/images/project-frontend.png) |
+| ![Home: search, setup checklist and spaces](docs/images/home.png) | ![Knowledge graph](docs/images/graph.png) | ![A project's articles by folder](docs/images/project-frontend.png) |
+| **Design system** (inherits from the Library) | **Sessions** asking each other | **Security** |
+| ![Design system with inherited and overridden colours and contrast checks](docs/images/design.png) | ![Sessions: who can be asked, listening or busy](docs/images/sessions.png) | ![Security: vulnerabilities needing attention](docs/images/security.png) |
+| **Guide**: every feature and command | **On a phone** | |
+| ![Guide: what's switched on and every command](docs/images/guide.png) | <img src="docs/images/design-phone.png" alt="Design system on a phone" width="220"> | |
+
+New here? Open **Guide** in the app (`#/guide`) for every feature, whether it's switched on, how to use it and every command, or read [`docs/`](docs/README.md).
 
 ## Concepts
 
@@ -181,6 +187,9 @@ The server also serves a web UI at `/` for people:
 - **Links:** copy a link to any article section from the icon beside its heading, or share an item with the Share button (the native share sheet on phones).
 - **Files and links:** attach screenshots and files, add Figma/PR/Sentry links, and share project items to the library.
 - **Connect:** after signing in, people see their access and roles (role names, not keys). They can create a token in place and copy ready-made setup for Claude Code (global or per repository, with the project and component chosen from lists), claude.ai and other MCP clients. The page also lists the workflow prompts and all tools. A home-page banner points new users there until they connect.
+- **Guide (`#/guide`):** every feature with whether it's switched on in this installation, how to turn it on, how to use it and every command for it (Claude Code slash commands, MCP prompts and tools, the server CLI, pages), searchable, with every prompt and tool listed live from the server. In the sidebar footer, the Help menu and Go to. `GET /api/guide` returns the on/off state (booleans only, never secrets) and the catalog.
+- **Design system (`#/scope/:slug/design`):** swatches with light and dark values and contrast checks, type, spacing, corners, shadows, breakpoints, components, rules and design decisions, marking what is inherited from the base system; edit as JSON with a base picker and version history; export buttons. See [Design systems](#design-systems).
+- **Sessions (`#/sessions`):** who can be asked (listening, busy or offline), questions to and from you with answer, decline and cancel, and asking a session from the browser. See [Sessions asking each other](#sessions-asking-each-other).
 - **Skills (`#/skills`):** **My skills** lists the Claude skills your roles, teams and projects give you, with badges for scripts, pre-approved tools, needed connectors and a newer version than the one you downloaded, **Add to my Claude** (a zip with upload steps) and **Report a problem**, plus how your skills reach Claude. Skills managers, reviewers and Auditors also get **All skills** (filters by collection, status and waiting for review, or one project's own skills from its settings; collections with **Give all to…**), **Sources** and **Usage**. A skill's page has Overview (front matter, SKILL.md as source or rendered, flags, connectors, why you have it), Files (shared guidance, scripts and reviewer-only files marked; invisible characters shown), Versions (raw-text diffs with flags, approve with the required checks, reject with a reason, roll back, release a hold, detach or reattach), Who gets it (everyone, an organisation role, a team, a project and its sub-projects, or a project role, with RolePicker and project picker), Usage and Problem reports. **Import skills** (`#/skills/import`) previews an upload or a repository source before importing, and each import has a report (`#/skills/imports/:id`). Review › Skills, Admin › System › Skills for Claude, Account › Skills for Claude and the Connect page's "Your skills in Claude" card (Claude Desktop through the connector, Claude Code through the sync) complete it. See [Skills for Claude](#skills-for-claude).
 - **Read and edit:** articles and findings. Edits by people who may review in the scope (Reviewers, Moderators, Project admins) or who hold Publish directly publish immediately; everyone else's edits become proposals.
 - **Writing guide:** the article and finding editors show, beside the editor, what each section of that type should contain (from the server's templates, `GET /api/writing-guide/:kind/:type`), with a tick on the sections already written, and a short checklist before saving. The Writing guide button hides or shows it; the choice is remembered in the browser. On narrow screens it sits above the form and starts hidden.
@@ -626,7 +635,7 @@ Re-importing creates new versions only for skills that changed, and they wait fo
 
 ## Running locally
 
-Requirements: Node 22, pnpm 9, and either Docker or Postgres 16 with [pgvector](https://github.com/pgvector/pgvector).
+Requirements: Node 22, pnpm 9, and either Docker or Postgres 16 with [pgvector](https://github.com/pgvector/pgvector) and a **UTF-8** database. Full guide: [`docs/install.md`](docs/install.md).
 
 **With Docker**
 
@@ -641,7 +650,7 @@ docker compose exec server node dist/scripts/seed.js   # optional demo data
 
 On Debian or Ubuntu, `deploy/native/install.sh` sets up everything:
 - installs Node 22 and Postgres 16 with pgvector;
-- creates a `thaliyola` service user and database;
+- creates a `thaliyola` service user and a UTF-8 database (Thaliyola needs UTF-8; see [`docs/install.md`](docs/install.md#the-database-must-be-utf-8) to check or convert an existing one);
 - builds the server and UI, deploys them to `/opt/thaliyola`, and runs them as the `thaliyola` systemd service on `127.0.0.1:8080`.
 
 ```sh
@@ -820,5 +829,7 @@ apps/server/
 - ~~Workflow prompts, Claude Code plugin, backups, promotion and duplicate suggestions~~ (done)
 - ~~Members-only projects~~ (done)
 - ~~S3-compatible file storage~~ (done)
+- ~~Security: dependency scanning, worldwide critical advisories, published alerts~~ (done)
+- ~~Design systems shared between projects; sessions asking each other; the Guide page~~ (done)
 - Next: Trello cards for recurring root causes (as a scheduled agent recipe)
 - **M5** Integrations with existing agent skills, Slack and Sentry

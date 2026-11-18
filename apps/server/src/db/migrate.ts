@@ -13,6 +13,9 @@ const MIGRATION_LOCK = 7_402_210;
  * once: an advisory lock lets one migrate while the others wait, and they then find nothing left to apply.
  */
 export async function migrate(db: Db, log: (msg: string) => void = () => {}): Promise<void> {
+  // Thaliyola needs a UTF-8 database (normalize() and redaction fail otherwise); say so plainly instead of failing later.
+  const enc = (await db.query<{ server_encoding: string }>("SHOW server_encoding")).rows[0]?.server_encoding;
+  if (enc && enc !== "UTF8") console.warn(`[migrate] WARNING: the database uses ${enc}; Thaliyola needs UTF8. Convert it: see docs/install.md#the-database-must-be-utf-8`);
   const lock = await db.connect();
   try {
     await lock.query("SELECT pg_advisory_lock($1)", [MIGRATION_LOCK]);
