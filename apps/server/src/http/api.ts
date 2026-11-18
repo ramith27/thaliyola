@@ -1412,6 +1412,37 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
     }),
   );
 
+  // ---- Guide: what's switched on here (booleans only, never secrets) and every command ----------------
+  router.get(
+    "/guide",
+    handle("guide", async (ctx) => {
+      const sec = settings.security;
+      const src = settings.sources;
+      return {
+        status: {
+          auth_mode: settings.authMode,
+          oauth: settings.authMode === "local" && !!settings.publicUrl,
+          public_url: !!settings.publicUrl,
+          semantic_search: !!embedder,
+          email: settings.mailTransport === "smtp",
+          slack_channel: !!settings.slackWebhookUrl,
+          file_store: settings.s3 ? "s3" : "local",
+          sources: !!src?.enabled,
+          slack_source: !!src?.slackToken,
+          notion_source: !!src?.notionToken,
+          web_search_source: !!src?.tavilyKey,
+          dependency_scan: !!sec?.enabled,
+          advisory_feed: !!sec?.feed,
+          nvd_key: !!sec?.nvdKey,
+          github_token: !!sec?.githubToken,
+          gitlab_token: !!sec?.gitlabToken,
+        },
+        admin: isAdmin(ctx),
+        catalog: await mcpCatalog(ctx),
+      };
+    }),
+  );
+
   // ---- Releases and the feature catalog (What's new) -------------------------------
 
   const versionParam = z.string().max(20);

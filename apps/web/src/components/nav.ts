@@ -8,7 +8,7 @@
 import type { IconName } from "./icons";
 import { can, type MeLike, type ScopeLike } from "./permissions";
 
-export type NavId = "home" | "review" | "inbox" | "sessions" | "security" | "graph" | "metrics" | "teams" | "skills" | "connect" | "whats-new" | "trash" | "admin" | "account" | "search";
+export type NavId = "home" | "review" | "inbox" | "sessions" | "security" | "graph" | "metrics" | "teams" | "skills" | "connect" | "whats-new" | "guide" | "trash" | "admin" | "account" | "search";
 
 /** What a predicate may look at. `current` is the project or space the page belongs to (page meta), if any. */
 export interface NavContext {
@@ -57,6 +57,7 @@ export const FOOTER_NAV: NavItem[] = [
     keywords: "what's new whats new release notes releases changelog features catalog version how to",
     activeOn: ["whats-new"],
   },
+  { id: "guide", label: "Guide", icon: "book", href: "#/guide", keywords: "guide help how to use features commands slash commands prompts tools cli enable settings", activeOn: ["guide"] },
   { id: "trash", label: "Trash", icon: "trash", href: "#/trash", keywords: "trash deleted restore", activeOn: ["trash"] },
   {
     id: "admin",
@@ -245,7 +246,7 @@ export interface GoToItem {
 
 /** Every destination the overlay offers before typing, each behind the same check as its other entry points. */
 export const GO_TO: GoToItem[] = [
-  ...NAV.filter((n) => n.id !== "admin" && n.id !== "connect" && n.id !== "trash" && n.id !== "whats-new").map(({ id, label, icon, href, keywords, show }) => ({ id, label, icon, href, keywords, show })),
+  ...NAV.filter((n) => n.id !== "admin" && n.id !== "connect" && n.id !== "trash" && n.id !== "whats-new" && n.id !== "guide").map(({ id, label, icon, href, keywords, show }) => ({ id, label, icon, href, keywords, show })),
   { id: "sources", label: "Sources", icon: "rss", href: "#/sources", keywords: "sources feeds rss watched pages slack notion web search" },
   { id: "trash", label: "Trash", icon: "trash", href: "#/trash", keywords: "trash deleted restore" },
   { id: "connect", label: "Connect Claude", icon: "plug", href: "#/connect", keywords: "connect claude connector mcp token setup tools" },
@@ -256,6 +257,7 @@ export const GO_TO: GoToItem[] = [
     href: "#/whats-new",
     keywords: "what's new whats new release notes releases changelog features catalog version how to",
   },
+  { id: "guide", label: "Guide: features and commands", icon: "book", href: "#/guide", keywords: "guide help how to use features commands slash commands prompts tools cli enable settings listen busy ask design" },
   { id: "account", label: "Account and tokens", icon: "user", href: "#/account", keywords: "account tokens password notifications my access my roles your access" },
   {
     id: "roles",

@@ -614,6 +614,12 @@ function Sidebar({
             </a>
           </li>
           <li>
+            <a className="nav-link" href="#/guide" aria-current={navId === "guide" ? "page" : undefined}>
+              <I name="book" size={16} />
+              <span className="nav-label">Guide</span>
+            </a>
+          </li>
+          <li>
             <a className="nav-link" href="#/trash" aria-current={navId === "trash" ? "page" : undefined}>
               <I name="trash" size={16} />
               <span className="nav-label">Trash</span>
@@ -916,6 +922,7 @@ function HelpMenu({
         align="end"
         items={[
           whatsNewItem(me),
+          { id: "guide", label: "Guide: features and commands", icon: "book", hint: "What's on here, how to use each feature, every command", href: "#/guide" },
           { type: "separator" },
           { id: "shortcuts", label: "Keyboard shortcuts", icon: "keyboard", shortcut: "?", onSelect: onShortcuts },
           { id: "glossary", label: "What the words mean", icon: "quote", onSelect: onGlossary },

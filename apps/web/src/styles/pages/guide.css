@@ -1,0 +1,19 @@
+/* Guide: features, how to turn them on, and every command */
+.guide-search { width: 100%; max-width: 640px; margin: 0.4rem 0 0.8rem; }
+.guide-toc { display: flex; flex-wrap: wrap; gap: 0.35rem 0.9rem; margin-bottom: 1rem; font-size: 0.88rem; }
+.guide-status, .guide-feature { margin-bottom: 1rem; }
+.status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.35rem 1rem; font-size: 0.88rem; }
+.status-grid li { display: flex; align-items: center; gap: 0.45rem; }
+.status-grid .presence { margin-top: 0; }
+.guide-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.6rem; }
+.guide-head h2 { margin: 0.1rem 0 0.4rem; }
+.guide-feature h3 { font-size: 0.95rem; margin: 0.9rem 0 0.35rem; }
+.guide-commands td { vertical-align: top; }
+.guide-commands code { overflow-wrap: anywhere; }
+.guide-kind { width: 7.5rem; white-space: nowrap; }
+.guide-links { display: flex; gap: 1rem; margin-top: 0.6rem; }
+@media (max-width: 860px) {
+  .guide-kind { width: auto; }
+  .guide-commands tr { display: block; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+  .guide-commands td { display: block; border: 0; padding: 0.15rem 0; }
+}

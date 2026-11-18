@@ -25,6 +25,7 @@ import { InboxPage, SourcesPage } from "./pages/sources";
 import { SecurityPage, VulnerabilityPage } from "./pages/security";
 import { SessionsPage } from "./pages/sessions";
 import { DesignPage } from "./pages/design";
+import { GuidePage } from "./pages/guide";
 import { HistoryPage } from "./pages/history";
 import { Layout } from "./components/Layout";
 import { ProjectPage, ScopePage, SearchPage } from "./pages/browse";
@@ -270,6 +271,9 @@ function SignedInApp({ route, onSignOut }: { route: Route; onSignOut: () => Prom
       break;
     case "sessions":
       page = <SessionsPage route={route} scopes={scopes} />;
+      break;
+    case "guide":
+      page = <GuidePage />;
       break;
     case "whats-new":
       page = <WhatsNewPage />;

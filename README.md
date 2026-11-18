@@ -469,7 +469,7 @@ Thaliyola can keep a living wiki for every repository, written by your own codin
 
 Each project (and Team and Library) can keep its design system as structured tokens, so every session and project builds UI with the same values:
 - **What it holds:** colours (name, value, dark-mode value, role, when to use it), fonts and the type scale, spacing, corner radii, shadows, breakpoints, the shared UI components (name, purpose, path), icon style, voice and accessibility notes, and the design rules in Markdown. Every change keeps a version you can restore.
-- **Shared across projects:** a project can be **based on** another system, usually the Library's, and override only what differs by name (e.g. its own accent colour). The Design page shows what is inherited and which projects use a system.
+- **Shared across projects:** a project can be **based on** another system, usually the Library's (Design → Edit → *Based on*, or `update_design_system` with `based_on`). Its effective design is built from the farthest base inwards: colours, spacing, radii, shadows, breakpoints, components and type steps merge **by name** (the project's `primary` replaces the Library's `primary`), fonts merge by role, and rules from every layer are shown. Changing the Library changes every project based on it; a project overrides inherited entries but can't delete them. Chains go up to 5 deep and can't loop. The Design page shows what is inherited and which projects use a system. Full guide: [`docs/design-systems.md`](docs/design-systems.md).
 - **Design decisions:** decision articles tagged `design` (`record_design_decision`, or *Record a decision* on the page) appear with the system, alongside component, UX pattern, screen and token pages. They publish directly for project owners and go to review for others.
 - **For coding agents:** `get_project_context` includes a short summary (palette, fonts, decisions), and `get_design_system` returns the full system or exports it as CSS custom properties (with dark mode), a Tailwind `theme.extend`, W3C design tokens or JSON. In Claude Code, `/mcp__thaliyola__capture-design` reads the real values from the code (CSS variables, Tailwind config, theme files, fonts, components) and records them with `update_design_system`.
 - **Contrast checks:** text, primary and status colours are checked against the background in light and dark mode (WCAG AA, 4.5:1), on the page and in every update's result.
@@ -482,7 +482,16 @@ A Claude session can ask another session, yours or a teammate's on any machine, 
 - **Asking:** `ask_session` (or `/thaliyola:ask <who> <question>`) goes to a session handle, a person's email (any of their sessions) or a project or project/repository (whoever works there). It waits up to 45 seconds for the answer; otherwise it returns a ticket, and the answer is handed over on the asker's next prompt (plugin) or with `get_answer`.
 - **Answering:** the server can't push to a session, so sessions pull. A **listening** session (`/mcp__thaliyola__listen`, or `/thaliyola:listen` with the plugin) answers within seconds; with the plugin the wait happens in a hook and costs no tokens. A **busy** session is handed waiting questions by its Stop hook when it finishes its task. A **person** can answer, decline or ask on the **Sessions** page. Answers can be saved as findings for review.
 - **Safety:** you can ask only sessions in projects you can read; `private` sessions take questions from their owner's own sessions only. Questions and answers are redacted, treated as data rather than instructions, limited to 8,000 characters and 30 questions an hour per session, and expire after 30 minutes by default. Owners are notified when a question waits more than 2 minutes or nobody is online to take it.
-- MCP tools: `register_session`, `list_sessions`, `ask_session`, `get_answer`, `wait_for_questions`, `answer_question`, `decline_question`; the `listen` prompt. API: `/api/agent-sessions`, `/api/agent-sessions/check` (for hooks), `/api/questions`.
+- **Commands (Claude Code plugin):**
+
+  | Command | What it does |
+  |---|---|
+  | `/thaliyola:ask <who> <question>` | Ask a session handle, a person's email or a project/repository; waits up to 45 s, else the answer arrives on your next prompt |
+  | `/thaliyola:listen` | Answer other sessions' questions whenever this one would go idle (the wait costs no tokens; stops after about an hour of quiet) |
+  | `/thaliyola:busy` | Stop listening; questions are still handed over when a task finishes |
+  | `/mcp__thaliyola__listen` | Listener for agents without the plugin |
+
+- MCP tools: `register_session`, `list_sessions`, `ask_session`, `get_answer`, `wait_for_questions`, `answer_question`, `decline_question`; the `listen` prompt. API: `/api/agent-sessions`, `/api/agent-sessions/check` (for hooks), `/api/questions`. Full guide: [`docs/sessions.md`](docs/sessions.md).
 
 ## Security: vulnerabilities
 
