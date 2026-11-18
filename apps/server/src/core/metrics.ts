@@ -98,8 +98,39 @@ export async function successMetrics(ctx: RequestContext, opts: { days?: number 
   );
 
   const rate = (n: number, d: number) => (d ? Math.round((n / d) * 1000) / 10 : null);
+  // Sessions helping each other (questions in projects the caller can read, or their own): measured, not estimated.
+  const sessions = (
+    await db.query(
+      `SELECT count(DISTINCT coalesce(q.group_id, q.id))::int AS asked,
+              count(*) FILTER (WHERE q.status = 'answered' AND q.kind = 'question')::int AS answered,
+              count(*) FILTER (WHERE q.status = 'answered' AND q.kind = 'question' AND q.answered_by_session_id IS NOT NULL)::int AS answered_by_sessions,
+              count(*) FILTER (WHERE q.status = 'answered' AND q.kind = 'question' AND q.answered_by_session_id IS NULL)::int AS answered_by_people,
+              count(*) FILTER (WHERE q.status = 'answered' AND q.kind = 'question' AND q.answered_at - q.created_at <= interval '45 seconds')::int AS within_wait,
+              count(*) FILTER (WHERE q.status = 'declined')::int AS declined,
+              count(*) FILTER (WHERE q.status = 'expired')::int AS expired,
+              count(*) FILTER (WHERE q.saved_item_id IS NOT NULL)::int AS saved_as_findings,
+              count(*) FILTER (WHERE q.kind = 'handoff')::int AS handoffs,
+              count(*) FILTER (WHERE q.kind = 'handoff' AND q.status = 'answered')::int AS handoffs_accepted,
+              round((extract(epoch FROM percentile_cont(0.5) WITHIN GROUP (ORDER BY q.answered_at - q.created_at) FILTER (WHERE q.status = 'answered' AND q.kind = 'question')))::numeric)::int AS median_answer_seconds,
+              count(DISTINCT q.from_user_id)::int AS people_asking
+         FROM session_questions q LEFT JOIN agent_sessions ts ON ts.id = q.to_session_id
+        WHERE q.created_at > now() - make_interval(days => $1)
+          AND ($2::uuid[] IS NULL OR q.from_user_id = $3 OR q.to_user_id = $3 OR ts.user_id = $3 OR coalesce(q.to_scope_id, ts.scope_id) = ANY($2))`,
+      [days, readable, ctx.actor.id],
+    )
+  ).rows[0];
+  const claims = (
+    await db.query(
+      `SELECT count(DISTINCT c.session_id)::int AS sessions_claiming, count(*)::int AS files_claimed
+         FROM work_claims c JOIN agent_sessions s ON s.id = c.session_id
+        WHERE c.created_at > now() - make_interval(days => $1) AND ($2::uuid[] IS NULL OR s.user_id = $3 OR s.scope_id = ANY($2))`,
+      [days, readable, ctx.actor.id],
+    )
+  ).rows[0];
+
   return {
     days,
+    sessions: { ...sessions, answer_rate: rate(sessions.answered, sessions.answered + sessions.declined + sessions.expired), ...claims },
     reuse: { ...reuse, rate: rate(reuse.verifications, reuse.verifications + reuse.proposals) },
     search: {
       ...search,

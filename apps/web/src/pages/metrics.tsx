@@ -26,8 +26,27 @@ import { useApi, useMediaQuery, useQueryState } from "../hooks";
 import { setPrefill } from "../paste";
 import { href, navigate, type Route } from "../router";
 
+interface SessionMetrics {
+  asked: number;
+  answered: number;
+  answered_by_sessions: number;
+  answered_by_people: number;
+  within_wait: number;
+  declined: number;
+  expired: number;
+  saved_as_findings: number;
+  handoffs: number;
+  handoffs_accepted: number;
+  median_answer_seconds: number | null;
+  people_asking: number;
+  answer_rate: number | null;
+  sessions_claiming: number;
+  files_claimed: number;
+}
+
 interface Success {
   days: number;
+  sessions?: SessionMetrics;
   reuse: { verifications: number; proposals: number; agent_reads: number; agent_searches: number; rate: number | null };
   search: { total: number; answered: number; from_agents: number; hit_rate: number | null; keyword_hit_rate: number | null; agent_hit_rate: number | null };
   weekly: { week: string; searches: number; answered: number; verifications: number; proposals: number }[];
@@ -202,6 +221,8 @@ function MetricsBody({
           info={`Articles without an owner, items not verified recently and articles past their review date, out of ${plural(h.total, "item")}. One article can count twice.`}
         />
       </TileGrid>
+
+      {data.sessions && data.sessions.asked + data.sessions.handoffs + data.sessions.files_claimed > 0 && <SessionTiles s={data.sessions} />}
 
       <div ref={attentionRef} className="tl-anchor">
         <NeedsAttention data={data} />
@@ -527,6 +548,48 @@ function Gaps({ days, setDays }: { days: string; setDays: (v: string) => void })
           />
         )}
       </AsyncBlock>
+    </Card>
+  );
+}
+
+const duration = (sec: number | null) => (sec === null ? null : sec < 90 ? `${sec} s` : sec < 5400 ? `${Math.round(sec / 60)} min` : `${Math.round(sec / 360) / 10} h`);
+
+/** Sessions helping each other: counted from questions, handoffs and claims, never estimated. */
+function SessionTiles({ s }: { s: SessionMetrics }) {
+  return (
+    <Card as="section" titleLevel={2} title="Sessions helping each other" description="Claude sessions asking each other, handing work over and saying what they're working on.">
+      <TileGrid>
+        <StatTile
+          label="Questions answered"
+          value={pct(s.answer_rate)}
+          icon="chat"
+          href={href("/sessions")}
+          note={`${s.answered} of ${plural(s.asked, "question")} · ${s.answered_by_sessions} by sessions`}
+          info={`Questions sessions asked other sessions or people, and how many got an answer rather than being declined or expiring (${s.answered_by_people} answered by people; ${plural(s.people_asking, "person", "people")} asked). Asking everyone counts once.`}
+        />
+        <StatTile
+          label="Answer time"
+          value={duration(s.median_answer_seconds)}
+          icon="clock"
+          note={`Median · ${s.within_wait} within 45 s`}
+          emptyNote="Nothing answered yet"
+          info="From asking to the answer. Answers inside 45 seconds reached the asking session without it having to check back."
+        />
+        <StatTile
+          label="Kept as knowledge"
+          value={s.saved_as_findings}
+          icon="bookmark"
+          note={`Answers saved as findings`}
+          info="Answers someone filed as a finding, so the next person finds them by searching instead of asking again."
+        />
+        <StatTile
+          label="Handoffs and claims"
+          value={s.handoffs_accepted}
+          icon="share"
+          note={`of ${plural(s.handoffs, "handoff")} accepted · ${plural(s.files_claimed, "file")} claimed`}
+          info="Work passed between sessions and accepted, and files sessions said they were working on (so others were warned before editing them)."
+        />
+      </TileGrid>
     </Card>
   );
 }

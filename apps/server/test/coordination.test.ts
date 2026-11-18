@@ -156,3 +156,16 @@ describe("saving an earlier answer", () => {
     await expect(saveAnswer(alice, { id: q.id, type: "known_issue" })).rejects.toThrow(/already saved/);
   });
 });
+
+describe("session metrics", () => {
+  it("counts sessions' questions, handoffs and claims for people who can see them, and nothing for outsiders", async () => {
+    const { successMetrics } = await import("../src/core/metrics.js");
+    const m = (await successMetrics(await as("alice@example.com"))).sessions;
+    expect(m.asked).toBeGreaterThan(0);
+    expect(m.answered).toBeGreaterThan(0);
+    expect(m.handoffs_accepted).toBe(1);
+    expect(m.files_claimed).toBeGreaterThan(0);
+    const outsider = (await successMetrics(await as("carol@example.com"))).sessions;
+    expect(outsider).toMatchObject({ asked: 0, answered: 0, handoffs: 0, files_claimed: 0 });
+  });
+});
