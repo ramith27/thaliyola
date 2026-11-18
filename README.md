@@ -490,6 +490,7 @@ A Claude session can ask another session, yours or a teammate's on any machine, 
 - **Joining:** with the Claude Code plugin, every session joins automatically when it starts. It gets a handle like `ramith/leadtransit-api`, and its git remote finds its project. Other agents call `register_session`, or run `/mcp__thaliyola__listen`.
 - **Asking:** `ask_session` (or `/thaliyola:ask <who> <question>`) goes to a session handle, a person's email (any of their sessions) or a project or project/repository (whoever works there). It waits up to 45 seconds for the answer; otherwise it returns a ticket, and the answer is handed over on the asker's next prompt (plugin) or with `get_answer`.
 - **Answering:** the server can't push to a session, so sessions pull. A **listening** session (`/mcp__thaliyola__listen`, or `/thaliyola:listen` with the plugin) answers within seconds; with the plugin the wait happens in a hook and costs no tokens. A **busy** session is handed waiting questions by its Stop hook when it finishes its task. A **person** can answer, decline or ask on the **Sessions** page. Answers can be saved as findings for review.
+- **Coordinating:** sessions also say what they're working on. With the plugin, a file a session edits is **claimed** for it for 30 minutes; before another session (yours or a teammate's, in any clone of that repository) edits it, Claude Code asks its person first: "alex/orders-web (Alex) edited src/orders/Timeline.tsx 4 minutes ago. Edit anyway?". Claims only warn; nothing is locked. Agents claim bigger work on purpose with `claim_work` (and `release_work`); `list_claims` and the Sessions page show who is on what. **Handoff** (`handoff_session`, `/thaliyola:handoff <who>`) passes unfinished work to another session or person with a summary, next steps and files; when they accept, the sender's claims move to them. **Ask everyone** (`everyone: true`, `/thaliyola:ask everyone <project> …`) asks every online session in a project and collects all the answers.
 - **Safety:** you can ask only sessions in projects you can read; `private` sessions take questions from their owner's own sessions only. Questions and answers are redacted, treated as data rather than instructions, limited to 8,000 characters and 30 questions an hour per session, and expire after 30 minutes by default. Owners are notified when a question waits more than 2 minutes or nobody is online to take it.
 - **Commands (Claude Code plugin):**
 
@@ -498,9 +499,11 @@ A Claude session can ask another session, yours or a teammate's on any machine, 
   | `/thaliyola:ask <who> <question>` | Ask a session handle, a person's email or a project/repository; waits up to 45 s, else the answer arrives on your next prompt |
   | `/thaliyola:listen` | Answer other sessions' questions whenever this one would go idle (the wait costs no tokens; stops after about an hour of quiet) |
   | `/thaliyola:busy` | Stop listening; questions are still handed over when a task finishes |
+  | `/thaliyola:handoff <who> [notes]` | Pass this session's unfinished work on, with a summary, next steps and files |
+  | `/thaliyola:ask everyone <project> <question>` | Ask every online session in a project and collect every answer |
   | `/mcp__thaliyola__listen` | Listener for agents without the plugin |
 
-- MCP tools: `register_session`, `list_sessions`, `ask_session`, `get_answer`, `wait_for_questions`, `answer_question`, `decline_question`; the `listen` prompt. API: `/api/agent-sessions`, `/api/agent-sessions/check` (for hooks), `/api/questions`. Full guide: [`docs/sessions.md`](docs/sessions.md).
+- MCP tools: `register_session`, `list_sessions`, `ask_session`, `get_answer`, `wait_for_questions`, `answer_question`, `decline_question`, `handoff_session`, `claim_work`, `release_work`, `list_claims`; the `listen` prompt. API: `/api/agent-sessions`, `/api/agent-sessions/check`, `/check-path` and `/touch` (for hooks), `/api/questions`, `/api/work-claims`, `/api/handoffs`. Full guide: [`docs/sessions.md`](docs/sessions.md).
 
 ## Security: vulnerabilities
 

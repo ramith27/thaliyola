@@ -14,6 +14,8 @@
 .ask-form h2 { margin-top: 0; }
 .ask-form label { display: block; margin: 0.7rem 0 0.3rem; font-weight: 550; font-size: 0.9rem; }
 .ask-form input, .ask-form textarea { width: 100%; }
+.ask-form label.checkbox { display: flex; font-weight: 400; font-size: 0.88rem; }
+.ask-form label.checkbox input { width: auto; margin-top: 0.2rem; }
 .question-list { display: flex; flex-direction: column; gap: 0.7rem; }
 .question { padding: 0.85rem 1rem; }
 .question-meta { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
@@ -27,3 +29,4 @@
 .answer-form textarea { width: 100%; }
 .answer-form .inline-form { margin-top: 0.4rem; align-items: center; }
 .answer-form select { width: auto; }
+.working-on { margin-top: 0.15rem; }

@@ -18,10 +18,13 @@ interface Session {
   mine: boolean;
   owner: string;
   waiting: number;
+  working_on?: string[];
 }
 
 interface Question {
   id: string;
+  kind?: "question" | "handoff";
+  group_id?: string | null;
   status: "pending" | "claimed" | "answered" | "declined" | "expired" | "cancelled";
   question: string;
   context: string;
@@ -101,6 +104,17 @@ export function SessionsPage({ route, scopes }: { route: Route; scopes: ScopeInf
                       {s.waiting ? ` · ${s.waiting} waiting` : ""}
                     </div>
                     {s.description && <div className="small">{s.description}</div>}
+                    {s.working_on?.length ? (
+                      <div className="small muted working-on">
+                        Working on {s.working_on.slice(0, 4).map((p, i) => (
+                          <span key={p}>
+                            {i > 0 && ", "}
+                            <code>{p}</code>
+                          </span>
+                        ))}
+                        {s.working_on.length > 4 ? ` and ${s.working_on.length - 4} more` : ""}
+                      </div>
+                    ) : null}
                   </div>
                   {!s.mine && (
                     <a className="btn btn-small" href={href("/sessions", { tab, to: s.handle })}>
@@ -161,6 +175,7 @@ function AskForm({ initialTo, suggestions, onAsked }: { initialTo: string; sugge
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [sent, setSent] = useState<string | null>(null);
+  const [everyone, setEveryone] = useState(false);
   return (
     <form
       className="card ask-form"
@@ -170,8 +185,17 @@ function AskForm({ initialTo, suggestions, onAsked }: { initialTo: string; sugge
         setError(null);
         setSent(null);
         try {
-          const r = await api<{ status: string; to?: string; to_online?: boolean }>("/questions", { method: "POST", body: { to, question, context: context || undefined, wait_seconds: 0 } });
-          setSent(r.to_online === false ? `Sent to ${r.to}. Nobody is online there, so its owner was notified.` : `Sent to ${r.to}. The answer shows below when it arrives.`);
+          const r = await api<{ status: string; to?: string; to_online?: boolean; asked?: string[] }>("/questions", {
+            method: "POST",
+            body: { to, question, context: context || undefined, wait_seconds: 0, everyone: everyone || undefined },
+          });
+          setSent(
+            r.asked
+              ? `Sent to ${r.asked.length} session${r.asked.length === 1 ? "" : "s"}: ${r.asked.join(", ")}. Their answers show below as they arrive.`
+              : r.to_online === false
+                ? `Sent to ${r.to}. Nobody is online there, so its owner was notified.`
+                : `Sent to ${r.to}. The answer shows below when it arrives.`,
+          );
           setQuestion("");
           setContext("");
           onAsked();
@@ -198,6 +222,9 @@ function AskForm({ initialTo, suggestions, onAsked }: { initialTo: string; sugge
         Context <span className="muted small">(optional: what you already know or tried)</span>
       </label>
       <textarea id="ask-c" rows={2} value={context} onChange={(e) => setContext(e.target.value)} />
+      <label className="checkbox">
+        <input type="checkbox" checked={everyone} onChange={(e) => setEveryone(e.target.checked)} /> Ask every online session there (a project, or a person's email), not just the first to pick it up
+      </label>
       <ErrorBox error={error} />
       {sent && <Notice kind="ok">{sent}</Notice>}
       <div className="actions">
@@ -230,7 +257,10 @@ function QuestionCard({ q, projects, onChange }: { q: Question; projects: ScopeI
   return (
     <li className={`card question q-${q.status}`}>
       <div className="question-meta small muted">
-        <span className={`badge ${open ? "badge-pending" : q.status === "answered" ? "badge-published" : "badge-type"}`}>{STATUS_TEXT[q.status]}</span>
+        {q.kind === "handoff" && <span className="badge badge-accent">Handoff</span>}
+        <span className={`badge ${open ? "badge-pending" : q.status === "answered" ? "badge-published" : "badge-type"}`}>
+          {q.kind === "handoff" && q.status === "answered" ? "Accepted" : STATUS_TEXT[q.status]}
+        </span>
         <span>
           <code>{q.from_session}</code> ({q.from_person}) → <code>{q.asked}</code> · {ago(q.created_at)}
         </span>
@@ -240,7 +270,7 @@ function QuestionCard({ q, projects, onChange }: { q: Question; projects: ScopeI
       {q.answer && (
         <div className={`answer ${q.status === "declined" ? "is-declined" : ""}`}>
           <div className="small muted">
-            {q.status === "declined" ? "Declined" : "Answer"} by {q.answered_by_session ? <code>{q.answered_by_session}</code> : q.answered_by} {q.answered_at ? `· ${ago(q.answered_at)}` : ""}
+            {q.status === "declined" ? "Declined" : q.kind === "handoff" ? "Accepted" : "Answer"} by {q.answered_by_session ? <code>{q.answered_by_session}</code> : q.answered_by} {q.answered_at ? `· ${ago(q.answered_at)}` : ""}
           </div>
           <p>{q.answer}</p>
           {q.saved_item_id && (
@@ -256,7 +286,7 @@ function QuestionCard({ q, projects, onChange }: { q: Question; projects: ScopeI
           {q.for_me && mode === null && (
             <>
               <button className="btn btn-small btn-primary" onClick={() => setMode("answer")}>
-                Answer
+                {q.kind === "handoff" ? "Accept" : "Answer"}
               </button>
               <button className="btn btn-small" onClick={() => setMode("decline")}>
                 Decline

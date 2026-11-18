@@ -28,7 +28,28 @@ Other agents (Codex, Cursor, Gemini CLI, …) don't have the hooks. They join wi
 | `/thaliyola:busy` | Turns listening off. Questions are still handed over when the session finishes a task. | You want this session for your own work only |
 | `/mcp__thaliyola__listen [name]` | The listener for agents without the plugin: registers, then loops on `wait_for_questions` and answers each one until you type. | Codex, Cursor or a Claude Code session without the plugin |
 
+| `/thaliyola:handoff <who> [notes]` | Hands this session's unfinished work to another session or person: Claude writes what was done, where it stands, the next steps and the files. | You're stopping and someone else will carry on |
+| `/thaliyola:ask everyone <project> <question>` | Asks every online session in the project (or of a person) at once and collects every answer. | You don't know which session knows |
+
 You can also ask in plain words: "ask the frontend session whether the orders page sends a status filter".
+
+## Working on the same code: claims
+
+Sessions also say what they're working on, so two of them don't change the same files without knowing.
+
+- **Automatic:** with the plugin, every file a session edits (Edit, Write, MultiEdit, NotebookEdit) is **claimed** for it until 30 minutes after its last edit.
+- **The warning:** before a session edits a file another session has claimed, in any clone of the same repository, Claude Code asks its person first: *"Thaliyola: alex/orders-web (Alex) edited src/orders/Timeline.tsx 4 minutes ago. Edit src/orders/Timeline.tsx anyway? (Or ask that session first with /thaliyola:ask.)"* It asks once per file, and again only if the other session edits it again.
+- **On purpose:** before bigger work, an agent claims files or folders with `claim_work` (a folder covers everything under it; default 2 hours, at most 8), with a note on what it's doing; the result says who is already there. `release_work` lets go. A deliberate claim isn't shortened or downgraded by later edits.
+- **Seeing them:** `list_claims` (by project or repository), `list_sessions` (`working_on`), and *Working on* under each session on the Sessions page.
+- Claims only warn: nothing is ever locked. Who sees a claim follows the same rules as who can ask a session (below). Repositories are matched by their git remote, so `git@github.com:acme/app.git` and `https://github.com/Acme/app` are the same.
+
+## Handing work over
+
+`handoff_session` (or `/thaliyola:handoff`) sends a summary, next steps and files to a session, a person or a project. It reaches them like a question, marked **Handoff**. The other side tells its person, then accepts with `answer_question` (saying what it will do) or declines. On acceptance, the sender's file claims move to the session that took it (or are released when a person accepts on the web), and the sender hears about it on its next prompt.
+
+## Asking everyone
+
+`ask_session` with `everyone: true` (or *Ask every online session there* on the Sessions page) sends one copy of the question to every online session in a project, a project/repository, or of a person, up to 20. It waits for the first answer; `get_answer` with the returned id collects every answer so far. It counts as one question towards the hourly limit. When nobody is online it becomes an ordinary project question for whoever comes along.
 
 ## How a question travels
 
@@ -89,9 +110,12 @@ The hooks never get in Claude's way: if Thaliyola can't be reached, they do noth
 | `ask_session` | Ask, waiting up to 45 s |
 | `get_answer` | A ticket's answer, plus any other answers that arrived |
 | `wait_for_questions` | Listener: wait up to 45 s and claim questions |
-| `answer_question` / `decline_question` | Reply, or say why not |
+| `answer_question` / `decline_question` | Reply (or accept a handoff), or say why not |
+| `handoff_session` | Pass unfinished work on |
+| `claim_work` / `release_work` | Say which files this session is working on; let go |
+| `list_claims` | Who is working on what |
 
-API: `/api/agent-sessions` (list, register), `/api/agent-sessions/check` (used by the hooks), `/api/agent-sessions/listening`, `/api/agent-sessions/end`, `/api/questions` (list, ask), and `/api/questions/:id/answer`, `/decline` and `/cancel`.
+API: `/api/agent-sessions` (list, register), `/api/agent-sessions/check`, `/check-path` and `/touch` (used by the hooks), `/api/work-claims` (list, claim) and `/release`, `/api/handoffs`, `/api/agent-sessions/listening`, `/api/agent-sessions/end`, `/api/questions` (list, ask), and `/api/questions/:id/answer`, `/decline` and `/cancel`.
 
 ## Troubleshooting
 

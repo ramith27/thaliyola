@@ -34,19 +34,8 @@ import { approveProjectRequest, createOrRequestProject, declineProjectRequest, l
 import { approveUser, declineUser, findPeople, listAccessRequests, NAME_MAX, setMyName } from "../core/users.js";
 import { SOURCE_KINDS } from "../core/connectors.js";
 import { designVersions, exportTokens, getDesignSystem, listDesignSystems, recordDesignDecision, restoreDesignVersion, updateDesignSystem } from "../core/design.js";
-import {
-  answerQuestion,
-  askSession,
-  cancelQuestion,
-  declineQuestion,
-  endSession,
-  getAnswer,
-  hookCheck,
-  listQuestions,
-  listSessions,
-  registerSession,
-  setListening,
-} from "../core/sessions.js";
+import { answerQuestion, askSession, cancelQuestion, declineQuestion, endSession, getAnswer, handoffSession, hookCheck, listQuestions, listSessions, registerSession, setListening } from "../core/sessions.js";
+import { checkPath, claimWork, listClaims, releaseWork, touchPath } from "../core/coordination.js";
 import { getReadableScope, personalScope } from "../core/scopes.js";
 import { hideAdvisory, latestAdvisories, publishAdvisory, setAdvisoryResponse, setProjectTechnologies, stackOf, TECHNOLOGIES } from "../core/advisories.js";
 import { beginDependencyScan, detectProjectStack, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, securityOverview, updateVulnerability, uploadWithAuth } from "../core/security.js";
@@ -676,6 +665,7 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
             context: z.string().max(8000).optional(),
             wait_seconds: z.number().int().min(0).max(45).optional(),
             expires_minutes: z.number().int().min(1).max(240).optional(),
+            everyone: z.boolean().optional(),
           })
           .parse(req.body),
         { signal: abortOnClose(req) },
@@ -707,6 +697,27 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
   router.post(
     "/questions/:id/decline",
     handle("decline_question", (ctx, req) => declineQuestion(ctx, { id: uuid.parse(req.params.id), ...z.object({ session: z.string().optional(), reason: z.string().min(1).max(1000) }).parse(req.body) })),
+  );
+  // Work claims and handoffs (core/coordination.ts). The two path routes are for the Claude Code plugin's edit hooks.
+  const pathRef = z.object({ session: z.string().optional(), client: z.string().max(40).optional(), client_session_id: z.string().max(200).optional(), path: z.string().min(1).max(1000) });
+  router.get("/work-claims", handle("list_claims", (ctx, req) => listClaims(ctx, z.object({ project: z.string().optional(), repo: z.string().optional() }).parse(req.query))));
+  router.post(
+    "/work-claims",
+    handle("claim_work", (ctx, req) =>
+      claimWork(ctx, z.object({ session: z.string(), paths: z.array(z.string()).min(1).max(50), note: z.string().max(300).optional(), minutes: z.number().int().min(5).max(480).optional() }).parse(req.body)),
+    ),
+  );
+  router.post("/work-claims/release", handle("release_work", (ctx, req) => releaseWork(ctx, z.object({ session: z.string(), paths: z.array(z.string()).max(50).optional() }).parse(req.body))));
+  router.get("/agent-sessions/check-path", handle("check_path", (ctx, req) => checkPath(ctx, pathRef.parse(req.query))));
+  router.post("/agent-sessions/touch", handle("touch_path", (ctx, req) => touchPath(ctx, pathRef.parse(req.body))));
+  router.post(
+    "/handoffs",
+    handle("handoff_session", (ctx, req) =>
+      handoffSession(
+        ctx,
+        z.object({ session: z.string(), to: z.string().min(1).max(200), summary: z.string().min(1).max(8000), next_steps: z.string().max(8000).optional(), files: z.array(z.string()).max(50).optional() }).parse(req.body),
+      ),
+    ),
   );
   router.post("/questions/:id/cancel", handle("cancel_question", (ctx, req) => cancelQuestion(ctx, uuid.parse(req.params.id))));
 

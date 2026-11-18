@@ -7,13 +7,15 @@
 //                  wait for one (the wait costs no tokens; only an arriving question starts a turn)
 //   prompt         when you type: hand over answers to this session's earlier questions
 //   session-end    mark the session ended
+//   pre-edit       before Claude edits a file: if another session is working on it, ask you first
+//   post-edit      after an edit: claim the file for 30 minutes, so other sessions are told
 //
 // Reads THALIYOLA_URL and THALIYOLA_TOKEN (the same as the plugin's MCP config). Never blocks Claude on
 // an error: if Thaliyola is unreachable the hook does nothing.
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 const URL_BASE = (process.env.THALIYOLA_URL || "").replace(/\/+$/, "");
 const TOKEN = process.env.THALIYOLA_TOKEN || "";
@@ -67,9 +69,24 @@ const writeState = (s) => {
   }
 };
 
+/** The edited file as a path relative to its git repository's root, or null outside a repository. */
+function repoPath() {
+  const t = input.tool_input || {};
+  const file = t.file_path || t.notebook_path;
+  if (!file) return null;
+  const abs = isAbsolute(file) ? file : resolve(input.cwd || process.cwd(), file);
+  try {
+    const root = execFileSync("git", ["-C", dirname(abs), "rev-parse", "--show-toplevel"], { timeout: 2000, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+    const rel = relative(root, abs).split("\\").join("/");
+    return rel && !rel.startsWith("..") ? rel : null;
+  } catch {
+    return null;
+  }
+}
+
 function formatQuestions(qs) {
   return qs
-    .map((q) => `- id ${q.id} from ${q.from_session} (${q.from_person}), to ${q.addressed_to}:\n  ${String(q.question).replace(/\n/g, "\n  ")}${q.context ? `\n  Context: ${String(q.context).replace(/\n/g, "\n  ")}` : ""}`)
+    .map((q) => `- ${q.kind === "handoff" ? "HANDOFF (work passed to you; tell your person, then accept with answer_question or decline)" : "question"} id ${q.id} from ${q.from_session} (${q.from_person}), to ${q.addressed_to}:\n  ${String(q.question).replace(/\n/g, "\n  ")}${q.context ? `\n  Context: ${String(q.context).replace(/\n/g, "\n  ")}` : ""}`)
     .join("\n");
 }
 
@@ -89,7 +106,9 @@ try {
         additionalContext:
           `Thaliyola: this session is "${r.session}"${r.project ? ` in project ${r.project}${r.repository ? `/${r.repository}` : ""}` : ""}. ` +
           `Other sessions (yours and teammates') can ask it questions; any waiting are handed to you before you stop. ` +
-          `To ask another session, use the Thaliyola ask_session tool with session "${r.session}" (list_sessions shows who's online).` +
+          `To ask another session, use the Thaliyola ask_session tool with session "${r.session}" (list_sessions shows who's online; everyone: true asks all of a project's sessions). ` +
+          `Files you edit are claimed for this session automatically, and you'll be warned before editing a file another session is working on. ` +
+          `To pass unfinished work on, use handoff_session.` +
           (r.waiting_questions ? ` ${r.waiting_questions} question(s) are already waiting for this session.` : ""),
       },
     });
@@ -98,7 +117,11 @@ try {
     const lines = [];
     for (const a of r.answers || [])
       lines.push(
-        a.status === "answered"
+        a.kind === "handoff"
+          ? a.status === "answered"
+            ? `- ${a.answered_by_session || a.answered_by} accepted your handoff (id ${a.id}); your file claims moved to them:\n  ${String(a.answer).replace(/\n/g, "\n  ")}`
+            : `- Your handoff (id ${a.id}) was ${a.status}${a.answer ? `: ${a.answer}` : ""}.`
+          : a.status === "answered"
           ? `- ${a.answered_by_session || a.answered_by} answered your question "${String(a.question).slice(0, 120)}" (id ${a.id}):\n  ${String(a.answer).replace(/\n/g, "\n  ")}`
           : `- Your question "${String(a.question).slice(0, 120)}" (id ${a.id}) was ${a.status}${a.answer ? `: ${a.answer}` : ""}.`,
       );
@@ -136,6 +159,31 @@ try {
         out({ decision: "block", reason: `Still listening for questions from other sessions through Thaliyola; none arrived. Reply only "Listening." and stop.` });
       }
     }
+  } else if (event === "pre-edit") {
+    const path = repoPath();
+    if (path) {
+      const r = await api("GET", `/agent-sessions/check-path?${ref}&path=${encodeURIComponent(path)}`, undefined, 4000);
+      if (r.conflicts?.length) {
+        // Ask once per file until the other session works on it again.
+        const state = readState();
+        const seen = (state.warned ||= {});
+        const stamp = r.conflicts.map((c) => `${c.session}@${c.since}`).sort().join(",");
+        if (seen[path] !== stamp) {
+          seen[path] = stamp;
+          writeState(state);
+          out({
+            hookSpecificOutput: {
+              hookEventName: "PreToolUse",
+              permissionDecision: "ask",
+              permissionDecisionReason: `Thaliyola: ${r.conflicts.map((c) => c.text).join("; ")}. Edit ${path} anyway? (Or ask that session first with /thaliyola:ask.)`,
+            },
+          });
+        }
+      }
+    }
+  } else if (event === "post-edit") {
+    const path = repoPath();
+    if (path) await api("POST", "/agent-sessions/touch", { client: "claude-code", client_session_id: sid, path }, 4000);
   } else if (event === "session-end") {
     await api("POST", "/agent-sessions/end", { client: "claude-code", client_session_id: sid });
   }
