@@ -38,6 +38,7 @@ import { answerQuestion, askSession, cancelQuestion, declineQuestion, endSession
 import { checkPath, claimWork, listClaims, releaseWork, touchPath } from "../core/coordination.js";
 import { checkDesignDrift, latestDrift } from "../core/design-drift.js";
 import { exportSbom, licenceReport } from "../core/sbom.js";
+import { guideProgress } from "../core/guide.js";
 import { getReadableScope, personalScope } from "../core/scopes.js";
 import { hideAdvisory, latestAdvisories, publishAdvisory, setAdvisoryResponse, setProjectTechnologies, stackOf, TECHNOLOGIES } from "../core/advisories.js";
 import { beginDependencyScan, detectProjectStack, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, securityOverview, updateVulnerability, uploadWithAuth } from "../core/security.js";
@@ -1477,6 +1478,7 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
           gitlab_token: !!sec?.gitlabToken,
         },
         admin: isAdmin(ctx),
+        progress: await guideProgress(ctx),
         catalog: await mcpCatalog(ctx),
       };
     }),

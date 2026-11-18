@@ -17,3 +17,8 @@
   .guide-commands tr { display: block; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
   .guide-commands td { display: block; border: 0; padding: 0.15rem 0; }
 }
+.guide-progress { margin-bottom: 1rem; }
+.guide-progress-head { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.guide-progress progress { flex: 1 1 12rem; max-width: 24rem; height: 0.6rem; accent-color: var(--accent); }
+.guide-badges { display: flex; gap: 0.35rem; flex-wrap: wrap; justify-content: flex-end; }
+.guide-tip { border-left: 3px solid var(--accent); padding: 0.35rem 0.6rem; background: var(--accent-soft); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }

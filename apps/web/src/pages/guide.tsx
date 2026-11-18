@@ -15,6 +15,7 @@ type Status = Record<string, boolean | string>;
 interface Guide {
   status: Status;
   admin: boolean;
+  progress?: { features: Record<string, { done: boolean; tip?: string }>; done: number; total: number };
   catalog: {
     tools: { name: string; title?: string; description: string; readOnly: boolean }[];
     prompts: { name: string; title?: string; description: string; arguments: string[] }[];
@@ -329,6 +330,31 @@ export function GuidePage() {
         Claude Code; tools are called by Claude for you when you ask in plain words.
       </p>
 
+      {data.progress && (
+        <section className="card guide-progress" aria-label="Your progress">
+          <div className="guide-progress-head">
+            <strong>
+              You've used {data.progress.done} of {data.progress.total} features
+            </strong>
+            <progress max={data.progress.total} value={data.progress.done} aria-label="Features used" />
+          </div>
+          {(() => {
+            const next = FEATURES.find((f) => data.progress!.features[f.id] && !data.progress!.features[f.id]!.done) ?? FEATURES.find((f) => data.progress!.features[f.id]?.tip);
+            const p = next && data.progress!.features[next.id];
+            return p?.tip ? (
+              <p className="small">
+                <strong>Next:</strong> {p.tip}{" "}
+                <a href={`#guide-${next!.id}`} onClick={(e) => (e.preventDefault(), document.getElementById(`guide-${next!.id}`)?.scrollIntoView({ behavior: "smooth" }))}>
+                  {next!.title}
+                </a>
+              </p>
+            ) : (
+              <p className="small muted">You've tried everything here. Search below for any command.</p>
+            );
+          })()}
+        </section>
+      )}
+
       <input className="guide-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search features and commands, e.g. listen, design, CVE" aria-label="Search the guide" />
 
       <nav className="guide-toc" aria-label="Features">
@@ -359,6 +385,7 @@ export function GuidePage() {
 
       {features.map((f) => {
         const on = !f.needs?.length || f.needs.every((k) => s[k]);
+        const mine = data.progress?.features[f.id];
         return (
           <section key={f.id} id={`guide-${f.id}`} className="card guide-feature">
             <div className="guide-head">
@@ -366,8 +393,12 @@ export function GuidePage() {
                 <div className="small muted">{f.area}</div>
                 <h2>{f.title}</h2>
               </div>
-              <span className={`badge ${on ? "badge-published" : "badge-pending"}`}>{on ? "On here" : "Off here"}</span>
+              <span className="guide-badges">
+                {mine?.done && <span className="badge badge-accent">You've used this</span>}
+                <span className={`badge ${on ? "badge-published" : "badge-pending"}`}>{on ? "On here" : "Off here"}</span>
+              </span>
             </div>
+            {mine?.tip && <p className="guide-tip small">{mine.tip}</p>}
             <p>{f.what}</p>
             <p className="small">
               <strong>Turn on:</strong> {f.enable}
