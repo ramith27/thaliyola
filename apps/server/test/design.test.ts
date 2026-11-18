@@ -64,7 +64,7 @@ describe("tokens", () => {
 
 describe("design systems", () => {
   it("lets library owners keep the shared system and project writers keep theirs", async () => {
-    await expect(updateDesignSystem(await as("dev@example.com"), "library", { tokens: LIBRARY })).rejects.toThrow(/owners and admins/);
+    await expect(updateDesignSystem(await as("dev@example.com"), "library", { tokens: LIBRARY })).rejects.toThrow(/those who review in Library/);
     const r = await updateDesignSystem(await as("admin@example.com"), "library", { tokens: LIBRARY, principles: "- Primary for one action per screen", source: "design-system@abc:tokens.css" });
     // Muted grey on white fails AA, and this blue just misses it (4.42:1).
     expect(r).toMatchObject({ version: 1, colors: 4 });
