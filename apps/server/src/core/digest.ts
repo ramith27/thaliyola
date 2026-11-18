@@ -60,6 +60,17 @@ async function digestFor(db: Db, p: Person) {
      UNION ALL SELECT id, title, 'finding' FROM findings WHERE author_id = $1 AND status = 'possibly_stale' LIMIT 5`,
     [p.id],
   );
+  // Sessions answered each other this week in projects this person reviews, and nobody kept the answer: worth a finding?
+  const answers = await db.query<{ question: string; scope: string }>(
+    `SELECT q.question, coalesce(s.slug, ts.slug) AS scope FROM session_questions q
+       LEFT JOIN scopes s ON s.id = q.to_scope_id
+       LEFT JOIN agent_sessions a ON a.id = q.to_session_id LEFT JOIN scopes ts ON ts.id = a.scope_id
+      WHERE q.status = 'answered' AND q.kind = 'question' AND q.saved_item_id IS NULL AND q.answered_at > now() - interval '7 days'
+        AND length(coalesce(q.answer, '')) >= 200
+        AND coalesce(q.to_scope_id, a.scope_id) IN (SELECT scope_id FROM scope_permissions WHERE user_id = $1 AND permission = 'review')
+      ORDER BY length(q.answer) DESC LIMIT 5`,
+    [p.id],
+  );
   const unread = (await db.query<{ n: number }>("SELECT count(*)::int AS n FROM notifications WHERE user_id = $1 AND read_at IS NULL", [p.id])).rows[0]!.n;
   const gaps = p.metrics
     ? (
@@ -74,6 +85,10 @@ async function digestFor(db: Db, p: Person) {
   if (changes.rows.length) parts.push(`New and updated (${changes.rows.length}):\n${changes.rows.map((c) => `• ${c.summary} — ${c.scope}`).join("\n")}`);
   if (toReview.rows.length) parts.push(`Waiting for your review:\n${toReview.rows.map((r) => `• ${r.summary}`).join("\n")}`);
   if (stale.rows.length) parts.push(`Yours to re-check (not verified recently):\n${stale.rows.map((s) => `• ${s.title}`).join("\n")}`);
+  if (answers.rows.length)
+    parts.push(
+      `Sessions answered each other; worth keeping? (Sessions page → Save as a finding)\n${answers.rows.map((a) => `• ${a.question.split("\n")[0]!.slice(0, 120)} — ${a.scope}`).join("\n")}`,
+    );
   if (gaps.length) parts.push(`Searched for but not found this week:\n${gaps.map((g) => `• "${g.query}" (${g.n}×)`).join("\n")}`);
   if (!parts.length && !unread) return null;
   if (unread) parts.push(`${unread} unread notification${unread > 1 ? "s" : ""} in Thaliyola.`);

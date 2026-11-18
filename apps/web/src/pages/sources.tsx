@@ -10,6 +10,7 @@ import {
   Button,
   Callout,
   Checkbox,
+  CopyButton,
   Dialog,
   Disclosure,
   EmptyState,
@@ -55,11 +56,12 @@ import { pickFilters, SavedViews } from "../components/saved-views";
 import { draftArticle, draftFinding, setPrefill } from "../paste";
 import { href, navigate, type Route } from "../router";
 
-type Kind = "rss" | "web" | "hackernews" | "slack" | "notion" | "tavily";
+type Kind = "rss" | "web" | "hackernews" | "slack" | "notion" | "tavily" | "github_prs" | "sentry_issues";
 
 interface KindInfo {
   kind: Kind;
   label: string;
+  push?: boolean;
   fields: { key: string; label: string; required?: boolean; hint?: string }[];
   configured: boolean;
   needs: string | null;
@@ -121,7 +123,37 @@ interface FullItem {
   url: string | null;
 }
 
-const KIND_ICON: Record<Kind, IconName> = { rss: "rss", web: "globe", hackernews: "hash", slack: "message", notion: "doc", tavily: "search" };
+const KIND_ICON: Record<Kind, IconName> = { rss: "rss", web: "globe", hackernews: "hash", slack: "message", notion: "doc", tavily: "search", github_prs: "code", sentry_issues: "alert" };
+const PUSH: ReadonlySet<string> = new Set(["github_prs", "sentry_issues"]);
+
+interface Webhook {
+  name: string;
+  url: string;
+  how: string;
+  note?: string;
+}
+
+/** A webhook source's secret URL, shown once (after adding it, or after making a new one). */
+function WebhookDialog({ hook, onClose }: { hook: Webhook; onClose(): void }) {
+  return (
+    <Dialog open title={`Webhook for ${hook.name}`} description="Copy this URL now: it's shown only once. Anyone with it can add items to this inbox, so keep it secret." onClose={onClose}>
+      <div className="sc-stack">
+        <div className="ib-webhook">
+          <code>{hook.url}</code>
+          <CopyButton text={hook.url} label="Copy URL" />
+        </div>
+        <p className="small">{hook.how}</p>
+        {hook.note && <p className="small muted">{hook.note}</p>}
+        <p className="small muted">Lost it? Choose New webhook URL in the source's menu; the old URL stops working.</p>
+        <div className="pp-form-actions">
+          <Button variant="primary" onClick={onClose}>
+            Done
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  );
+}
 
 const KIND_DESCRIPTION: Record<Kind, string> = {
   rss: "New posts from an RSS or Atom feed.",
@@ -130,6 +162,8 @@ const KIND_DESCRIPTION: Record<Kind, string> = {
   slack: "Busy threads from a Slack channel.",
   notion: "Pages shared with your Notion integration.",
   tavily: "New web search results for a query.",
+  github_prs: "Pull requests as they're merged, sent by a GitHub webhook: what was fixed and why.",
+  sentry_issues: "Errors as they're resolved in Sentry, sent by a webhook: where, how often and what fixed them.",
 };
 
 const kindLabel = (k: string) => SOURCE_KIND[k] ?? k;
@@ -994,6 +1028,17 @@ export function SourcesPage({ scopes, me }: { scopes: ScopeInfo[]; me: Me }) {
   // Projects where they have Manage settings; Team space and Library for Administrators.
   const manageable = scopes.filter(managesSourcesIn(me));
   const [sheet, setSheet] = useState<{ source: Source | null } | null>(route.query.get("add") === "1" && manageable.length ? { source: null } : null);
+  const [webhook, setWebhook] = useState<Webhook | null>(null);
+  async function newWebhook(s: Source) {
+    const ok = await confirm({ title: `New webhook URL for ${s.name}?`, body: "The current URL stops working at once; paste the new one into GitHub or Sentry.", confirmLabel: "Make a new URL" });
+    if (!ok) return;
+    try {
+      const r = await api<{ webhook: Omit<Webhook, "name"> }>(`/sources/${s.id}/webhook`, { method: "POST" });
+      setWebhook({ name: s.name, ...r.webhook });
+    } catch (e) {
+      toast.error(e, { title: "Couldn't make a new webhook URL" });
+    }
+  }
   const [rows, setRows] = useState<Record<string, { busy?: "check" | "toggle" | "remove"; error?: string }>>({});
 
   const patchRow = (id: string, patch: { busy?: "check" | "toggle" | "remove"; error?: string } | null) =>
@@ -1156,7 +1201,7 @@ export function SourcesPage({ scopes, me }: { scopes: ScopeInfo[]; me: Me }) {
                                   <Spinner />
                                   {row.busy === "remove" ? "Removing…" : s.enabled ? "Pausing…" : "Resuming…"}
                                 </span>
-                              ) : (
+                              ) : PUSH.has(s.kind) ? null : (
                                 <Button size="sm" icon="refresh" loading={row.busy === "check"} loadingText="Checking…" onClick={() => void checkNow(s)}>
                                   Check now
                                 </Button>
@@ -1179,6 +1224,7 @@ export function SourcesPage({ scopes, me }: { scopes: ScopeInfo[]; me: Me }) {
                                     onSelect: () => void toggle(s),
                                     disabledReason: row.busy ? "Wait for the current action to finish" : undefined,
                                   },
+                                  ...(PUSH.has(s.kind) ? [{ id: "webhook", label: "New webhook URL…", icon: "key" as IconName, onSelect: () => void newWebhook(s) }] : []),
                                   { type: "separator" },
                                   {
                                     id: "remove",
@@ -1231,13 +1277,15 @@ export function SourcesPage({ scopes, me }: { scopes: ScopeInfo[]; me: Me }) {
           scopes={scopes}
           manageable={manageable}
           onClose={closeSheet}
-          onSaved={() => {
+          onSaved={(hook) => {
             closeSheet();
             reload();
             refreshCounts();
+            if (hook) setWebhook(hook);
           }}
         />
       )}
+      {webhook && <WebhookDialog hook={webhook} onClose={() => setWebhook(null)} />}
     </Page>
   );
 }
@@ -1264,7 +1312,7 @@ function SourceSheet({
   scopes: ScopeInfo[];
   manageable: ScopeInfo[];
   onClose(): void;
-  onSaved(): void;
+  onSaved(webhook?: Webhook): void;
 }) {
   const toast = useToast();
   const confirm = useConfirm();
@@ -1358,16 +1406,22 @@ function SourceSheet({
       if (source) {
         const s = await api<{ name: string }>(`/sources/${source.id}`, {
           method: "PATCH",
-          body: { name: form.name.trim(), scope: form.scope, interval_minutes: form.every, ...(configChanged() ? { config: config() } : {}) },
+          body: { name: form.name.trim(), scope: form.scope, ...(info.push ? {} : { interval_minutes: form.every }), ...(configChanged() ? { config: config() } : {}) },
         });
         toast.success(`Saved ${s.name}`);
         onSaved();
         return;
       }
-      const s = await api<{ id: string; name: string }>("/sources", {
+      const s = await api<{ id: string; name: string; webhook?: Omit<Webhook, "name"> }>("/sources", {
         method: "POST",
-        body: { kind: form.kind, scope: form.scope, name: form.name.trim(), config: config(), interval_minutes: form.every },
+        body: { kind: form.kind, scope: form.scope, name: form.name.trim(), config: config(), ...(info.push ? {} : { interval_minutes: form.every }) },
       });
+      // Webhook sources have nothing to fetch: show their secret URL instead.
+      if (s.webhook) {
+        toast.success(`Added ${s.name}`);
+        onSaved({ name: s.name, ...s.webhook });
+        return;
+      }
       // Fill the inbox right away instead of waiting for the schedule.
       const r = await api<{ added: number; error?: string }>(`/sources/${s.id}/run`, { method: "POST" }).catch((err: unknown) => ({ added: 0, error: humanizeError(err).title }));
       if (r.error) toast.warning(`Added ${s.name}, but the first check failed: ${r.error}`, { duration: 10000 });
@@ -1404,9 +1458,11 @@ function SourceSheet({
           <Button variant="ghost" onClick={() => void close()} disabled={!!busy}>
             Cancel
           </Button>
-          <Button onClick={doPreview} loading={busy === "preview"} loadingText="Previewing…" disabledReason={notSetUp ?? (busy === "save" ? "Wait for the save to finish" : undefined)}>
-            Preview
-          </Button>
+          {!info.push && (
+            <Button onClick={doPreview} loading={busy === "preview"} loadingText="Previewing…" disabledReason={notSetUp ?? (busy === "save" ? "Wait for the save to finish" : undefined)}>
+              Preview
+            </Button>
+          )}
           <Button
             variant="primary"
             type="submit"
@@ -1472,9 +1528,13 @@ function SourceSheet({
             filter={(s) => manageableSlugs.has(s.slug)}
           />
         </Field>
-        <Field label="How often to check">
-          <Select value={String(form.every)} onChange={(e) => set({ every: Number(e.target.value) })} options={intervals.map(([m, label]) => ({ value: String(m), label }))} />
-        </Field>
+        {info.push ? (
+          <p className="small muted">{editing ? "GitHub or Sentry sends items to this source's webhook URL as they happen." : "After adding it you get a secret webhook URL to paste into GitHub or Sentry; items arrive as they happen."}</p>
+        ) : (
+          <Field label="How often to check">
+            <Select value={String(form.every)} onChange={(e) => set({ every: Number(e.target.value) })} options={intervals.map(([m, label]) => ({ value: String(m), label }))} />
+          </Field>
+        )}
         <Field label="Name" optional hint={editing ? undefined : "Leave it empty to use the address or search terms."}>
           <TextInput value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder="e.g. Payment provider changelog" maxLength={120} />
         </Field>

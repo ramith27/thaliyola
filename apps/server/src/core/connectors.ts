@@ -11,7 +11,9 @@ import { htmlToMarkdown } from "./importer.js";
  * Credentials live in the server's environment, never in the database.
  */
 
-export const SOURCE_KINDS = ["rss", "web", "hackernews", "slack", "notion", "tavily"] as const;
+export const SOURCE_KINDS = ["rss", "web", "hackernews", "slack", "notion", "tavily", "github_prs", "sentry_issues"] as const;
+/** Kinds that receive webhooks at a secret URL instead of being fetched on a schedule. */
+export const PUSH_KINDS: readonly SourceKind[] = ["github_prs", "sentry_issues"];
 export type SourceKind = (typeof SOURCE_KINDS)[number];
 
 export interface RawItem {
@@ -45,7 +47,20 @@ const TIMEOUT_MS = 20_000;
 const UA = "Thaliyola/1.0 (+team knowledge base; source fetcher)";
 
 /** What each kind needs, for validation and the UI. */
-export const SOURCE_FIELDS: Record<SourceKind, { label: string; needs?: keyof ConnectorEnv; fields: { key: string; label: string; required?: boolean; hint?: string }[] }> = {
+export const SOURCE_FIELDS: Record<SourceKind, { label: string; needs?: keyof ConnectorEnv; push?: boolean; fields: { key: string; label: string; required?: boolean; hint?: string }[] }> = {
+  github_prs: {
+    label: "GitHub merged pull requests (webhook)",
+    push: true,
+    fields: [
+      { key: "branch", label: "Only pull requests merged into", hint: "optional, e.g. main" },
+      { key: "repos", label: "Only these repositories", hint: "optional, comma-separated owner/name" },
+    ],
+  },
+  sentry_issues: {
+    label: "Sentry resolved issues (webhook)",
+    push: true,
+    fields: [{ key: "projects", label: "Only these Sentry projects", hint: "optional, comma-separated project slugs" }],
+  },
   rss: { label: "RSS or Atom feed", fields: [{ key: "url", label: "Feed URL", required: true }] },
   web: {
     label: "Web page (changes)",
@@ -417,7 +432,9 @@ const tavily: Fetcher = async (config, state, env) => {
   };
 };
 
-const FETCHERS: Record<SourceKind, Fetcher> = { rss, web, hackernews, slack, notion, tavily };
+// Push kinds have nothing to fetch: their items arrive as webhooks (sources.ts receiveWebhook).
+const pushed: Fetcher = async (_c, state) => ({ items: [], state });
+const FETCHERS: Record<SourceKind, Fetcher> = { rss, web, hackernews, slack, notion, tavily, github_prs: pushed, sentry_issues: pushed };
 
 export async function fetchSource(kind: SourceKind, config: Record<string, string>, state: Record<string, unknown>, env: ConnectorEnv): Promise<FetchResult> {
   const r = await FETCHERS[kind](config, state, env);

@@ -325,6 +325,8 @@ export const SOURCE_KIND: Record<string, string> = {
   slack: "Slack",
   notion: "Notion",
   tavily: "Web search",
+  github_prs: "GitHub merged PRs",
+  sentry_issues: "Sentry resolved issues",
 };
 
 export const REPO_KIND: Record<string, string> = {

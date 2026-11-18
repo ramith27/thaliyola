@@ -64,6 +64,7 @@ interface QuestionRow {
   created_at: string;
   kind: "question" | "handoff";
   group_id: string | null;
+  saved_item_id: string | null;
 }
 
 const slugPart = (s: string) =>
@@ -558,6 +559,30 @@ export async function answerQuestion(
     if (fid) await ctx.db.query("UPDATE session_questions SET saved_item_id = $2 WHERE id = $1", [q.id, fid]);
   }
   return { id: q.id, status: q.kind === "handoff" ? "accepted" : "answered", ...(saved ? { saved } : {}) };
+}
+
+/** Keep an answer given earlier as a finding (for review): the asker, the answerer's side, or the project's people. */
+export async function saveAnswer(ctx: RequestContext, input: { id: string; type: "known_issue" | "rca" | "data_gotcha" | "query_recipe" | "incident"; scope?: string }) {
+  const q = (
+    await ctx.db.query<QuestionRow & { session_scope: string | null; session_owner: string | null }>(
+      "SELECT q.*, a.scope_id AS session_scope, a.user_id AS session_owner FROM session_questions q LEFT JOIN agent_sessions a ON a.id = q.to_session_id WHERE q.id = $1",
+      [input.id],
+    )
+  ).rows[0];
+  const readable = await readableScopes(ctx);
+  const projectId = q?.to_scope_id ?? q?.session_scope ?? null;
+  const visible =
+    q && (q.from_user_id === ctx.actor.id || q.to_user_id === ctx.actor.id || q.session_owner === ctx.actor.id || (projectId && (readable === null || readable.includes(projectId))));
+  if (!q || !visible) throw new NotFoundError(`question ${input.id}`);
+  if (q.status !== "answered" || !q.answer) throw new ValidationError("only answered questions can be saved");
+  if (q.saved_item_id) throw new ValidationError("this answer is already saved as a finding");
+  const scope = input.scope ?? (projectId ? (await ctx.db.query<{ slug: string }>("SELECT slug FROM scopes WHERE id = $1", [projectId])).rows[0]?.slug : undefined);
+  if (!scope) throw new ValidationError("pass scope: the project (or 'team') to file it in");
+  const saved = await proposeFinding(ctx, { scope, type: input.type, title: q.question.split("\n")[0]!.slice(0, 160), symptoms: [q.question, q.context].filter(Boolean).join("\n\n"), root_cause: q.answer, force_new: true });
+  const fid = (saved as { finding_id?: string }).finding_id;
+  if (fid) await ctx.db.query("UPDATE session_questions SET saved_item_id = $2 WHERE id = $1", [q.id, fid]);
+  emitChanged();
+  return { id: q.id, saved };
 }
 
 export async function declineQuestion(ctx: RequestContext, input: { session?: string; id: string; reason: string }) {

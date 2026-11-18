@@ -18,6 +18,7 @@ import { buildMcpServer } from "../mcp/server.js";
 import { isClaudeCode, type SkillMcpOpts } from "../mcp/skills.js";
 import { deliverableSkills, rankedForInstructions, skillPromptsFor } from "../core/skills/delivery.js";
 import { receiveSkillWebhook } from "../core/skills/sources.js";
+import { receiveWebhook } from "../core/sources.js";
 import { SKILL_LIMITS } from "../core/skills/types.js";
 import type { RequestContext } from "../core/context.js";
 import { isAdmin } from "../core/permissions.js";
@@ -168,6 +169,19 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
       res.status(out.status).json(out.body);
     } catch (err) {
       console.error(`[skills] webhook failed: ${(err as Error).message}`);
+      res.status(500).json({ error: "webhook failed" });
+    }
+  });
+  // Webhook sources (GitHub merged PRs, Sentry resolved issues): the secret in the URL is the credential.
+  app.post("/hooks/sources/:id/:token", express.json({ limit: "2mb" }), async (req, res) => {
+    try {
+      const headers: Record<string, string | undefined> = {};
+      for (const name of ["x-github-event", "sentry-hook-resource"]) headers[name] = req.header(name) ?? undefined;
+      const out = await receiveWebhook(db, String(req.params.id), String(req.params.token), headers, req.body);
+      if (out.status === 404) return void res.status(404).json({ error: "not found" });
+      res.status(out.status).json({ result: out.result });
+    } catch (err) {
+      console.error(`[sources] webhook failed: ${(err as Error).message}`);
       res.status(500).json({ error: "webhook failed" });
     }
   });

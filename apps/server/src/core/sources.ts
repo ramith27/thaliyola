@@ -1,7 +1,8 @@
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { Settings } from "../config.js";
 import type { Db } from "../db/pool.js";
 import { audit } from "./audit.js";
-import { ENV_NAME, fetchSource, hashText, SOURCE_FIELDS, SOURCE_KINDS, validateConfig, type ConnectorEnv, type RawItem, type SourceKind } from "./connectors.js";
+import { ENV_NAME, fetchSource, hashText, PUSH_KINDS, SOURCE_FIELDS, SOURCE_KINDS, validateConfig, type ConnectorEnv, type RawItem, type SourceKind } from "./connectors.js";
 import { NotFoundError, ValidationError, type RequestContext } from "./context.js";
 import { emitChanged } from "./events.js";
 import { assertCanManage, assertCanPropose, assertCanRead, canManage, readableScopes } from "./permissions.js";
@@ -37,7 +38,7 @@ export function sourceKinds(settings: Settings) {
   const env = connectorEnv(settings);
   return SOURCE_KINDS.map((kind) => {
     const spec = SOURCE_FIELDS[kind];
-    return { kind, label: spec.label, fields: spec.fields, configured: !spec.needs || !!env[spec.needs], needs: spec.needs ? ENV_NAME[spec.needs] : null };
+    return { kind, label: spec.label, fields: spec.fields, push: !!spec.push, configured: !spec.needs || !!env[spec.needs], needs: spec.needs ? ENV_NAME[spec.needs] : null };
   });
 }
 
@@ -93,12 +94,122 @@ export async function createSource(ctx: RequestContext, input: { kind: SourceKin
   const config = validateConfig(input.kind, input.config ?? {}, connectorEnv(ctx.settings));
   checkInterval(input.interval_minutes);
   const name = input.name?.trim().slice(0, 120) || config.url || config.query || config.channel || SOURCE_FIELDS[input.kind].label;
+  const push = PUSH_KINDS.includes(input.kind);
   const { rows } = await ctx.db.query<{ id: string }>(
-    `INSERT INTO sources (kind, name, scope_id, config, interval_minutes, enabled, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-    [input.kind, name, scope.id, config, input.interval_minutes ?? 360, input.enabled ?? true, ctx.actor.id],
+    `INSERT INTO sources (kind, name, scope_id, config, interval_minutes, enabled, created_by, next_run_at) VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $8 THEN 'infinity'::timestamptz ELSE now() END) RETURNING id`,
+    [input.kind, name, scope.id, config, push ? 10080 : (input.interval_minutes ?? 360), input.enabled ?? true, ctx.actor.id, push],
   );
   await audit(ctx.db, ctx.actor.id, "create_source", rows[0]!.id);
-  return getSource(ctx, rows[0]!.id);
+  const created = await getSource(ctx, rows[0]!.id);
+  return push ? { ...created, webhook: await newWebhookUrl(ctx, rows[0]!.id, input.kind) } : created;
+}
+
+// ---- Webhook (push) sources ---------------------------------------------------------------------------
+
+const tokenHash = (t: string) => createHash("sha256").update(t).digest("hex");
+
+const WEBHOOK_HOW: Record<string, string> = {
+  github_prs:
+    "In the GitHub repository (or organisation): Settings → Webhooks → Add webhook. Payload URL: this URL; Content type: application/json; " +
+    "events: Let me select → Pull requests. Merged pull requests arrive in the inbox.",
+  sentry_issues:
+    "In Sentry: Settings → Developer Settings → New Internal Integration. Webhook URL: this URL; turn on Alert Rule Action off, and under Webhooks tick issue. " +
+    "Permissions: Issue & Event Read. Resolved issues arrive in the inbox.",
+};
+
+/** A new secret webhook URL for a push source (shown once; only its hash is kept). Replaces the old one. */
+async function newWebhookUrl(ctx: RequestContext, id: string, kind: string) {
+  const token = randomBytes(24).toString("base64url");
+  await ctx.db.query("UPDATE sources SET state = jsonb_set(state, '{hook_token_hash}', to_jsonb($2::text)) WHERE id = $1", [id, tokenHash(token)]);
+  const base = ctx.settings.publicUrl?.replace(/\/+$/, "") ?? "";
+  return {
+    url: `${base}/hooks/sources/${id}/${token}`,
+    shown_once: true,
+    how: WEBHOOK_HOW[kind] ?? "",
+    ...(base ? {} : { note: "PUBLIC_URL isn't set on this server: put its public address in front of /hooks/…" }),
+  };
+}
+
+/** Replace a push source's webhook URL (the old one stops working). */
+export async function rotateWebhook(ctx: RequestContext, id: string) {
+  const s = await manageable(ctx, id);
+  if (!PUSH_KINDS.includes(s.kind)) throw new ValidationError("only webhook sources have a webhook URL");
+  const webhook = await newWebhookUrl(ctx, id, s.kind);
+  await audit(ctx.db, ctx.actor.id, "rotate_source_webhook", id);
+  return { id, webhook };
+}
+
+const list = (v: string | undefined) => (v ?? "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+const str = (v: unknown) => (typeof v === "string" ? v : typeof v === "number" ? String(v) : "");
+
+/** A GitHub pull_request event → an inbox item when it was merged (and passes the filters). */
+function githubItem(config: Record<string, string>, event: string, p: Record<string, any>): RawItem | null {
+  if (event !== "pull_request" || p.action !== "closed" || !p.pull_request?.merged) return null;
+  const pr = p.pull_request;
+  const repo = str(p.repository?.full_name);
+  const base = str(pr.base?.ref);
+  if (config.branch && base !== config.branch) return null;
+  if (list(config.repos).length && !list(config.repos).includes(repo.toLowerCase())) return null;
+  const labels = Array.isArray(pr.labels) ? pr.labels.map((l: { name?: unknown }) => str(l?.name)).filter(Boolean) : [];
+  const facts = [
+    `Repository: ${repo}`,
+    `Merged into ${base} by ${str(pr.merged_by?.login) || "someone"} at ${str(pr.merged_at)}`,
+    labels.length ? `Labels: ${labels.join(", ")}` : "",
+    pr.changed_files ? `${pr.changed_files} files changed (+${pr.additions ?? 0} −${pr.deletions ?? 0})` : "",
+  ].filter(Boolean);
+  return {
+    external_id: `pr:${repo}#${str(pr.number)}`,
+    title: `Merged: ${str(pr.title)} (${repo}#${str(pr.number)})`,
+    url: str(pr.html_url) || null,
+    author: str(pr.user?.login) || null,
+    body: `${facts.join("\n")}\n\n${str(pr.body).slice(0, 15_000)}`.trim(),
+    published_at: str(pr.merged_at) || null,
+  };
+}
+
+/** A Sentry internal-integration issue event → an inbox item when it was resolved. */
+function sentryItem(config: Record<string, string>, resource: string, p: Record<string, any>): RawItem | null {
+  if (resource !== "issue" || p.action !== "resolved") return null;
+  const issue = p.data?.issue;
+  if (!issue) return null;
+  const project = str(issue.project?.slug);
+  if (list(config.projects).length && !list(config.projects).includes(project.toLowerCase())) return null;
+  const sd = issue.statusDetails ?? {};
+  const facts = [
+    `Sentry project: ${project}`,
+    issue.culprit ? `Where: ${str(issue.culprit)}` : "",
+    issue.metadata?.type ? `Error: ${str(issue.metadata.type)}${issue.metadata.value ? `: ${str(issue.metadata.value)}` : ""}` : "",
+    issue.count ? `${str(issue.count)} events, ${str(issue.userCount ?? 0)} users, first seen ${str(issue.firstSeen)}, last seen ${str(issue.lastSeen)}` : "",
+    sd.inRelease ? `Resolved in release ${str(sd.inRelease)}` : sd.inCommit ? `Resolved in commit ${str(sd.inCommit?.commit ?? sd.inCommit)}` : sd.inNextRelease ? "Resolved in the next release" : "",
+    p.actor?.name ? `Resolved by ${str(p.actor.name)}` : "",
+  ].filter(Boolean);
+  return {
+    external_id: `sentry:${str(issue.id)}`,
+    title: `Resolved: ${str(issue.shortId) ? `${str(issue.shortId)} ` : ""}${str(issue.title)}`,
+    url: str(issue.web_url) || str(issue.permalink) || null,
+    author: str(p.actor?.name) || null,
+    body: facts.join("\n"),
+    published_at: new Date().toISOString(),
+  };
+}
+
+/**
+ * A webhook for a push source. Unauthenticated: the secret in the URL is the credential (compared by hash, in
+ * constant time). Returns what happened; unknown or ignored events are fine (GitHub's ping, an opened PR).
+ */
+export async function receiveWebhook(db: Db, id: string, token: string, headers: Record<string, string | undefined>, body: unknown) {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { status: 404 as const };
+  const s = (await db.query<SourceRow>("SELECT * FROM sources WHERE id = $1", [id])).rows[0];
+  const want = typeof s?.state?.hook_token_hash === "string" ? Buffer.from(s.state.hook_token_hash, "hex") : null;
+  const got = Buffer.from(tokenHash(token), "hex");
+  if (!s || !PUSH_KINDS.includes(s.kind) || !want || want.length !== got.length || !timingSafeEqual(want, got)) return { status: 404 as const };
+  if (!s.enabled) return { status: 202 as const, result: "source is paused" };
+  const p = (body && typeof body === "object" ? body : {}) as Record<string, any>;
+  const item = s.kind === "github_prs" ? githubItem(s.config, headers["x-github-event"] ?? "", p) : sentryItem(s.config, headers["sentry-hook-resource"] ?? "", p);
+  if (!item) return { status: 202 as const, result: "ignored" };
+  const r = await storeItems(db, s, [item]);
+  await db.query("UPDATE sources SET last_run_at = now(), last_error = NULL, last_count = $2 WHERE id = $1", [id, r.added]);
+  return { status: 200 as const, result: r.added ? "added" : r.updated ? "updated" : "unchanged" };
 }
 
 export async function getSource(ctx: RequestContext, id: string) {
@@ -121,7 +232,8 @@ export async function updateSource(
   const config = patch.config ? validateConfig(s.kind, patch.config, connectorEnv(ctx.settings)) : null;
   checkInterval(patch.interval_minutes);
   await ctx.db.query(
-    `UPDATE sources SET name = coalesce($2, name), scope_id = $3, config = coalesce($4, config), state = CASE WHEN $4::jsonb IS NULL THEN state ELSE '{}' END,
+    `UPDATE sources SET name = coalesce($2, name), scope_id = $3, config = coalesce($4, config),
+            state = CASE WHEN $4::jsonb IS NULL THEN state WHEN state ? 'hook_token_hash' THEN jsonb_build_object('hook_token_hash', state->'hook_token_hash') ELSE '{}' END,
             interval_minutes = coalesce($5, interval_minutes), enabled = coalesce($6, enabled),
             next_run_at = CASE WHEN $6 IS TRUE AND NOT enabled THEN now() ELSE next_run_at END
       WHERE id = $1`,
@@ -162,9 +274,22 @@ export async function runSource(db: Db, settings: Settings, s: SourceRow, envOve
   const next = `now() + make_interval(mins => ${Number(s.interval_minutes) || 360})`;
   try {
     const r = await fetchSource(s.kind, s.config, s.state ?? {}, { ...connectorEnv(settings), ...envOverride });
-    let added = 0;
-    let updated = 0;
-    for (const raw of r.items) {
+    const { added, updated } = await storeItems(db, s, r.items);
+    await db.query(`UPDATE sources SET state = $2, last_run_at = now(), next_run_at = ${next}, last_error = NULL, last_count = $3 WHERE id = $1`, [s.id, r.state, added]);
+    return { fetched: r.items.length, added, updated };
+  } catch (err) {
+    const message = (err as Error).name === "TimeoutError" ? "timed out" : (err as Error).message;
+    await db.query(`UPDATE sources SET last_run_at = now(), next_run_at = ${next}, last_error = $2 WHERE id = $1`, [s.id, message.slice(0, 500)]);
+    return { fetched: 0, added: 0, updated: 0, error: message };
+  }
+}
+
+/** Puts items in a source's inbox: new ones added, changed ones updated (a filed one comes back as updated). */
+async function storeItems(db: Db, s: Pick<SourceRow, "id" | "scope_id">, items: RawItem[]) {
+  let added = 0;
+  let updated = 0;
+  {
+    for (const raw of items) {
       const item = clean(raw);
       const hash = hashText(`${item.title}\n${item.body}`);
       // A filed item whose source changed comes back as "updated"; a dismissed one stays dismissed.
@@ -183,18 +308,13 @@ export async function runSource(db: Db, settings: Settings, s: SourceRow, envOve
       if (rows[0]?.inserted) added++;
       else if (rows[0]) updated++;
     }
-    await db.query(`UPDATE sources SET state = $2, last_run_at = now(), next_run_at = ${next}, last_error = NULL, last_count = $3 WHERE id = $1`, [s.id, r.state, added]);
-    if (added || updated) emitChanged();
-    return { fetched: r.items.length, added, updated };
-  } catch (err) {
-    const message = (err as Error).name === "TimeoutError" ? "timed out" : (err as Error).message;
-    await db.query(`UPDATE sources SET last_run_at = now(), next_run_at = ${next}, last_error = $2 WHERE id = $1`, [s.id, message.slice(0, 500)]);
-    return { fetched: 0, added: 0, updated: 0, error: message };
   }
+  if (added || updated) emitChanged();
+  return { added, updated };
 }
 
 export async function runDueSources(db: Db, settings: Settings, log: (msg: string) => void) {
-  const { rows } = await db.query<SourceRow>("SELECT * FROM sources WHERE enabled AND next_run_at <= now() ORDER BY next_run_at LIMIT 20");
+  const { rows } = await db.query<SourceRow>("SELECT * FROM sources WHERE enabled AND next_run_at <= now() AND kind <> ALL ($1) ORDER BY next_run_at LIMIT 20", [PUSH_KINDS]);
   for (const s of rows) {
     const r = await runSource(db, settings, s);
     if (r.error) log(`source "${s.name}" (${s.kind}) failed: ${r.error}`);

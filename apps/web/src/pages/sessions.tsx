@@ -273,11 +273,13 @@ function QuestionCard({ q, projects, onChange }: { q: Question; projects: ScopeI
             {q.status === "declined" ? "Declined" : q.kind === "handoff" ? "Accepted" : "Answer"} by {q.answered_by_session ? <code>{q.answered_by_session}</code> : q.answered_by} {q.answered_at ? `· ${ago(q.answered_at)}` : ""}
           </div>
           <p>{q.answer}</p>
-          {q.saved_item_id && (
+          {q.saved_item_id ? (
             <a className="small" href={href(`/finding/${q.saved_item_id}`)}>
               Saved as a finding
             </a>
-          )}
+          ) : q.status === "answered" && q.kind !== "handoff" ? (
+            <SaveAnswer id={q.id} projects={projects} defaultScope={saveTo} onSaved={onChange} />
+          ) : null}
         </div>
       )}
       {open && q.status === "claimed" && !q.answer && <p className="small muted">A session is answering it now.</p>}
@@ -352,5 +354,56 @@ function QuestionCard({ q, projects, onChange }: { q: Question; projects: ScopeI
       )}
       {!mode && <ErrorBox error={error} />}
     </li>
+  );
+}
+
+/** Keep an answer given earlier as a finding (it goes to review). */
+function SaveAnswer({ id, projects, defaultScope, onSaved }: { id: string; projects: ScopeInfo[]; defaultScope: string; onSaved(): void }) {
+  const [open, setOpen] = useState(false);
+  const [type, setType] = useState("known_issue");
+  const [scope, setScope] = useState(defaultScope || projects[0]?.slug || "team");
+  const [error, setError] = useState<Error | null>(null);
+  if (!open)
+    return (
+      <button className="link-btn small" onClick={() => setOpen(true)}>
+        Save as a finding
+      </button>
+    );
+  return (
+    <form
+      className="save-answer small"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setError(null);
+        try {
+          await api(`/questions/${id}/save`, { method: "POST", body: { type, scope } });
+          setOpen(false);
+          onSaved();
+        } catch (err) {
+          setError(err as Error);
+        }
+      }}
+    >
+      <select value={type} onChange={(e) => setType(e.target.value)} aria-label="Kind of finding">
+        <option value="known_issue">Known issue</option>
+        <option value="rca">Root cause</option>
+        <option value="data_gotcha">Data gotcha</option>
+        <option value="query_recipe">Query recipe</option>
+        <option value="incident">Incident</option>
+      </select>
+      <select value={scope} onChange={(e) => setScope(e.target.value)} aria-label="Where to file it">
+        <option value="team">Team</option>
+        {projects.map((p) => (
+          <option key={p.slug} value={p.slug}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+      <button className="btn btn-small btn-primary">Save for review</button>
+      <button type="button" className="link-btn" onClick={() => setOpen(false)}>
+        Cancel
+      </button>
+      <ErrorBox error={error} />
+    </form>
   );
 }

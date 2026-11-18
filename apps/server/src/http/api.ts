@@ -34,7 +34,7 @@ import { approveProjectRequest, createOrRequestProject, declineProjectRequest, l
 import { approveUser, declineUser, findPeople, listAccessRequests, NAME_MAX, setMyName } from "../core/users.js";
 import { SOURCE_KINDS } from "../core/connectors.js";
 import { designVersions, exportTokens, getDesignSystem, listDesignSystems, recordDesignDecision, restoreDesignVersion, updateDesignSystem } from "../core/design.js";
-import { answerQuestion, askSession, cancelQuestion, declineQuestion, endSession, getAnswer, handoffSession, hookCheck, listQuestions, listSessions, registerSession, setListening } from "../core/sessions.js";
+import { answerQuestion, askSession, cancelQuestion, declineQuestion, endSession, getAnswer, handoffSession, hookCheck, listQuestions, listSessions, registerSession, saveAnswer, setListening } from "../core/sessions.js";
 import { checkPath, claimWork, listClaims, releaseWork, touchPath } from "../core/coordination.js";
 import { checkDesignDrift, latestDrift } from "../core/design-drift.js";
 import { exportSbom, licenceReport } from "../core/sbom.js";
@@ -46,7 +46,7 @@ import { describeColumns, getApi, getTable, listCalls, listChanges, projectData 
 import { createRoute, deleteRoute, listRoutes, sendDigestNow, updateRoute } from "../core/connections/routes.js";
 import { createTicket, linkTicket, listTickets } from "../core/connections/tickets.js";
 import { canSeal } from "../core/secrets.js";
-import { createSource, deleteSource, getInboxItem, listInbox, listSources, previewSource, reopenInboxItem, resolveInboxItem, runSourceNow, updateSource } from "../core/sources.js";
+import { createSource, deleteSource, getInboxItem, listInbox, listSources, previewSource, reopenInboxItem, resolveInboxItem, rotateWebhook, runSourceNow, updateSource } from "../core/sources.js";
 import { deleteItem, deleteProject, emptyItem, emptyProject, listTrash, restoreItem, restoreProject } from "../core/trash.js";
 import { listPurges, purgeItem } from "../core/purge.js";
 import { insights, knowledgeGraph } from "../core/insights.js";
@@ -712,6 +712,13 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
       claimWork(ctx, z.object({ session: z.string(), paths: z.array(z.string()).min(1).max(50), note: z.string().max(300).optional(), minutes: z.number().int().min(5).max(480).optional() }).parse(req.body)),
     ),
   );
+  router.post(
+    "/questions/:id/save",
+    handle("save_answer", (ctx, req) =>
+      saveAnswer(ctx, { id: uuid.parse(req.params.id), ...z.object({ type: z.enum(["known_issue", "rca", "data_gotcha", "query_recipe", "incident"]), scope: z.string().optional() }).parse(req.body) }),
+    ),
+  );
+  router.post("/sources/:id/webhook", handle("rotate_source_webhook", (ctx, req) => rotateWebhook(ctx, uuid.parse(req.params.id))));
   router.post("/work-claims/release", handle("release_work", (ctx, req) => releaseWork(ctx, z.object({ session: z.string(), paths: z.array(z.string()).max(50).optional() }).parse(req.body))));
   router.get("/agent-sessions/check-path", handle("check_path", (ctx, req) => checkPath(ctx, pathRef.parse(req.query))));
   router.post("/agent-sessions/touch", handle("touch_path", (ctx, req) => touchPath(ctx, pathRef.parse(req.body))));

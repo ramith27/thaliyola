@@ -140,3 +140,5 @@ a.ib-title-link:focus-visible { outline: 2px solid var(--focus); outline-offset:
 .ib-pane-error { margin: 0; color: var(--danger); font-size: var(--fs-sm); font-weight: var(--fw-medium); }
 .ib-pane-body { min-width: 0; padding-top: var(--space-4); border-top: 1px solid var(--border); overflow-wrap: anywhere; }
 .ib-pane-title .ib-title-link svg { margin-left: var(--space-1); vertical-align: -1px; }
+.ib-webhook { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.ib-webhook code { overflow-wrap: anywhere; flex: 1 1 18rem; padding: 0.4rem 0.5rem; background: var(--surface-2); border-radius: var(--radius-sm); }

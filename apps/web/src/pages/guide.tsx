@@ -222,7 +222,11 @@ const FEATURES: Feature[] = [
     what: "RSS feeds, watched web pages, Hacker News searches, Slack threads, Notion pages and web searches fetched on a schedule into an inbox that agents triage.",
     needs: ["sources"],
     enable: "SOURCES=on (the default). Slack, Notion and web search need SLACK_BOT_TOKEN, NOTION_TOKEN and TAVILY_API_KEY in the server's environment.",
-    use: ["Add sources on Inbox → Sources (project owners for their projects, admins for Team).", "Run triage-inbox, or file and dismiss items on the Inbox page."],
+    use: [
+      "Add sources on Inbox → Sources (project owners for their projects, admins for Team).",
+      "Capture automatically: add a GitHub merged pull requests or Sentry resolved issues source and paste its webhook URL into GitHub or Sentry.",
+      "Run triage-inbox, or file and dismiss items on the Inbox page; save useful session answers from the Sessions page.",
+    ],
     commands: [
       { kind: "prompt", cmd: "/mcp__thaliyola__triage-inbox [scope]", what: "File what matters, dismiss the rest" },
       { kind: "tool", cmd: "list_inbox · get_inbox_item · resolve_inbox_item · add_source", what: "Inbox tools" },

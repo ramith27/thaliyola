@@ -140,3 +140,19 @@ describe("asking everyone", () => {
     await expect(askSession(alice, { session: "alice/shop-api", to: "bob/shop-api", question: "x", everyone: true, wait_seconds: 0 })).rejects.toThrow(/not one session/);
   });
 });
+
+describe("saving an earlier answer", () => {
+  it("files an answered question as a finding once, for people who can see it", async () => {
+    const { saveAnswer } = await import("../src/core/sessions.js");
+    const alice = await as("alice@example.com");
+    const bob = await as("bob@example.com");
+    await db.query("UPDATE agent_sessions SET last_seen_at = now()");
+    const q = (await askSession(alice, { session: "alice/shop-api", to: "bob/shop-api", question: "Why do refunds take 5 days?", wait_seconds: 0 })) as { id: string };
+    await waitForQuestions(bob, { session: "bob/shop-api", wait_seconds: 0 });
+    await answerQuestion(bob, { session: "bob/shop-api", id: q.id, answer: "The payment provider batches refunds nightly and settles after 3 to 5 business days." });
+    await expect(saveAnswer(await as("carol@example.com"), { id: q.id, type: "known_issue" })).rejects.toThrow(/not found/);
+    const r = await saveAnswer(alice, { id: q.id, type: "known_issue" });
+    expect((r.saved as { finding_id?: string }).finding_id).toBeTruthy();
+    await expect(saveAnswer(alice, { id: q.id, type: "known_issue" })).rejects.toThrow(/already saved/);
+  });
+});

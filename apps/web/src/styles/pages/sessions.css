@@ -30,3 +30,4 @@
 .answer-form .inline-form { margin-top: 0.4rem; align-items: center; }
 .answer-form select { width: auto; }
 .working-on { margin-top: 0.15rem; }
+.save-answer { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin-top: 0.4rem; }
