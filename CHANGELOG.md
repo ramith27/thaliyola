@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- **Bots with roles in one step.** `thaliyola-admin create-token --in <project or space> [--role contributor]` gives a new bot its roles (Team and Library too), `thaliyola-admin grant` adds them later, and a bot created without roles gets a warning that it can't write. Admin › Service accounts › Give access offers the Team space and Library as well as projects.
+- **Sessions across replicas.** Wake-ups for waiting sessions (an answer for an asker, a question for a listener) travel between replicas over Postgres `LISTEN/NOTIFY` (`thaliyola_wake`, ids only), so a session on one pod hears an answer written on another at once.
+
 ### Fixed
 
 - **UTF-8 databases.** `deploy/native/install.sh` creates the database as UTF-8 (it used the server's default, which can be `SQL_ASCII`, where 1.1.1's text normalisation fails) and stops with instructions when an existing one isn't. The server warns at start when its database isn't UTF-8. `docs/install.md` explains how to check and convert one.

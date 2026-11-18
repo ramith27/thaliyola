@@ -289,7 +289,7 @@ function ServiceAccountCard({ account, onChanged, onNewToken, onAddAccess }: { a
           ))}
         </ul>
       ) : (
-        <p className="pp-sa-empty">Not in any project yet, so it can only see the Team space and Library.</p>
+        <p className="pp-sa-empty">Not in any project or space yet: it can read the Team space and Library but write nowhere.</p>
       )}
       <Button variant="ghost" icon="plus" onClick={onAddAccess}>
         Give project access
@@ -488,7 +488,7 @@ function ProjectAccessDialog({ account, onClose, onSaved }: { account: ServiceAc
   const { me, scopes } = useBoot();
   const { data: catalog } = useRoles();
   const toast = useToast();
-  const manageable = (s: ScopeInfo) => s.kind === "project" && canIn(s, "manage_members", me) && !account.projects.some((p) => p.slug === s.slug);
+  const manageable = (s: ScopeInfo) => (s.kind === "project" || s.kind === "team" || s.kind === "library") && canIn(s, "manage_members", me) && !account.projects.some((p) => p.slug === s.slug);
   // Start on a top-level project (roles flow down to its sub-projects), not whichever nested one comes first.
   const [project, setProject] = useState(() => (scopes.find((s) => manageable(s) && !s.parent) ?? scopes.find(manageable))?.slug ?? "");
   const [roles, setRoles] = useState<string[]>(["reader"]);
@@ -497,7 +497,7 @@ function ProjectAccessDialog({ account, onClose, onSaved }: { account: ServiceAc
   const options = scopes.filter(manageable);
 
   return (
-    <Dialog open title={`Give ${label(account)} project access`} description="Viewer lets it read the project; Contributor also lets it propose findings and articles, which people review." dismissible={!busy} onClose={onClose}>
+    <Dialog open title={`Give ${label(account)} access`} description="Viewer lets it read; Contributor also lets it propose findings and articles, which people review. Team and Library work too, e.g. for a bot that imports shared guides." dismissible={!busy} onClose={onClose}>
       {options.length ? (
         <form
           className="pp-form"
@@ -519,11 +519,11 @@ function ProjectAccessDialog({ account, onClose, onSaved }: { account: ServiceAc
             }
           }}
         >
-          <Field label="Project" hint="Roles also apply to its sub-projects.">
-            <ProjectPicker searchable value={project} onChange={setProject} scopes={scopes} filter={manageable} includeSpaces={false} />
+          <Field label="Project or space" hint="A project's roles also apply to its sub-projects.">
+            <ProjectPicker searchable value={project} onChange={setProject} scopes={scopes} filter={manageable} includeSpaces />
           </Field>
-          <Field label="Project roles">
-            <RolePicker roles={catalog?.roles} kind="project" value={roles} onChange={setRoles} label="Project roles" required />
+          <Field label="Roles">
+            <RolePicker roles={catalog?.roles} kind="project" value={roles} onChange={setRoles} label="Roles" required />
           </Field>
           {error ? <ErrorState compact error={error} title="Couldn't give access" /> : null}
           <div className="pp-form-actions">

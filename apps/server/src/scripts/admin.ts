@@ -7,6 +7,8 @@
  *   node dist/scripts/admin.js create-token --email you@example.com --name "Claude Code" [--days 90]
  *   node dist/scripts/admin.js create-token --service rca-bot --name "nightly RCA job"
  *   node dist/scripts/admin.js create-token --service docs-bot --name "CI docs" --owner-of order-service
+ *   node dist/scripts/admin.js create-token --service import-bot --name "Docs import" --in team [--in library] [--role contributor]
+ *   node dist/scripts/admin.js grant --service import-bot --in team [--role reviewer]
  *   node dist/scripts/admin.js export --out thaliyola-export.zip [--scope team]
  *
  * Reads DATABASE_URL like the server.
@@ -31,6 +33,8 @@ const { positionals, values } = parseArgs({
     out: { type: "string" },
     scope: { type: "string" },
     "owner-of": { type: "string", multiple: true },
+    in: { type: "string", multiple: true },
+    role: { type: "string" },
   },
 });
 
@@ -38,6 +42,25 @@ async function userId(db: Db, email: string) {
   const { rows } = await db.query<{ id: string }>("SELECT id FROM users WHERE subject = $1", [`local:${email.trim().toLowerCase()}`]);
   if (!rows[0]) throw new Error(`no local user ${email}`);
   return rows[0].id;
+}
+
+/** Role names people use, mapped to their keys (both work). */
+const ROLE_ALIASES: Record<string, string> = { contributor: "writer", viewer: "reader", "project-admin": "owner", admin: "owner" };
+
+/** Gives an account a role in spaces or projects (any kind: team, library or project). */
+async function grantRoles(db: Db, userId: string, slugs: string[], roleName = "contributor") {
+  const role = ROLE_ALIASES[roleName.toLowerCase()] ?? roleName.toLowerCase();
+  const known = (await db.query<{ name: string }>("SELECT name FROM roles WHERE key = $1 AND kind = 'project'", [role])).rows[0];
+  if (!known) {
+    const all = (await db.query<{ key: string; name: string }>("SELECT key, name FROM roles WHERE kind = 'project' ORDER BY position")).rows;
+    throw new Error(`no role ${roleName}; use one of: ${all.map((r) => `${r.name.toLowerCase().replace(/ /g, "-")} (${r.key})`).join(", ")}`);
+  }
+  for (const slug of slugs) {
+    const scope = (await db.query<{ id: string; name: string }>("SELECT id, name FROM scopes WHERE slug = $1 AND kind IN ('team', 'library', 'project') AND status = 'active'", [slug])).rows[0];
+    if (!scope) throw new Error(`no space or project ${slug}`);
+    await db.query("INSERT INTO scope_members (scope_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", [scope.id, userId, role]);
+    console.error(`${known.name} in ${scope.name}.`);
+  }
 }
 
 const db = createPool(process.env.DATABASE_URL ?? "postgres://thaliyola:thaliyola@localhost:5432/thaliyola");
@@ -73,9 +96,17 @@ try {
       );
       console.error(`Project admin of ${slug} (its writes still go to review: service accounts never publish).`);
     }
+    if (values.in?.length) await grantRoles(db, owner, values.in, values.role);
+    if (values.service && !values.in?.length && !values["owner-of"]?.length)
+      console.error("No roles given: this bot can read what everyone can but can't write anywhere. Add --in <space or project> [--role contributor].");
     const token = await createApiToken(db, owner, values.name, values.days ? Number(values.days) : undefined);
     console.log(token.token);
     console.error("Shown once. Use it as: Authorization: Bearer <token>");
+  } else if (command === "grant") {
+    if (!values.in?.length) throw new Error("--in <space or project> is required");
+    const who = values.service ? await serviceUserId(db, values.service) : values.email ? await userId(db, values.email) : null;
+    if (!who) throw new Error("pass --service <bot> or --email <person>");
+    await grantRoles(db, who, values.in, values.role);
   } else if (command === "export") {
     if (!values.out) throw new Error("--out <file.zip> is required");
     // Everything, as a system actor with admin reach (no person's read limits apply).
@@ -85,7 +116,7 @@ try {
     writeFileSync(values.out, out.zip);
     console.log(`Wrote ${values.out}: ${out.articles} articles, ${out.findings} findings, ${out.assets} files.`);
   } else {
-    console.error("commands: create-user | reset-password | list-users | create-token | export");
+    console.error("commands: create-user | reset-password | list-users | create-token | grant | export");
     process.exitCode = 2;
   }
 } catch (err) {

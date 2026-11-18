@@ -16,6 +16,8 @@ import type { Db } from "../db/pool.js";
  * means a page refreshes on its next visit.
  */
 export const CHANGES_CHANNEL = "thaliyola_changed";
+/** Keyed wake-ups (sessions' long-polls) between replicas: the payload carries only opaque keys (ids). */
+export const WAKE_CHANNEL = "thaliyola_wake";
 
 export class ChangeBus {
   /** Tells this process's own notifications apart from other replicas'. */
@@ -136,7 +138,22 @@ export function startChangeRelay(
     }, publishDelay);
   };
 
+  relayWake = (keys) =>
+    void db.query("SELECT pg_notify($1, $2)", [WAKE_CHANNEL, JSON.stringify({ from: bus.instanceId, keys })]).then(
+      () => undefined,
+      (err: Error) => log(`couldn't wake waiters on the other replicas: ${err.message}`),
+    );
+
   const onNotification = (msg: pg.Notification) => {
+    if (msg.channel === WAKE_CHANNEL) {
+      try {
+        const m = JSON.parse(msg.payload ?? "{}") as { from?: string; keys?: unknown };
+        if (m.from !== bus.instanceId && Array.isArray(m.keys)) wakeLocal(m.keys.filter((k): k is string => typeof k === "string").slice(0, 20));
+      } catch {
+        // Malformed: waiters re-check the database when their wait ends anyway.
+      }
+      return;
+    }
     if (msg.channel !== CHANGES_CHANNEL) return;
     try {
       if ((JSON.parse(msg.payload ?? "{}") as { from?: string }).from === bus.instanceId) return;
@@ -177,6 +194,7 @@ export function startChangeRelay(
       c.on("end", () => drop(conn));
       client = c;
       await c.query(`LISTEN ${CHANGES_CHANNEL}`);
+      await c.query(`LISTEN ${WAKE_CHANNEL}`);
       if (stopped) return;
       if (connectedBefore) bus.deliver();
       connectedBefore = true;
@@ -204,6 +222,7 @@ export function startChangeRelay(
         await send();
       }
       if (bus.publish) bus.publish = null;
+      relayWake = null;
       await ready;
       const c = client;
       client = null;
@@ -219,14 +238,23 @@ export function startChangeRelay(
 /**
  * Keyed wake-ups for long-polls (a session waiting for an answer, a listener waiting for a question).
  * Waiters still re-check the database when woken or when their wait ends, so a missed event only
- * delays an answer until the next check. One process; several instances would relay keys over
- * Postgres LISTEN/NOTIFY.
+ * delays an answer until the next check. With several replicas, the change relay carries the keys
+ * to the others over Postgres LISTEN/NOTIFY (WAKE_CHANNEL), so a waiter on one pod hears a write on another.
  */
 const keyed = new EventEmitter();
 keyed.setMaxListeners(0);
+/** Set by the change relay: sends keys to the other replicas. */
+let relayWake: ((keys: string[]) => void) | null = null;
+
+function wakeLocal(keys: string[]) {
+  for (const k of keys) keyed.emit(k);
+}
 
 export function wake(keys: (string | null | undefined)[]) {
-  for (const k of keys) if (k) keyed.emit(k);
+  const ks = keys.filter((k): k is string => !!k);
+  if (!ks.length) return;
+  wakeLocal(ks);
+  relayWake?.(ks);
 }
 
 /** Resolves true when any key fires, false when `ms` passes (or the signal aborts). */

@@ -707,7 +707,7 @@ Thaliyola runs as several replicas behind a load balancer, all sharing one Postg
 On SIGTERM a replica stops taking requests and lets in-flight ones finish, within `SHUTDOWN_TIMEOUT_SECONDS` (default 20). It also stops its background jobs and closes its connections. Several replicas need these settings and behave this way:
 - `ASSET_STORE=s3`, so every replica sees every uploaded file.
 - `TRUST_PROXY` set to the number of proxies in front of the server (`1` behind one cloud load balancer), so sign-in throttling sees real client addresses. Avoid `true` and `uniquelocal`: they let a client (any client on a private address, for `uniquelocal`) forge its own address in `X-Forwarded-For` and dodge the throttle.
-- Live page refresh reaches every replica through Postgres `LISTEN/NOTIFY`.
+- Live page refresh, and sessions waiting for questions or answers, reach every replica through Postgres `LISTEN/NOTIFY`.
 - Migrations and background jobs run on one replica at a time (advisory locks).
 - Sign-in throttling is counted in Postgres.
 - The per-user rate limit counts per replica.
@@ -760,7 +760,7 @@ In every mode, people can create **personal API tokens** on their Account page f
 2. **Create token**: it's shown once, with the server URL and a ready-to-paste header and `claude mcp add` command. Choose an expiry (90 days to no expiry). Make one token per system or environment.
 3. **Give project access**: project roles, like a person's (Viewer to read; Contributor to also propose). Roles flow down to sub-projects. You can also add `service:<name>` in a project's Members and access.
 
-Tokens work in every sign-in mode, including behind Cloudflare Access. Revoke a token to stop one system, or disable the account to stop all its tokens; its project roles stay. Service accounts never hold organisation roles and never publish or approve: their writes always wait for review. Every create, revoke, rotation, disable and enable is in the audit log. The command line does the same: `thaliyola-admin create-token --service <name> --name "<label>"`.
+Tokens work in every sign-in mode, including behind Cloudflare Access. Revoke a token to stop one system, or disable the account to stop all its tokens; its project roles stay. Service accounts never hold organisation roles and never publish or approve: their writes always wait for review. Every create, revoke, rotation, disable and enable is in the audit log. The command line does the same: `thaliyola-admin create-token --service <name> --name "<label>" --in <project or space> [--role contributor]` creates the bot with its roles in one step (Team and Library work too), and `thaliyola-admin grant --service <name> --in <slug> [--role reviewer]` adds roles later. A bot created without `--in` can read but not write, and the command says so. In the app, **Give access** on a service account also offers the Team space and Library.
 
 Local mode details:
 - **Invitations:** User managers and Administrators invite people by email from the Users page, optionally into a project with one or more project roles (Contributor by default; you need Manage access there and can only give roles whose permissions you hold). The link works once, expires after 7 days, and lets the invitee choose their own password. Without email set up, whoever invited gets the link to pass on. If a role is deleted before the invitation is accepted, the invitee simply doesn't get it.
@@ -773,7 +773,8 @@ Local mode details:
 ```sh
 sudo thaliyola-admin create-user --email you@example.com --admin      # first Administrator (prints a temporary password)
 sudo thaliyola-admin reset-password --email someone@example.com
-sudo thaliyola-admin create-token --service nightly-rca --name "RCA job"  # token for a bot account (or Admin › Service accounts)
+sudo thaliyola-admin create-token --service nightly-rca --name "RCA job" --in team  # bot token with Contributor in Team (or Admin › Service accounts)
+sudo thaliyola-admin grant --service nightly-rca --in order-service --role reviewer  # more roles later
 sudo thaliyola-admin export --out /tmp/thaliyola.zip [--scope team]          # everything as Markdown (members-only projects too)
 ```
 

@@ -9,7 +9,7 @@ import { apiTokenAuthenticator, chain, devAuthenticator, sessionAuthenticator } 
 import { createLocalUser } from "../src/auth/local.js";
 import { trustProxyFrom } from "../src/config.js";
 import { EMBEDDING_DIMS, startIndexer, type Embedder } from "../src/core/embeddings.js";
-import { ChangeBus, CHANGES_CHANNEL, startChangeRelay, type ChangeRelay } from "../src/core/events.js";
+import { ChangeBus, CHANGES_CHANNEL, startChangeRelay, waitFor, wake, WAKE_CHANNEL, type ChangeRelay } from "../src/core/events.js";
 import { startJobs } from "../src/core/freshness.js";
 import { flushDeliveries, track } from "../src/core/notify.js";
 import { migrate } from "../src/db/migrate.js";
@@ -303,13 +303,40 @@ describe("live page refresh across replicas", () => {
     const a = await replica();
     const b = await replica();
     await db.query(
-      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE pid <> pg_backend_pid() AND datname = current_database() AND query = $1",
-      [`LISTEN ${CHANGES_CHANNEL}`],
+      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE pid <> pg_backend_pid() AND datname = current_database() AND query = ANY($1)",
+      [[`LISTEN ${CHANGES_CHANNEL}`, `LISTEN ${WAKE_CHANNEL}`]],
     );
     expect(await until(() => b.heard() >= 1 && b.relay.listening && a.relay.listening)).toBe(true);
     const before = b.heard();
     a.bus.emit();
     expect(await until(() => b.heard() === before + 1)).toBe(true);
+  });
+
+  it("carries session wake-ups between replicas, as opaque keys only", async () => {
+    const listener = await db.connect();
+    try {
+      const got: string[] = [];
+      listener.on("notification", (m) => got.push(m.payload ?? ""));
+      await listener.query(`LISTEN ${WAKE_CHANNEL}`);
+      const a = await replica();
+      // A wake here goes to the other replicas…
+      wake(["q:one", null, "s:two"]);
+      expect(await until(() => got.length === 1)).toBe(true);
+      expect(JSON.parse(got[0]!).keys).toEqual(["q:one", "s:two"]);
+      // …and one from another replica wakes waiters here.
+      const waiting = waitFor(["s:remote"], 3000);
+      await db.query("SELECT pg_notify($1, $2)", [WAKE_CHANNEL, JSON.stringify({ from: "another-replica", keys: ["s:remote"] })]);
+      expect(await waiting).toBe(true);
+      // Junk is harmless: the relay keeps working.
+      await db.query("SELECT pg_notify($1, $2)", [WAKE_CHANNEL, "not json"]);
+      const after = waitFor(["s:after"], 3000);
+      await db.query("SELECT pg_notify($1, $2)", [WAKE_CHANNEL, JSON.stringify({ from: "another-replica", keys: ["s:after"] })]);
+      expect(await after).toBe(true);
+      expect(a.relay.listening).toBe(true);
+    } finally {
+      await listener.query(`UNLISTEN ${WAKE_CHANNEL}`);
+      listener.release();
+    }
   });
 
   it("stops: sends what is pending, then hears nothing more", async () => {
