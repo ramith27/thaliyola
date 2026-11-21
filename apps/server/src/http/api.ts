@@ -1500,6 +1500,7 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
           semantic_search: !!embedder,
           email: settings.mailTransport === "smtp",
           slack_channel: !!settings.slackWebhookUrl,
+          slack_app: !!settings.slackApp?.signingSecret && !!settings.slackApp?.botToken,
           file_store: settings.s3 ? "s3" : "local",
           sources: !!src?.enabled,
           slack_source: !!src?.slackToken,

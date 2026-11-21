@@ -20,6 +20,7 @@ import { deliverableSkills, rankedForInstructions, skillPromptsFor } from "../co
 import { receiveSkillWebhook } from "../core/skills/sources.js";
 import { receiveWebhook } from "../core/sources.js";
 import { receiveGitWebhook } from "../core/briefings.js";
+import { receiveSlackCommand } from "../core/slack-app.js";
 import { SKILL_LIMITS } from "../core/skills/types.js";
 import type { RequestContext } from "../core/context.js";
 import { isAdmin } from "../core/permissions.js";
@@ -171,6 +172,18 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
     } catch (err) {
       console.error(`[skills] webhook failed: ${(err as Error).message}`);
       res.status(500).json({ error: "webhook failed" });
+    }
+  });
+  // The /thaliyola slash command (Slack signs the raw form body).
+  app.post("/hooks/slack/commands", webhookRaw, async (req, res) => {
+    try {
+      const headers: Record<string, string | undefined> = {};
+      for (const name of ["x-slack-request-timestamp", "x-slack-signature"]) headers[name] = req.header(name) ?? undefined;
+      const out = await receiveSlackCommand(db, settings, headers, Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0));
+      res.status(out.status).json(out.body);
+    } catch (err) {
+      console.error(`[slack] command failed: ${(err as Error).message}`);
+      res.status(200).json({ response_type: "ephemeral", text: "Thaliyola couldn't handle that just now." });
     }
   });
   // Pull-request webhooks of a git connection (PR briefings): the connection's webhook secret is the credential.

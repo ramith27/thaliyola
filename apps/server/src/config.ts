@@ -90,6 +90,9 @@ const Env = z
     // Team sources (feeds, pages, Slack, Notion, Hacker News, web search) fetched into the inbox
     SOURCES: z.enum(["on", "off"]).default("on"),
     SLACK_BOT_TOKEN: z.string().optional(),
+    // The /thaliyola slash command: the Slack app's signing secret (and SLACK_BOT_TOKEN to post answers).
+    SLACK_SIGNING_SECRET: z.string().optional(),
+    SLACK_API_URL: z.string().url().optional(),
     NOTION_TOKEN: z.string().optional(),
     TAVILY_API_KEY: z.string().optional(),
     // Let feeds and page watches reach private networks (intranet wikis). Off: only public addresses
@@ -183,6 +186,7 @@ export function settingsFrom(config: Config): Settings {
     smtpUrl: config.SMTP_URL,
     mailFrom: config.MAIL_FROM,
     slackWebhookUrl: config.SLACK_WEBHOOK_URL,
+    slackApp: { signingSecret: config.SLACK_SIGNING_SECRET || undefined, botToken: config.SLACK_BOT_TOKEN || undefined, apiUrl: config.SLACK_API_URL },
     rateLimitPerMinute: config.RATE_LIMIT_PER_MINUTE,
     logRequests: config.LOG_REQUESTS === "true",
     publicUrl: config.PUBLIC_URL?.replace(/\/+$/, ""),
@@ -300,6 +304,8 @@ export interface Settings {
   /** Team sources; absent in tests that don't use them. */
   sources?: { enabled: boolean; slackToken?: string; notionToken?: string; tavilyKey?: string; allowPrivate: boolean };
   /** Vulnerability matching; `fetch` is injected in tests. */
+  /** The /thaliyola slash command (core/slack-app.ts). */
+  slackApp?: { signingSecret?: string; botToken?: string; apiUrl?: string; fetch?: typeof fetch };
   security?: {
     enabled: boolean;
     osvUrl: string;

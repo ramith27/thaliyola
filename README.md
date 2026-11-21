@@ -492,6 +492,33 @@ Thaliyola works out who knows what from what people did: versions of articles an
 - **Asking:** `ask_session` with `to: "expert:<topic>"` (or `/thaliyola:ask expert <topic> <question>`) asks the top three experts' online sessions at once and collects their answers; with none online it goes to the top expert in person, who is notified.
 - **Privacy:** a caller only sees expertise built from projects they can read, so a members-only project's work never shows up for outsiders. Personal spaces and service accounts never count, and anyone can leave the map with the `hide_expertise` preference.
 
+## Slack: /thaliyola
+
+A slash command for people who live in Slack. Each command runs **as the Thaliyola person whose verified email matches the Slack user** (looked up once with `users:read.email`, then cached), with that person's permissions; people without an approved account are told so and nothing runs.
+
+| Command | What it does |
+|---|---|
+| `/thaliyola search <words>` | The three best matches across everything you can read, quoted, with links (only you see them) |
+| `/thaliyola ask <who> <question>` | Asks a session handle, an email, a project or `expert:<topic>`. The question is posted in the channel and the answer (or the decline) arrives **in its thread**; if the app isn't in the channel, through the command's response instead |
+| `/thaliyola incident <what's broken> [in <project>] [sev1-4]` | Declares an incident, announced in the channel. Without `in <project>`, the project whose Slack notification route posts to this channel |
+
+**Setting it up:** create a Slack app from this manifest (api.slack.com/apps → *Create New App* → *From a manifest*), install it, and set `SLACK_SIGNING_SECRET` (Basic Information → Signing Secret) and `SLACK_BOT_TOKEN` (the bot token) in the server's environment, then restart. Invite the app to channels where you `ask`, so answers can be threaded. Requests are verified with Slack's signature (5-minute window) and answered within Slack's 3 seconds; the work happens after.
+
+```yaml
+display_information:
+  name: Thaliyola
+features:
+  bot_user: { display_name: Thaliyola }
+  slash_commands:
+    - command: /thaliyola
+      url: https://thaliyola.example.com/hooks/slack/commands
+      description: Search Thaliyola, ask a session or expert, declare an incident
+      usage_hint: search <words> | ask <who> <question> | incident <what's broken>
+oauth_config:
+  scopes:
+    bot: [commands, chat:write, users:read, users:read.email]
+```
+
 ## Incidents
 
 When something is broken right now, declare an **incident** in the project: everyone with a role there (and anyone watching it) is told in the app, by email and on the project's Slack or Trello routes (the new *incident* kind), and the incident's **timeline** fills itself while it's open:
