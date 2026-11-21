@@ -11,8 +11,10 @@ The server holds no LLM. Clients (Claude Code, claude.ai, scheduled agents) do t
 | ![Home: search, setup checklist and spaces](docs/images/home.png) | ![Knowledge graph](docs/images/graph.png) | ![A project's articles by folder](docs/images/project-frontend.png) |
 | **Design system** (inherits from the Library) | **Sessions** asking each other | **Security** |
 | ![Design system with inherited and overridden colours and contrast checks](docs/images/design.png) | ![Sessions: who can be asked, listening or busy](docs/images/sessions.png) | ![Security: vulnerabilities needing attention](docs/images/security.png) |
-| **Guide**: every feature and command | **On a phone** | |
-| ![Guide: what's switched on and every command](docs/images/guide.png) | <img src="docs/images/design-phone.png" alt="Design system on a phone" width="220"> | |
+| **Incident** with its timeline | **Pull request briefings** | **What happened lately** |
+| ![An incident: severity, status, and a timeline of notes and status changes](docs/images/incident.png) | ![Pull requests briefed, with the PR briefing setting and webhook](docs/images/pulls.png) | ![A project's brief: incidents, decisions, new knowledge](docs/images/brief.png) |
+| **Guide**: every feature and command | **On a phone** | **Health** |
+| ![Guide: what's switched on and every command](docs/images/guide.png) | <img src="docs/images/design-phone.png" alt="Design system on a phone" width="220"> | ![Admin › System › Health: backups, restore checks, jobs](docs/images/health.png) |
 
 New here? Open **Guide** in the app (`#/guide`) for every feature, whether it's switched on, how to use it and every command, or read [`docs/`](docs/README.md).
 
