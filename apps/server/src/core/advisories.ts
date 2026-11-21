@@ -557,7 +557,13 @@ export async function refreshAdvisories(db: Db, settings: Settings, log: (msg: s
   }
   await linkCoverage(db);
   const notified = await notifyAffected(db, settings, { recentDays: last ? 3 : 2 });
-  if (failures < batches.length) await db.query("INSERT INTO job_runs (name, last_run) VALUES ('advisories', $1) ON CONFLICT (name) DO UPDATE SET last_run = $1", [to.toISOString()]);
+  if (failures < batches.length)
+    await db.query(
+      `INSERT INTO job_runs (name, last_run, status, last_success, last_error, failures) VALUES ('advisories', $1, $2, CASE WHEN $2 = 'ok' THEN now() END, $3, CASE WHEN $2 = 'ok' THEN 0 ELSE 1 END)
+       ON CONFLICT (name) DO UPDATE SET last_run = $1, status = $2, last_success = CASE WHEN $2 = 'ok' THEN now() ELSE job_runs.last_success END,
+         last_error = coalesce($3, job_runs.last_error), failures = CASE WHEN $2 = 'ok' THEN 0 ELSE job_runs.failures + 1 END`,
+      [to.toISOString(), failures ? "failed" : "ok", failures ? `${failures} of ${batches.length} advisory feeds failed` : null],
+    );
   if (created || notified) log(`advisories: ${created} new, ${notified} project notifications`);
   if (created) emitChanged();
   return { created, notified };

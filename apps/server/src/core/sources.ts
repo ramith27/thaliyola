@@ -10,6 +10,7 @@ import { redact } from "./redaction.js";
 import { getReadableScope } from "./scopes.js";
 import { findItemFor } from "./writes.js";
 import { onProjectEvent, onSentryAlert, onSentryResolved } from "./incidents.js";
+import { recordJob } from "./jobs.js";
 
 /**
  * Team sources and the inbox. Thaliyola fetches on a schedule; people and
@@ -350,8 +351,13 @@ export function startSourceJobs(db: Db, settings: Settings, log: (msg: string) =
     try {
       const { rows } = await client.query<{ locked: boolean }>("SELECT pg_try_advisory_lock($1) AS locked", [LOCK]);
       if (!rows[0]?.locked) return;
+      const started = Date.now();
       try {
-        await runDueSources(db, settings, log);
+        const checked = await runDueSources(db, settings, log);
+        await recordJob(db, "sources", { ok: true, durationMs: Date.now() - started, details: { checked } }).catch(() => undefined);
+      } catch (err) {
+        await recordJob(db, "sources", { ok: false, error: (err as Error).message, durationMs: Date.now() - started }).catch(() => undefined);
+        throw err;
       } finally {
         await client.query("SELECT pg_advisory_unlock($1)", [LOCK]);
       }

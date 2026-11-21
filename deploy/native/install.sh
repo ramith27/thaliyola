@@ -135,13 +135,15 @@ chmod 755 /usr/local/bin/thaliyola-admin
 log "Backups (daily to /var/backups/thaliyola)"
 install -m 755 deploy/native/backup.sh /usr/local/bin/thaliyola-backup
 install -m 755 deploy/native/restore.sh /usr/local/bin/thaliyola-restore
-install -m 644 deploy/native/thaliyola-backup.service deploy/native/thaliyola-backup.timer /etc/systemd/system/
+install -m 755 deploy/native/restore-check.sh /usr/local/bin/thaliyola-restore-check
+install -m 644 deploy/native/thaliyola-backup.service deploy/native/thaliyola-backup.timer deploy/native/thaliyola-restore-check.service deploy/native/thaliyola-restore-check.timer /etc/systemd/system/
 
 log "systemd"
 install -m 644 deploy/native/thaliyola.service /etc/systemd/system/thaliyola.service
 systemctl daemon-reload
 systemctl enable thaliyola >/dev/null
 systemctl enable --now thaliyola-backup.timer >/dev/null
+systemctl enable --now thaliyola-restore-check.timer >/dev/null
 systemctl restart thaliyola
 
 for _ in $(seq 1 30); do

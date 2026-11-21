@@ -70,7 +70,7 @@ interface SystemData {
   presets?: Preset[];
 }
 
-type SectionId = "access" | "notifications" | "search" | "skills" | "installation";
+type SectionId = "access" | "notifications" | "search" | "skills" | "installation" | "health";
 
 /** In-page sections. "Access and publishing" also takes the publishing switch, which the server files under knowledge. */
 const SECTIONS: { id: SectionId; title: string; lead: string; has: (s: Setting) => boolean }[] = [
@@ -152,7 +152,9 @@ export function SystemSettingsPage() {
   // #/admin/system?section=skills opens that section (the Skills pages link here).
   const [section, setSection] = useState<SectionId>(() => {
     const asked = new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("section");
-    return asked === "skills" || asked === "notifications" || asked === "search" || asked === "installation" ? asked : "access";
+    const tab = new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("tab");
+    if (tab === "health") return "health";
+    return asked === "skills" || asked === "notifications" || asked === "search" || asked === "installation" || asked === "health" ? asked : "access";
   });
   const confirm = useConfirm();
   const toast = useToast();
@@ -474,8 +476,12 @@ export function SystemSettingsPage() {
                 items={[
                   ...SECTIONS.map((x) => ({ id: x.id, label: x.title, count: d.settings.filter((s) => x.has(s) && s.key in draft).length || undefined, countTone: "accent" as const })),
                   { id: "installation", label: "This installation" },
+                  { id: "health", label: "Health" },
                 ]}
               />
+              <div role="tabpanel" id="system-panel-health" aria-labelledby="system-tab-health" hidden={section !== "health"} className="pp-panel">
+                {section === "health" && <HealthPanel />}
+              </div>
               {SECTIONS.map((x) => (
                 <div key={x.id} role="tabpanel" id={`system-panel-${x.id}`} aria-labelledby={`system-tab-${x.id}`} hidden={section !== x.id} className="pp-panel">
                   <Card as="section" title={x.title} titleLevel={2} description={x.lead}>
@@ -555,5 +561,133 @@ export function SystemSettingsPage() {
       </AsyncBlock>
       <SaveBar dirtyCount={Object.keys(draft).length} onSave={() => void saveDraft()} onDiscard={() => { setDraft({}); setSaveError(null); }} saving={busy} error={saveError} />
     </Page>
+  );
+}
+
+interface Job {
+  name: string;
+  last_run: string;
+  status: "ok" | "failed" | "running" | null;
+  last_success: string | null;
+  last_error: string | null;
+  duration_ms: number | null;
+  failures: number;
+  details: Record<string, unknown>;
+}
+interface Health {
+  database: { size: string; version: string; encoding: string; migration: string | null };
+  jobs: Job[];
+  backups: { last: Job | null; offsite: Job | null; restore_check: Job | null; stale: boolean | null; note: string | null };
+  embeddings: { enabled: boolean; pending: number };
+  disk: { free_bytes: number; total_bytes: number } | null;
+  connections: { health: string; n: number }[];
+  activity: { sessions: number; incidents: number };
+  problems: string[];
+}
+
+const JOB_LABEL: Record<string, string> = {
+  maintenance: "Maintenance (stale entries, clean-up, revisit reminders, who-knows-what)",
+  digests: "Weekly digests",
+  sources: "Team sources",
+  sessions: "Sessions (expiring questions)",
+  security: "Dependency re-check",
+  advisories: "Advisory feed",
+  token_expiry: "Token expiry",
+  expertise: "Who knows what",
+  backup: "Backup",
+  backup_offsite: "Off-site copy",
+  restore_check: "Restore check",
+};
+const gb = (b: number) => `${(b / 1e9).toFixed(1)} GB`;
+
+/** Admin › System › Health: whether the installation is well, and what needs a look. */
+function HealthPanel() {
+  const result = useApi<Health>("/system/health");
+  return (
+    <AsyncBlock result={result} label="Loading health" skeleton={<SkeletonRows count={6} />} errorTitle="Couldn't load the health page">
+      {(h) => (
+        <div className="pp-stack">
+          {h.problems.length ? (
+            <Card as="section" title="Needs a look" titleLevel={2} tone="danger">
+              <ul className="list">
+                {h.problems.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            </Card>
+          ) : (
+            <Card as="section" title="All well" titleLevel={2} description="Backups, restore checks and background jobs are running as they should." />
+          )}
+          <Section title="Backups">
+            <Facts
+              items={[
+                { term: "Last backup", value: h.backups.last?.last_success ? <RelativeTime date={h.backups.last.last_success} /> : "none reported" },
+                { term: "Off-site copy", value: h.backups.offsite?.last_success ? <RelativeTime date={h.backups.offsite.last_success} /> : "not set up (BACKUP_S3_BUCKET)" },
+                {
+                  term: "Last restore check",
+                  value: h.backups.restore_check ? (
+                    <>
+                      <Badge tone={h.backups.restore_check.status === "ok" ? "success" : "danger"}>{h.backups.restore_check.status === "ok" ? "passed" : "failed"}</Badge> <RelativeTime date={h.backups.restore_check.last_run} />
+                    </>
+                  ) : (
+                    "not run yet (monthly)"
+                  ),
+                },
+              ]}
+            />
+            {h.backups.note && <p className="muted small">{h.backups.note}</p>}
+          </Section>
+          <Section title="Background jobs">
+            <div className="table-wrap">
+              <table className="table health-jobs">
+                <thead>
+                  <tr>
+                    <th>Job</th>
+                    <th>Last run</th>
+                    <th>Last success</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {h.jobs.map((j) => (
+                    <tr key={j.name}>
+                      <td>{JOB_LABEL[j.name] ?? j.name}</td>
+                      <td>
+                        <RelativeTime date={j.last_run} />
+                        {j.duration_ms !== null ? <span className="muted small"> · {j.duration_ms < 1000 ? `${j.duration_ms} ms` : `${(j.duration_ms / 1000).toFixed(1)} s`}</span> : null}
+                      </td>
+                      <td>{j.last_success ? <RelativeTime date={j.last_success} /> : "—"}</td>
+                      <td>
+                        {j.status === "failed" ? (
+                          <>
+                            <Badge tone="danger">failed{j.failures > 1 ? ` ×${j.failures}` : ""}</Badge> <span className="small">{j.last_error}</span>
+                          </>
+                        ) : j.status === "ok" ? (
+                          <Badge tone="success">ok</Badge>
+                        ) : (
+                          <span className="muted small">ran</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Section>
+          <Section title="The installation">
+            <Facts
+              items={[
+                { term: "Database", value: `${h.database.size}, PostgreSQL ${h.database.version}, ${h.database.encoding}` },
+                { term: "Latest migration", value: h.database.migration ?? "—" },
+                { term: "Search by meaning", value: h.embeddings.enabled ? `on, ${plural(h.embeddings.pending, "section")} waiting to be indexed` : "off" },
+                ...(h.disk ? [{ term: "Disk for uploads", value: `${gb(h.disk.free_bytes)} free of ${gb(h.disk.total_bytes)}` }] : []),
+                { term: "Connections", value: h.connections.length ? h.connections.map((c) => `${c.n} ${c.health}`).join(", ") : "none" },
+                { term: "Right now", value: `${plural(h.activity.sessions, "session")} online, ${plural(h.activity.incidents, "open incident")}` },
+              ]}
+            />
+          </Section>
+        </div>
+      )}
+    </AsyncBlock>
   );
 }

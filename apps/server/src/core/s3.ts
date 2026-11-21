@@ -1,4 +1,5 @@
-import { createHash, createHmac } from "node:crypto";
+import { createHash } from "node:crypto";
+import { encodeSegment, signS3 } from "./s3-sign.js";
 import { NotFoundError } from "./context.js";
 import type { AssetStore } from "./assets.js";
 
@@ -19,9 +20,6 @@ export interface S3Config {
 }
 
 const sha256hex = (data: string | Buffer) => createHash("sha256").update(data).digest("hex");
-const hmac = (key: string | Buffer, data: string) => createHmac("sha256", key).update(data).digest();
-// RFC 3986 encoding as SigV4 requires (encodeURIComponent leaves !'()* alone).
-const encodeSegment = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
 
 export class S3AssetStore implements AssetStore {
   private readonly endpoint: URL;
@@ -44,26 +42,9 @@ export class S3AssetStore implements AssetStore {
     return url;
   }
 
-  /** Signs a request (SigV4, payload hash in x-amz-content-sha256). */
+  /** Signs a request (SigV4, payload hash in x-amz-content-sha256); shared with backups (s3-sign.ts). */
   signedHeaders(method: string, url: URL, body: Buffer | null, now = new Date()): Record<string, string> {
-    const amzDate = now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-    const date = amzDate.slice(0, 8);
-    const payloadHash = sha256hex(body ?? "");
-    const host = url.host;
-    const headers: Record<string, string> = { host, "x-amz-content-sha256": payloadHash, "x-amz-date": amzDate };
-    const signed = Object.keys(headers).sort();
-    const canonicalHeaders = signed.map((h) => `${h}:${headers[h]}\n`).join("");
-    const canonicalRequest = [method, url.pathname, "", canonicalHeaders, signed.join(";"), payloadHash].join("\n");
-    const scope = `${date}/${this.cfg.region}/s3/aws4_request`;
-    const stringToSign = ["AWS4-HMAC-SHA256", amzDate, scope, sha256hex(canonicalRequest)].join("\n");
-    const kDate = hmac(`AWS4${this.cfg.secretAccessKey}`, date);
-    const kSigning = hmac(hmac(hmac(kDate, this.cfg.region), "s3"), "aws4_request");
-    const signature = createHmac("sha256", kSigning).update(stringToSign).digest("hex");
-    const { host: _host, ...rest } = headers;
-    return {
-      ...rest,
-      authorization: `AWS4-HMAC-SHA256 Credential=${this.cfg.accessKeyId}/${scope}, SignedHeaders=${signed.join(";")}, Signature=${signature}`,
-    };
+    return signS3(this.cfg, method, url, sha256hex(body ?? ""), now);
   }
 
   async put(key: string, data: Buffer): Promise<void> {

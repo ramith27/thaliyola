@@ -73,7 +73,7 @@ export function startTokenJobs(db: Db, settings: Settings, log: (msg: string) =>
         const last = await db.query<{ due: boolean }>("SELECT last_run < now() - interval '23 hours' AS due FROM job_runs WHERE name = 'token_expiry'");
         if (last.rows[0]?.due === false) return;
         const sent = await notifyExpiringTokens(db, settings);
-        await db.query("INSERT INTO job_runs (name, last_run) VALUES ('token_expiry', now()) ON CONFLICT (name) DO UPDATE SET last_run = now()");
+        await db.query("INSERT INTO job_runs (name, last_run, status, last_success) VALUES ('token_expiry', now(), 'ok', now()) ON CONFLICT (name) DO UPDATE SET last_run = now(), status = 'ok', last_success = now(), failures = 0");
         if (sent.personal || sent.service) log(`warned about ${sent.personal} personal and ${sent.service} service-account token(s) expiring within ${EXPIRY_NOTICE_DAYS} days`);
       } finally {
         await client.query("SELECT pg_advisory_unlock($1)", [LOCK]);

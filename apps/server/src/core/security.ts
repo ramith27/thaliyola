@@ -393,7 +393,7 @@ export async function runSecurityChecks(db: Db, settings: Settings, log: (msg: s
   }
   await announce(db, settings);
   await db.query("DELETE FROM dependency_uploads WHERE expires_at < now() - interval '1 day'");
-  await db.query("INSERT INTO job_runs (name, last_run) VALUES ('security', now()) ON CONFLICT (name) DO UPDATE SET last_run = now()");
+  await db.query("INSERT INTO job_runs (name, last_run, status, last_success) VALUES ('security', now(), 'ok', now()) ON CONFLICT (name) DO UPDATE SET last_run = now(), status = 'ok', last_success = now(), failures = 0");
 }
 
 function ingestFromGraph(db: Db, settings: Settings, scopeId: string, component: string, packages: Package[]) {

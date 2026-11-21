@@ -23,7 +23,7 @@ if [ "${2:-}" != "--yes" ]; then
 fi
 
 $live && systemctl stop thaliyola
-su postgres -c "psql -v ON_ERROR_STOP=1 -q -c 'DROP DATABASE IF EXISTS $target' -c 'CREATE DATABASE $target OWNER $db_user'"
+su postgres -c "psql -v ON_ERROR_STOP=1 -q -c 'DROP DATABASE IF EXISTS $target' -c \"CREATE DATABASE $target OWNER $db_user ENCODING 'UTF8' LC_COLLATE 'C' LC_CTYPE 'C' TEMPLATE template0\""
 su postgres -c "psql -v ON_ERROR_STOP=1 -q -d $target -c 'CREATE EXTENSION IF NOT EXISTS vector'"
 # Restore as the app's own role; extension entries need a superuser and were created above.
 list="$(mktemp)"

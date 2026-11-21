@@ -5,6 +5,7 @@ import { claimsBySession, transferClaims } from "./coordination.js";
 import { onProjectEvent, openIncidentsIn } from "./incidents.js";
 import { findExperts } from "./expertise.js";
 import { replyInSlack } from "./slack-app.js";
+import { recordJob } from "./jobs.js";
 import { ForbiddenError, NotFoundError, ValidationError, type RequestContext } from "./context.js";
 import { emitChanged, waitFor, wake } from "./events.js";
 import { notify, reviewersFor } from "./notify.js";
@@ -745,6 +746,7 @@ export function startSessionJobs(db: Db, settings: Settings, log: (msg: string) 
     try {
       const { rows } = await client.query<{ locked: boolean }>("SELECT pg_try_advisory_lock($1) AS locked", [LOCK]);
       if (!rows[0]?.locked) return;
+      const started = Date.now();
       try {
         await expireQuestions(db);
         const waiting = await db.query<{ id: string; to_session_id: string | null; to_user_id: string | null; to_scope_id: string | null }>(
@@ -758,6 +760,10 @@ export function startSessionJobs(db: Db, settings: Settings, log: (msg: string) 
               : await reviewersFor(db, settings, q.to_scope_id!);
           await notifyWaiting(db, settings, q.id, owners);
         }
+        await recordJob(db, "sessions", { ok: true, durationMs: Date.now() - started }).catch(() => undefined);
+      } catch (err) {
+        await recordJob(db, "sessions", { ok: false, error: (err as Error).message, durationMs: Date.now() - started }).catch(() => undefined);
+        throw err;
       } finally {
         await client.query("SELECT pg_advisory_unlock($1)", [LOCK]);
       }

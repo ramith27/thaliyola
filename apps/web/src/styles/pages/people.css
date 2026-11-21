@@ -221,3 +221,4 @@
 .pp-skills-foot p { margin: 0; flex: 1 1 20rem; }
 .pp-gate-sso { display: grid; gap: 0.5rem; margin-bottom: 0.8rem; }
 .pp-gate-or { text-align: center; color: var(--muted); font-size: 0.85rem; margin: 0.4rem 0 0; }
+.health-jobs td { vertical-align: top; }

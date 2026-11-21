@@ -747,6 +747,7 @@ sudo ADMIN_EMAIL=you@example.com deploy/native/install.sh
 - Re-run the script to upgrade. It keeps the config and the database.
 - Logs: `journalctl -u thaliyola -f`.
 - Backups run daily at 03:15 (`thaliyola-backup.timer`). Each one is a database dump plus an archive of uploaded files, written to `/var/backups/thaliyola`, and the newest 14 are kept. Run one now with `sudo thaliyola-backup`.
+- **Off-site and checked:** with `BACKUP_S3_*` set, each backup is also copied to an S3-compatible bucket (optionally encrypted with `BACKUP_ENCRYPTION_KEY`), and on the 1st of each month `thaliyola-restore-check` restores the newest one into a scratch database and compares it with the live data. Both report to **Admin › System › Health**, which also shows every background job's last run and error, the database, disk space and the embedding backlog; Administrators are told when backups stop, a restore check fails or a job keeps failing. See [`docs/install.md`](docs/install.md#backups-off-the-machine-and-checking-they-restore).
 - Restore with `sudo thaliyola-restore /var/backups/thaliyola/thaliyola-….dump`. To check a backup without touching the live data, add `TARGET_DB=thaliyola_check` to restore it into a scratch database. Copy backups off the machine too.
 
 **Without Docker, for development**

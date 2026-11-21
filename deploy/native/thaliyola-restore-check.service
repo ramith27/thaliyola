@@ -1,0 +1,7 @@
+[Unit]
+Description=Check that the newest Thaliyola backup restores
+After=postgresql.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/thaliyola-restore-check

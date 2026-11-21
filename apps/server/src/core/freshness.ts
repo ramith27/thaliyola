@@ -1,4 +1,6 @@
 import { sendDigests } from "./digest.js";
+import { alertHealth } from "./health.js";
+import { runJob } from "./jobs.js";
 import { notifyReviewsDue } from "./decisions.js";
 import { rebuildExpertise } from "./expertise.js";
 import type { Settings } from "../config.js";
@@ -65,63 +67,43 @@ export async function needsAttention(ctx: RequestContext, opts: { scope?: string
 export function startJobs(db: Db, opts: { findingDays: number; articleDays: number; intervalHours: number; settings?: Settings }, log: (msg: string) => void) {
   const LOCK = 7_402_211; // arbitrary, stable key for "thaliyola maintenance"
   async function run() {
-    // Database unreachable: log and try again next time instead of an unhandled rejection that ends the process.
-    const client = await db.connect().catch((err: Error) => void log(`maintenance failed: ${err.message}`));
-    if (!client) return;
-    try {
-      const { rows } = await client.query<{ locked: boolean }>("SELECT pg_try_advisory_lock($1) AS locked", [LOCK]);
-      if (!rows[0]?.locked) return;
-      try {
-        const stale = await markStale(db, opts, opts.settings);
-        await db.query("DELETE FROM sessions WHERE expires_at < now()");
-        await db.query("DELETE FROM auth_throttle WHERE reset_at < now()");
-        await db.query("DELETE FROM oauth_requests WHERE expires_at < now()");
-        await db.query("DELETE FROM oauth_codes WHERE expires_at < now() - interval '1 day'");
-        await db.query("DELETE FROM oauth_tokens WHERE expires_at < now() - interval '7 days'");
-        await db.query("DELETE FROM invitations WHERE expires_at < now() - interval '30 days' AND accepted_at IS NULL");
-        if (opts.settings) await db.query("DELETE FROM search_log WHERE at < now() - make_interval(days => $1)", [opts.settings.searchLogDays]);
-        if (stale.findings || stale.articles) log(`marked ${stale.findings} finding(s) and ${stale.articles} article(s) possibly stale`);
-        if (opts.settings) {
-          const due = await notifyReviewsDue(db, opts.settings);
-          if (due) log(`told owners about ${due} article(s) due for revisiting`);
-        }
-        // Who knows what: rebuilt about once a day.
-        const due = (await db.query("SELECT 1 FROM job_runs WHERE name = 'expertise' AND last_run > now() - interval '20 hours'")).rowCount === 0;
-        if (due) {
-          const n = await rebuildExpertise(db);
-          await db.query("INSERT INTO job_runs (name, last_run) VALUES ('expertise', now()) ON CONFLICT (name) DO UPDATE SET last_run = now()");
-          log(`rebuilt who-knows-what (${n} rows)`);
-        }
-      } finally {
-        await client.query("SELECT pg_advisory_unlock($1)", [LOCK]);
+    await runJob(db, "maintenance", LOCK, log, async () => {
+      const stale = await markStale(db, opts, opts.settings);
+      await db.query("DELETE FROM sessions WHERE expires_at < now()");
+      await db.query("DELETE FROM auth_throttle WHERE reset_at < now()");
+      await db.query("DELETE FROM oauth_requests WHERE expires_at < now()");
+      await db.query("DELETE FROM oauth_codes WHERE expires_at < now() - interval '1 day'");
+      await db.query("DELETE FROM oauth_tokens WHERE expires_at < now() - interval '7 days'");
+      await db.query("DELETE FROM invitations WHERE expires_at < now() - interval '30 days' AND accepted_at IS NULL");
+      if (opts.settings) await db.query("DELETE FROM search_log WHERE at < now() - make_interval(days => $1)", [opts.settings.searchLogDays]);
+      if (stale.findings || stale.articles) log(`marked ${stale.findings} finding(s) and ${stale.articles} article(s) possibly stale`);
+      if (opts.settings) {
+        const due = await notifyReviewsDue(db, opts.settings);
+        if (due) log(`told owners about ${due} article(s) due for revisiting`);
       }
-    } catch (err) {
-      log(`maintenance failed: ${(err as Error).message}`);
-    } finally {
-      client.release();
-    }
+      // Who knows what: rebuilt about once a day.
+      const due = (await db.query("SELECT 1 FROM job_runs WHERE name = 'expertise' AND last_run > now() - interval '20 hours'")).rowCount === 0;
+      if (due) {
+        const n = await rebuildExpertise(db);
+        await db.query("INSERT INTO job_runs (name, last_run) VALUES ('expertise', now()) ON CONFLICT (name) DO UPDATE SET last_run = now()");
+        log(`rebuilt who-knows-what (${n} rows)`);
+      }
+      if (opts.settings) await alertHealth(db, opts.settings);
+      return { stale_findings: stale.findings, stale_articles: stale.articles };
+    });
   }
   // Weekly digests: checked every 15 minutes, sent once per person per week (one instance at a time).
   const DIGEST_LOCK = 7_402_212;
   async function digests() {
     if (!opts.settings || opts.settings.mailTransport === "off") return;
-    const client = await db.connect().catch((err: Error) => void log(`digest failed: ${err.message}`));
-    if (!client) return;
-    try {
-      const { rows } = await client.query<{ locked: boolean }>("SELECT pg_try_advisory_lock($1) AS locked", [DIGEST_LOCK]);
-      if (!rows[0]?.locked) return;
-      try {
-        const r = await sendDigests(db, opts.settings);
-        if (r.sent) log(`sent ${r.sent} weekly digest(s)`);
-      } finally {
-        await client.query("SELECT pg_advisory_unlock($1)", [DIGEST_LOCK]);
-      }
-    } catch (err) {
-      log(`digest failed: ${(err as Error).message}`);
-    } finally {
-      client.release();
-    }
+    const settings = opts.settings;
+    await runJob(db, "digests", DIGEST_LOCK, log, async () => {
+      const r = await sendDigests(db, settings);
+      if (r.sent) log(`sent ${r.sent} weekly digest(s)`);
+      return { sent: r.sent };
+    });
   }
+
   // Runs the timers started, so shutdown can wait for them (an interrupted run is redone by the next one).
   const active = new Set<Promise<void>>();
   const start = (job: () => Promise<void>) => () => {
