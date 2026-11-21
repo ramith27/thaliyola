@@ -138,15 +138,21 @@ export async function login(db: Db, email: string, password: string, opts: { ttl
   // Hash even for unknown users so timing doesn't reveal which emails exist.
   const ok = await verifyPassword(password, user?.password_hash ?? "scrypt$32768$8$1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
   if (!user || !ok || user.disabled_at) return null;
+  const token = await startSession(db, user.id, opts);
+  await db.query("DELETE FROM sessions WHERE expires_at < now()");
+  return { token, userId: user.id, mustChangePassword: user.must_change_password };
+}
+
+/** A new browser session for an account (password or OpenID Connect sign-in); returns the cookie value. */
+export async function startSession(db: Queryable, userId: string, opts: { ttlHours: number; userAgent?: string }) {
   const token = randomToken();
   await db.query("INSERT INTO sessions (token_hash, user_id, expires_at, user_agent) VALUES ($1, $2, now() + make_interval(hours => $3), $4)", [
     sha256(token),
-    user.id,
+    userId,
     opts.ttlHours,
     (opts.userAgent ?? "").slice(0, 300),
   ]);
-  await db.query("DELETE FROM sessions WHERE expires_at < now()");
-  return { token, userId: user.id, mustChangePassword: user.must_change_password };
+  return token;
 }
 
 export async function logout(db: Db, token: string) {

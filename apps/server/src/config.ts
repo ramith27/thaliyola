@@ -92,6 +92,10 @@ const Env = z
     SLACK_BOT_TOKEN: z.string().optional(),
     // The /thaliyola slash command: the Slack app's signing secret (and SLACK_BOT_TOKEN to post answers).
     SLACK_SIGNING_SECRET: z.string().optional(),
+    // Sign-in with OpenID Connect providers (OIDC_PROVIDERS and OIDC_<NAME>_* are read in oidcProvidersFrom).
+    OIDC_PROVIDERS: z.string().optional(),
+    OIDC_ALLOWED_DOMAINS: z.string().optional(),
+    OIDC_ONLY: z.enum(["true", "false"]).optional(),
     SLACK_API_URL: z.string().url().optional(),
     NOTION_TOKEN: z.string().optional(),
     TAVILY_API_KEY: z.string().optional(),
@@ -162,7 +166,35 @@ const Env = z
     if (env.CONNECTIONS_KEY_OLD?.trim() && !env.CONNECTIONS_KEY?.trim()) ctx.addIssue({ code: "custom", message: "CONNECTIONS_KEY_OLD needs CONNECTIONS_KEY (the new key)" });
   });
 
-export type Config = z.infer<typeof Env>;
+export interface OidcProvider {
+  /** Lower-case name used in URLs and subjects (google, okta, entra…). */
+  name: string;
+  label: string;
+  issuer: string;
+  clientId: string;
+  clientSecret: string;
+  /** Trust the email claim without email_verified (providers such as Entra that don't send it). */
+  trustEmail: boolean;
+}
+export type Config = z.infer<typeof Env> & { OIDC?: OidcProvider[] };
+
+/**
+ * OpenID Connect providers from OIDC_PROVIDERS=google,okta and, for each, OIDC_<NAME>_ISSUER, _CLIENT_ID,
+ * _CLIENT_SECRET, optional _LABEL and _TRUST_EMAIL=true. A provider missing a value is an error at start.
+ */
+export function oidcProvidersFrom(env: NodeJS.ProcessEnv): OidcProvider[] {
+  const names = (env.OIDC_PROVIDERS ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+  return names.map((name) => {
+    if (!/^[a-z][a-z0-9-]{0,30}$/.test(name)) throw new Error(`OIDC_PROVIDERS: "${name}" isn't a valid provider name (letters, digits, dashes)`);
+    const key = (k: string) => env[`OIDC_${name.toUpperCase().replace(/-/g, "_")}_${k}`]?.trim() ?? "";
+    const issuer = key("ISSUER").replace(/\/+$/, "");
+    const clientId = key("CLIENT_ID");
+    const clientSecret = key("CLIENT_SECRET");
+    if (!/^https:\/\//.test(issuer) || !clientId || !clientSecret) throw new Error(`OIDC provider ${name}: set OIDC_${name.toUpperCase()}_ISSUER (https://…), _CLIENT_ID and _CLIENT_SECRET`);
+    const defaultLabel: Record<string, string> = { google: "Google", okta: "Okta", entra: "Microsoft", microsoft: "Microsoft", github: "GitHub", gitlab: "GitLab", auth0: "Auth0" };
+    return { name, label: key("LABEL") || defaultLabel[name] || name, issuer, clientId, clientSecret, trustEmail: key("TRUST_EMAIL") === "true" };
+  });
+}
 
 /** TRUST_PROXY as Express takes it: true / false, a hop count, or the list of trusted addresses and ranges. */
 export function trustProxyFrom(value: string): boolean | number | string {
@@ -186,6 +218,13 @@ export function settingsFrom(config: Config): Settings {
     smtpUrl: config.SMTP_URL,
     mailFrom: config.MAIL_FROM,
     slackWebhookUrl: config.SLACK_WEBHOOK_URL,
+    oidc: config.OIDC?.length
+      ? {
+          providers: config.OIDC,
+          allowedDomains: (config.OIDC_ALLOWED_DOMAINS ?? "").split(",").map((d) => d.trim().toLowerCase().replace(/^@/, "")).filter(Boolean),
+          only: config.OIDC_ONLY === "true",
+        }
+      : undefined,
     slackApp: { signingSecret: config.SLACK_SIGNING_SECRET || undefined, botToken: config.SLACK_BOT_TOKEN || undefined, apiUrl: config.SLACK_API_URL },
     rateLimitPerMinute: config.RATE_LIMIT_PER_MINUTE,
     logRequests: config.LOG_REQUESTS === "true",
@@ -304,6 +343,8 @@ export interface Settings {
   /** Team sources; absent in tests that don't use them. */
   sources?: { enabled: boolean; slackToken?: string; notionToken?: string; tavilyKey?: string; allowPrivate: boolean };
   /** Vulnerability matching; `fetch` is injected in tests. */
+  /** Sign-in with OpenID Connect providers (auth/oidc.ts); local mode only. */
+  oidc?: { providers: OidcProvider[]; allowedDomains: string[]; only: boolean; fetch?: typeof fetch };
   /** The /thaliyola slash command (core/slack-app.ts). */
   slackApp?: { signingSecret?: string; botToken?: string; apiUrl?: string; fetch?: typeof fetch };
   security?: {
@@ -350,5 +391,5 @@ export interface Settings {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  return Env.parse(env);
+  return { ...Env.parse(env), OIDC: oidcProvidersFrom(env) };
 }

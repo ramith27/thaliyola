@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { oidcRouter, signInOptions } from "../auth/oidc.js";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { sessionToken } from "../auth/index.js";
@@ -67,12 +68,15 @@ export function publicAuthRouter(db: Db, settings: Settings) {
   const perIp = new LoginThrottle(db, "login-ip", 50, 15 * 60_000);
 
   router.get("/config", (_req, res) => {
-    res.json({ mode: settings.authMode });
+    res.json({ mode: settings.authMode, ...(settings.authMode === "local" ? signInOptions(settings) : {}) });
   });
+  // Sign-in with OpenID Connect providers (Google, Okta, Entra…), next to passwords.
+  if (settings.authMode === "local" && settings.oidc?.providers.length) router.use("/oidc", oidcRouter(db, settings, (req, res, token) => setSessionCookie(req, res, settings, token)));
 
   router.post("/login", async (req, res, next) => {
     try {
       if (settings.authMode !== "local") return void res.status(404).json({ error: "local sign-in is not enabled" });
+      if (!signInOptions(settings).password) return void res.status(403).json({ error: "passwords are switched off here: sign in with your organisation's account" });
       const body = z.object({ email: z.string().min(3).max(320), password: z.string().min(1).max(200) }).safeParse(req.body);
       if (!body.success) return void res.status(400).json({ error: "email and password are required" });
       const ip = req.ip ?? "unknown";

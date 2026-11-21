@@ -1,4 +1,5 @@
 import type { OAuthRegisteredClientsStore } from "@modelcontextprotocol/sdk/server/auth/clients.js";
+import { signInOptions } from "./oidc.js";
 import { InvalidGrantError, InvalidTokenError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import type { AuthorizationParams, OAuthServerProvider } from "@modelcontextprotocol/sdk/server/auth/provider.js";
 import { mcpAuthRouter } from "@modelcontextprotocol/sdk/server/auth/router.js";
@@ -235,7 +236,7 @@ p{margin:8px 0}.muted{color:var(--muted);font-size:.9rem}.box{background:var(--w
 label{display:flex;flex-direction:column;gap:4px;margin:10px 0;font-weight:550;font-size:.92rem}
 input{font:inherit;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text)}
 .row{display:flex;gap:8px;margin-top:16px}button{font:inherit;padding:8px 16px;border-radius:6px;border:1px solid var(--border);background:var(--panel);color:var(--text);cursor:pointer;flex:1}
-button.primary{background:var(--accent);border-color:var(--accent);color:var(--panel)}.error{color:var(--danger)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--panel)}a.button{flex:1;text-align:center;font:inherit;padding:8px 16px;border-radius:6px;border:1px solid var(--border);color:var(--text);text-decoration:none}.error{color:var(--danger)}
 </style></head><body><main><h1><img src="/favicon.svg" alt="" width="24" height="24"> ${escapeHtml(title)}</h1>${body}</main></body></html>`);
 }
 
@@ -261,12 +262,19 @@ function consentRouter(db: Db, settings: Settings) {
       "Sign in to Thaliyola",
       `<p><strong>${escapeHtml(name)}</strong> wants to connect to Thaliyola. Sign in to continue.</p>
        ${error ? `<p class="error">${escapeHtml(error)}</p>` : ""}
-       <form method="post" action="/oauth/consent/login">
+       ${signInOptions(settings)
+         .providers.map((p) => `<div class="row"><a class="button" href="/auth/oidc/${escapeHtml(p.name)}/start?return=${encodeURIComponent(`/oauth/consent?request=${requestId}`)}">Sign in with ${escapeHtml(p.label)}</a></div>`)
+         .join("")}
+       ${
+         signInOptions(settings).password
+           ? `<form method="post" action="/oauth/consent/login">
          <input type="hidden" name="request" value="${escapeHtml(requestId)}">
          <label>Email<input type="email" name="email" autocomplete="username" required autofocus></label>
          <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
          <div class="row"><button class="primary" type="submit">Sign in</button></div>
-       </form>`,
+       </form>`
+           : ""
+       }`,
     );
   }
 

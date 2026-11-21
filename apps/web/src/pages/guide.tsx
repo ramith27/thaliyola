@@ -352,6 +352,7 @@ const FEATURES: Feature[] = [
 const STATUS_LABELS: [string, string][] = [
   ["public_url", "Public address (PUBLIC_URL)"],
   ["oauth", "claude.ai sign-in (OAuth)"],
+  ["oidc", "Sign-in with Google, Okta or Microsoft"],
   ["semantic_search", "Search by meaning"],
   ["email", "Email notifications"],
   ["slack_channel", "Slack channel"],

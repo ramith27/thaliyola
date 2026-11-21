@@ -62,7 +62,7 @@ describe("passwords", () => {
 
 describe("local sign-in", () => {
   it("reports the auth mode publicly", async () => {
-    expect(await (await fetch(`${base}/auth/config`)).json()).toEqual({ mode: "local" });
+    expect(await (await fetch(`${base}/auth/config`)).json()).toEqual({ mode: "local", providers: [], password: true });
   });
 
   it("signs in with an HttpOnly session cookie and signs out", async () => {

@@ -74,6 +74,15 @@ export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
   const [error, setError] = useState<unknown>(null);
   const formRef = useRef<HTMLFormElement>(null);
   usePageMeta({ title: "Sign in" });
+  // Sign-in with the organisation's provider (OpenID Connect), when the server offers it.
+  const [options, setOptions] = useState<{ providers: { name: string; label: string }[]; password: boolean }>({ providers: [], password: true });
+  useEffect(() => {
+    fetch("/auth/config", { credentials: "same-origin" })
+      .then((r) => r.json())
+      .then((c: { providers?: { name: string; label: string }[]; password?: boolean }) => setOptions({ providers: c.providers ?? [], password: c.password !== false }))
+      .catch(() => undefined);
+  }, []);
+  const returnTo = `/${window.location.hash}`;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -99,6 +108,17 @@ export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
 
   return (
     <GateCard title="Sign in to Thaliyola" description={<p>Your team's knowledge base.</p>} footer={<p className="pp-gate-hint">Forgot your password? Ask an Administrator or User manager to reset it.</p>}>
+      {options.providers.length > 0 && (
+        <div className="pp-gate-sso">
+          {options.providers.map((p) => (
+            <Button key={p.name} size="lg" block href={`/auth/oidc/${encodeURIComponent(p.name)}/start?return=${encodeURIComponent(returnTo)}`}>
+              Sign in with {p.label}
+            </Button>
+          ))}
+          {options.password && <p className="pp-gate-or">or with your Thaliyola password</p>}
+        </div>
+      )}
+      {options.password && (
       <form ref={formRef} className="pp-gate-form" noValidate onSubmit={submit}>
         <Field label="Email" error={errors.email}>
           <TextInput type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
@@ -111,6 +131,7 @@ export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
           {busy ? "Signing in…" : "Sign in"}
         </Button>
       </form>
+      )}
     </GateCard>
   );
 }

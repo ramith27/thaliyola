@@ -863,6 +863,24 @@ sudo thaliyola-admin grant --service nightly-rca --in order-service --role revie
 sudo thaliyola-admin export --out /tmp/thaliyola.zip [--scope team]          # everything as Markdown (members-only projects too)
 ```
 
+### Sign in with Google, Okta or Microsoft (OpenID Connect)
+
+In local mode, people can sign in with your organisation's identity provider next to (or instead of) Thaliyola passwords. Any OpenID Connect provider works.
+
+```sh
+OIDC_PROVIDERS=google,okta                       # one or more names, used in the URLs below
+OIDC_GOOGLE_ISSUER=https://accounts.google.com
+OIDC_GOOGLE_CLIENT_ID=…  OIDC_GOOGLE_CLIENT_SECRET=…
+OIDC_OKTA_ISSUER=https://acme.okta.com  OIDC_OKTA_CLIENT_ID=…  OIDC_OKTA_CLIENT_SECRET=…  OIDC_OKTA_LABEL="Acme SSO"
+OIDC_ALLOWED_DOMAINS=acme.com                    # optional: only these email domains
+OIDC_ONLY=true                                   # optional: hide the password form (and refuse password sign-in)
+```
+
+- In the provider, register a web application with the redirect URI `<PUBLIC_URL>/auth/oidc/<name>/callback` (e.g. `https://kb.acme.com/auth/oidc/google/callback`). `PUBLIC_URL` must be set.
+- **Microsoft Entra:** issuer `https://login.microsoftonline.com/<tenant id>/v2.0`, and `OIDC_ENTRA_TRUST_EMAIL=true`, since Entra doesn't send `email_verified` (only do this for a single-tenant app whose emails you trust).
+- The sign-in page (and the claude.ai connector's consent page) shows **Sign in with …** buttons. The flow is the authorization code with PKCE, state and nonce (kept ten minutes, used once, in the database, so any replica can finish it); the ID token is verified against the provider's published keys; a verified email is required.
+- **Accounts:** the first sign-in links to the existing Thaliyola account with the same email (one account per person); otherwise a new account is created and follows the usual approval rules (`REQUIRE_APPROVAL`, `ADMIN_EMAILS`). Disabled accounts can't sign in. Each sign-in is in the audit log.
+
 ### OAuth for claude.ai and other OAuth clients (local mode)
 
 Set `PUBLIC_URL` (e.g. `https://thaliyola.example.com`) and Thaliyola also acts as an OAuth 2.1 authorization server for MCP clients that only support OAuth, such as claude.ai custom connectors:
