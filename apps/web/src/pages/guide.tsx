@@ -191,6 +191,26 @@ const FEATURES: Feature[] = [
     page: "/sessions",
   },
   {
+    id: "incidents",
+    area: "Claude",
+    title: "Incidents",
+    what: "Declare an incident when something is broken: the project is told, and a timeline fills itself with notes, Sentry alerts, merged pull requests and sessions' questions; resolving drafts a root-cause finding.",
+    enable: "Always on. Sentry alerts open incidents when the project's Sentry source has 'Open incidents from alerts' on.",
+    use: [
+      "Incidents → Declare incident, or /thaliyola:incident in Claude Code.",
+      "Add what you learn as notes; sessions in the project are told about it on their next prompt.",
+      "Mark mitigated, then resolve; then run write-rca to complete the drafted root cause.",
+    ],
+    commands: [
+      { kind: "claude", cmd: "/thaliyola:incident <what's broken> [sev1-4]", what: "Declare one, or add to the open one" },
+      { kind: "prompt", cmd: "/mcp__thaliyola__write-rca <incident id>", what: "Work out and write the root cause" },
+      { kind: "tool", cmd: "declare_incident · get_incident · list_incidents · add_incident_note · update_incident", what: "Incident tools" },
+      { kind: "page", cmd: "Incidents", what: "Open incidents, timelines, declare" },
+    ],
+    docs: "README.md#incidents",
+    page: "/incidents",
+  },
+  {
     id: "security",
     area: "Security",
     title: "Vulnerabilities in your dependencies and code",

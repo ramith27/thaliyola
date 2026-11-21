@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Settings } from "../config.js";
 import type { Db, Queryable } from "../db/pool.js";
 import { claimsBySession, transferClaims } from "./coordination.js";
+import { onProjectEvent, openIncidentsIn } from "./incidents.js";
 import { ForbiddenError, NotFoundError, ValidationError, type RequestContext } from "./context.js";
 import { emitChanged, waitFor, wake } from "./events.js";
 import { notify, reviewersFor } from "./notify.js";
@@ -308,6 +309,7 @@ export async function askSession(
   ).rows[0]!;
   wake([target.to_session_id && `s:${target.to_session_id}`, target.to_user_id && `u:${target.to_user_id}`, target.to_scope_id && `p:${target.to_scope_id}`]);
   emitChanged();
+  await incidentEvent(ctx.db, q, "question", `${kind === "handoff" ? "Handoff" : "Asked"} ${target.label}: ${question.split("\n")[0]!.slice(0, 160)}`);
   // Nobody online to pick it up: tell the person (or the project's reviewers) now rather than in two minutes.
   if (!target.online) await notifyWaiting(ctx.db, ctx.settings, q.id, target.owners);
 
@@ -549,6 +551,7 @@ export async function answerQuestion(
     [q.id, answer, session?.id ?? null, ctx.actor.id],
   );
   if (q.kind === "handoff" && q.from_session_id) await transferClaims(ctx.db, q.from_session_id, session?.id ?? null);
+  await incidentEvent(ctx.db, q, "answer", `${session?.handle ?? "Answered"}${session ? " answered" : ""}: ${q.question.split("\n")[0]!.slice(0, 160)}`);
   wake([`q:${q.id}`, q.from_session_id && `a:${q.from_session_id}`, `au:${q.from_user_id}`]);
   emitChanged();
   let saved: unknown = null;
@@ -610,6 +613,15 @@ export async function cancelQuestion(ctx: RequestContext, id: string) {
   return { id, status: "cancelled" };
 }
 
+/** A question or answer in a project with an open incident goes on its timeline (the question's first line only). */
+async function incidentEvent(db: Queryable, q: Pick<QuestionRow, "id" | "to_scope_id" | "to_session_id" | "from_session_id">, kind: "question" | "answer", text: string) {
+  const scope =
+    q.to_scope_id ??
+    (await db.query<{ scope_id: string | null }>("SELECT scope_id FROM agent_sessions WHERE id = ANY($1::uuid[]) AND scope_id IS NOT NULL LIMIT 1", [[q.to_session_id, q.from_session_id].filter(Boolean)])).rows[0]?.scope_id ??
+    null;
+  await onProjectEvent(db, scope, { kind, text, ref: `${kind}:${q.id}`, url: "#/sessions" });
+}
+
 // ---- Handoff ----------------------------------------------------------------------------------------------
 
 /**
@@ -647,7 +659,8 @@ export async function hookCheck(
 ) {
   const s = await findOwnSession(ctx, input);
   const answers = input.answers ? await undeliveredAnswers(ctx.db, s.id, ctx.actor.id) : [];
-  if (!input.claim) return { session: s.handle, listening: s.listening, waiting: await pendingCount(ctx.db, s), questions: [], answers };
+  const incidents = await openIncidentsIn(ctx.db, s.scope_id);
+  if (!input.claim) return { session: s.handle, listening: s.listening, waiting: await pendingCount(ctx.db, s), questions: [], answers, incidents };
   const r = await waitForQuestions(ctx, { session: s.handle, wait_seconds: input.wait_seconds ?? 0 }, { maxWaitMs: MAX_WAIT_HTTP_MS, signal });
   return { session: s.handle, listening: s.listening, questions: r.questions, how: ANSWER_HOW, answers };
 }

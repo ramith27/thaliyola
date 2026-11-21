@@ -485,6 +485,20 @@ When a pull (merge) request opens or gets new commits, Thaliyola can comment on 
 - **For agents:** `brief_changes` gives the same briefing for local changes before a pull request exists, `get_pr_briefing` returns a pull request's, and `/mcp__thaliyola__review-pr [number]` reviews a pull request (or the current branch) against them.
 - API: `GET`/`PUT /api/scopes/:slug/pr-briefings`, `POST /api/connections/:id/webhook` (new secret, shown once), `POST /hooks/git/:connection` (the webhook).
 
+## Incidents
+
+When something is broken right now, declare an **incident** in the project: everyone with a role there (and anyone watching it) is told in the app, by email and on the project's Slack or Trello routes (the new *incident* kind), and the incident's **timeline** fills itself while it's open:
+- notes people and agents add (`add_incident_note`, or the box on the incident page), status and severity changes, who leads it;
+- **pull requests merged** in the project (from a GitHub merged-PR source), **questions and answers** between the project's sessions (the question's first line only), and **Sentry** events for its issues.
+
+**Declaring:** **Incidents** in the sidebar → *Declare incident*; `declare_incident` over MCP; `/thaliyola:incident <what's broken> [sev2]` in Claude Code (it adds to the project's open incident instead when one already covers it); or a **Sentry alert**: turn on *Open incidents from alerts* (`incidents: on`) on the project's Sentry source and add the alert webhook in Sentry: an issue or metric alert opens an incident, a later alert for the same issue or rule joins it, and the issue resolving goes on its timeline.
+
+**While it's open**, Claude Code sessions in that project hear about it once on their next prompt (plugin 0.4.0), with the id for `get_incident`. The sidebar shows how many are open.
+
+**Resolving** drafts a **root-cause finding** (type `rca`) for review: the severity, how long it lasted and the whole timeline, with the cause left to write. `/mcp__thaliyola__write-rca <id>` has Claude work the cause out from the timeline, the pull requests and the code, and complete it.
+
+Severity is SEV1 (everyone down or data at risk) to SEV4 (minor). Contributors and above declare and update incidents in their projects; anyone who can read the project sees them. MCP: `declare_incident`, `get_incident`, `list_incidents`, `add_incident_note`, `update_incident`. API: `GET`/`POST /api/incidents`, `GET`/`PATCH /api/incidents/:id`, `POST /api/incidents/:id/notes`.
+
 ## Design systems
 
 Each project (and Team and Library) can keep its design system as structured tokens, so every session and project builds UI with the same values:

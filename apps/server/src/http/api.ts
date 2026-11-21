@@ -40,6 +40,7 @@ import { checkDesignDrift, latestDrift } from "../core/design-drift.js";
 import { exportSbom, licenceReport } from "../core/sbom.js";
 import { guideProgress } from "../core/guide.js";
 import { listBriefings, setBriefingMode, setGitWebhook } from "../core/briefings.js";
+import { addIncidentNote, declareIncident, getIncident, listIncidents, updateIncident } from "../core/incidents.js";
 import { getReadableScope, personalScope } from "../core/scopes.js";
 import { hideAdvisory, latestAdvisories, publishAdvisory, setAdvisoryResponse, setProjectTechnologies, stackOf, TECHNOLOGIES } from "../core/advisories.js";
 import { beginDependencyScan, detectProjectStack, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, securityOverview, updateVulnerability, uploadWithAuth } from "../core/security.js";
@@ -718,6 +719,25 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
     "/questions/:id/save",
     handle("save_answer", (ctx, req) =>
       saveAnswer(ctx, { id: uuid.parse(req.params.id), ...z.object({ type: z.enum(["known_issue", "rca", "data_gotcha", "query_recipe", "incident"]), scope: z.string().optional() }).parse(req.body) }),
+    ),
+  );
+  // Incidents.
+  router.get("/incidents", handle("list_incidents", (ctx, req) => listIncidents(ctx, z.object({ project: z.string().optional(), status: z.enum(["open", "all"]).optional(), limit: z.coerce.number().int().optional() }).parse(req.query))));
+  router.post(
+    "/incidents",
+    handle("declare_incident", (ctx, req) =>
+      declareIncident(ctx, { ...z.object({ project: z.string(), title: z.string().min(1).max(200), severity: z.enum(["sev1", "sev2", "sev3", "sev4"]).optional(), summary: z.string().max(4000).optional() }).parse(req.body), via: "web" }),
+    ),
+  );
+  router.get("/incidents/:id", handle("get_incident", (ctx, req) => getIncident(ctx, uuid.parse(req.params.id))));
+  router.post("/incidents/:id/notes", handle("add_incident_note", (ctx, req) => addIncidentNote(ctx, { id: uuid.parse(req.params.id), ...z.object({ text: z.string().min(1).max(2000), url: z.string().url().max(500).optional() }).parse(req.body) })));
+  router.patch(
+    "/incidents/:id",
+    handle("update_incident", (ctx, req) =>
+      updateIncident(ctx, {
+        id: uuid.parse(req.params.id),
+        ...z.object({ status: z.enum(["open", "mitigated", "resolved"]).optional(), severity: z.enum(["sev1", "sev2", "sev3", "sev4"]).optional(), commander: z.string().email().optional(), summary: z.string().max(4000).optional() }).parse(req.body),
+      }),
     ),
   );
   // PR briefings.

@@ -32,7 +32,7 @@ import { postTrello } from "./trello.js";
  * Nothing at the top level of this module may use what it imports from notify.ts (the two import each other).
  */
 
-export type RouteKind = "review" | "decided" | "comment" | "change" | "stale" | "security" | "connection" | "access";
+export type RouteKind = "review" | "decided" | "comment" | "change" | "stale" | "security" | "connection" | "access" | "incident";
 
 /** The kinds a route can carry; `team`: only team-wide routes (the event has no project). */
 export const ROUTE_KINDS: { kind: RouteKind; label: string; team?: true }[] = [
@@ -42,6 +42,7 @@ export const ROUTE_KINDS: { kind: RouteKind; label: string; team?: true }[] = [
   { kind: "change", label: "A contract, shared design, schema or API it uses changed" },
   { kind: "stale", label: "Entries that need re-verifying" },
   { kind: "security", label: "Critical or actively exploited vulnerabilities" },
+  { kind: "incident", label: "Incidents declared, mitigated and resolved" },
   { kind: "connection", label: "Connections that fail or recover; schema and API changes" },
   { kind: "access", label: "People waiting for access to Thaliyola", team: true },
 ];

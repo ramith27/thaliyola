@@ -126,6 +126,12 @@ try {
           : `- Your question "${String(a.question).slice(0, 120)}" (id ${a.id}) was ${a.status}${a.answer ? `: ${a.answer}` : ""}.`,
       );
     if (r.waiting) lines.push(`- ${r.waiting} question(s) from other sessions are waiting for this session; they'll be handed to you when you finish this request.`);
+    // Each open incident in this project, once per session.
+    const state = readState();
+    const seen = new Set(state.incidents || []);
+    const fresh = (r.incidents || []).filter((i) => !seen.has(i.id));
+    for (const i of fresh) lines.push(`- Incident open in this project: "${i.title}" (${i.severity}, ${i.status}, id ${i.id}). get_incident has the timeline; add what you find with add_incident_note.`);
+    if (fresh.length) writeState({ ...state, incidents: [...seen, ...fresh.map((i) => i.id)].slice(-50) });
     if (lines.length)
       out({
         hookSpecificOutput: {
@@ -142,7 +148,7 @@ try {
       r = await api("GET", `/agent-sessions/check?${ref}&claim=true&wait_seconds=100`, undefined, 115_000);
     }
     if (r.questions?.length) {
-      writeState({ idle: 0 });
+      writeState({ ...readState(), idle: 0 });
       out({
         decision: "block",
         reason:
@@ -153,9 +159,9 @@ try {
       const idle = (state.idle || 0) + 1;
       if (idle >= IDLE_ROUNDS) {
         await api("POST", "/agent-sessions/listening", { client: "claude-code", client_session_id: sid, listening: false });
-        writeState({ idle: 0 });
+        writeState({ ...readState(), idle: 0 });
       } else {
-        writeState({ idle });
+        writeState({ ...readState(), idle });
         out({ decision: "block", reason: `Still listening for questions from other sessions through Thaliyola; none arrived. Reply only "Listening." and stop.` });
       }
     }

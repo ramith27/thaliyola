@@ -49,17 +49,17 @@ describe("MCP over streamable HTTP", () => {
     const client = await connect({ authorization: "Bearer secret-token" });
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
-      "ack_notice", "add_person", "add_source", "add_source_link", "answer_question", "approve_skill_import", "ask_session", "assign_skill", "brief_changes", "browse_kb", "call_api", "check_design_drift", "check_licenses", "claim_work", "complete_task", "create_article",
-      "create_project", "create_ticket", "decide_access_request", "decide_project_request", "decline_question", "delete_role", "delete_team", "describe_columns", "docs_begin", "docs_finish",
+      "ack_notice", "add_incident_note", "add_person", "add_source", "add_source_link", "answer_question", "approve_skill_import", "ask_session", "assign_skill", "brief_changes", "browse_kb", "call_api", "check_design_drift", "check_licenses", "claim_work", "complete_task", "create_article",
+      "create_project", "create_ticket", "decide_access_request", "decide_project_request", "declare_incident", "decline_question", "delete_role", "delete_team", "describe_columns", "docs_begin", "docs_finish",
       "docs_inspect_claims", "docs_next_page", "docs_skip_page", "docs_submit_page", "docs_submit_plan", "find_people", "get_agents_md_block", "get_answer", "get_article", "get_article_template", "get_asset",
-      "get_design_system", "get_finding", "get_guide", "get_inbox_item", "get_person_access", "get_personal_context", "get_pr_briefing", "get_project_access", "get_project_context", "get_proposal", "get_sbom", "get_skill", "get_skill_file",
+      "get_design_system", "get_finding", "get_guide", "get_inbox_item", "get_incident", "get_person_access", "get_personal_context", "get_pr_briefing", "get_project_access", "get_project_context", "get_proposal", "get_sbom", "get_skill", "get_skill_file",
       "get_skill_version", "get_table_schema", "get_tasks", "get_version", "get_vulnerability", "handoff_session", "latest_advisories", "link_entries", "link_ticket", "list_api_endpoints", "list_audit_log", "list_claims", "list_connections",
-      "list_features", "list_impact_notices", "list_inbox", "list_people", "list_project_requests", "list_projects", "list_review_queue", "list_roles", "list_sessions", "list_skill_reviews",
+      "list_features", "list_impact_notices", "list_inbox", "list_incidents", "list_people", "list_project_requests", "list_projects", "list_review_queue", "list_roles", "list_sessions", "list_skill_reviews",
       "list_skill_sources", "list_skills", "list_stale_entries", "list_suggestions", "list_teams", "list_vulnerabilities", "move_entry", "promote_finding", "propose_article_edit", "propose_finding",
       "propose_skill", "propose_skill_edit", "publish_advisory", "publish_release", "query_database", "read_repo_file", "record_design_decision", "record_security_review", "register_session", "release_work",
       "report_skill_problem", "report_vulnerability", "resolve_claims", "resolve_inbox_item", "review_proposal", "review_skill_version", "save_personal_note", "save_role", "save_team", "scan_dependencies",
       "search_knowledge", "set_account_status", "set_advisory_response", "set_my_name", "set_project_access", "set_project_parent", "set_project_visibility", "set_team_membership", "set_user_roles",
-      "share_to_library", "sync_skill_source", "unassign_skill", "unpublish_release", "update_design_system", "update_finding", "update_vulnerability", "upload_asset", "verify_entry", "wait_for_questions",
+      "share_to_library", "sync_skill_source", "unassign_skill", "unpublish_release", "update_design_system", "update_finding", "update_incident", "update_vulnerability", "upload_asset", "verify_entry", "wait_for_questions",
       "whats_new",
     ]);
     const readOnly = tools.filter((t) => t.annotations?.readOnlyHint).map((t) => t.name);
@@ -148,7 +148,7 @@ describe("MCP over streamable HTTP", () => {
   it("offers workflow prompts", async () => {
     const client = await connect({ authorization: "Bearer secret-token" });
     const { prompts } = await client.listPrompts();
-    expect(prompts.map((p) => p.name).sort()).toEqual(["capture", "capture-design", "check-design", "curate", "document-repo", "draft-from-paste", "explore-data", "fix-vulnerabilities", "investigate", "listen", "manage-access", "review-pr", "review-stale", "security-check", "start-coding", "sync-figma-design", "triage-inbox", "update-docs"]);
+    expect(prompts.map((p) => p.name).sort()).toEqual(["capture", "capture-design", "check-design", "curate", "document-repo", "draft-from-paste", "explore-data", "fix-vulnerabilities", "investigate", "listen", "manage-access", "review-pr", "review-stale", "security-check", "start-coding", "sync-figma-design", "triage-inbox", "update-docs", "write-rca"]);
     const p = await client.getPrompt({ name: "start-coding", arguments: { project: "order-service", component: "frontend" } });
     const text = (p.messages[0]!.content as { text: string }).text;
     expect(text).toContain('get_project_context with component "frontend"');

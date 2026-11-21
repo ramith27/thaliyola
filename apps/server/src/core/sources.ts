@@ -9,6 +9,7 @@ import { assertCanManage, assertCanPropose, assertCanRead, canManage, readableSc
 import { redact } from "./redaction.js";
 import { getReadableScope } from "./scopes.js";
 import { findItemFor } from "./writes.js";
+import { onProjectEvent, onSentryAlert, onSentryResolved } from "./incidents.js";
 
 /**
  * Team sources and the inbox. Thaliyola fetches on a schedule; people and
@@ -197,7 +198,7 @@ function sentryItem(config: Record<string, string>, resource: string, p: Record<
  * A webhook for a push source. Unauthenticated: the secret in the URL is the credential (compared by hash, in
  * constant time). Returns what happened; unknown or ignored events are fine (GitHub's ping, an opened PR).
  */
-export async function receiveWebhook(db: Db, id: string, token: string, headers: Record<string, string | undefined>, body: unknown) {
+export async function receiveWebhook(db: Db, id: string, token: string, headers: Record<string, string | undefined>, body: unknown, settings?: Settings) {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return { status: 404 as const };
   const s = (await db.query<SourceRow>("SELECT * FROM sources WHERE id = $1", [id])).rows[0];
   const want = typeof s?.state?.hook_token_hash === "string" ? Buffer.from(s.state.hook_token_hash, "hex") : null;
@@ -205,9 +206,19 @@ export async function receiveWebhook(db: Db, id: string, token: string, headers:
   if (!s || !PUSH_KINDS.includes(s.kind) || !want || want.length !== got.length || !timingSafeEqual(want, got)) return { status: 404 as const };
   if (!s.enabled) return { status: 202 as const, result: "source is paused" };
   const p = (body && typeof body === "object" ? body : {}) as Record<string, any>;
-  const item = s.kind === "github_prs" ? githubItem(s.config, headers["x-github-event"] ?? "", p) : sentryItem(s.config, headers["sentry-hook-resource"] ?? "", p);
+  const resource = headers["sentry-hook-resource"] ?? "";
+  // Sentry alerts open (or join) incidents when the source says so; they aren't inbox items.
+  if (s.kind === "sentry_issues" && (resource === "event_alert" || resource === "metric_alert")) {
+    if (s.config.incidents?.toLowerCase() !== "on" || !settings) return { status: 202 as const, result: "ignored" };
+    const r = await onSentryAlert(db, settings, s.scope_id, resource, p);
+    return { status: r.result === "ignored" ? (202 as const) : (200 as const), result: r.result };
+  }
+  const item = s.kind === "github_prs" ? githubItem(s.config, headers["x-github-event"] ?? "", p) : sentryItem(s.config, resource, p);
   if (!item) return { status: 202 as const, result: "ignored" };
   const r = await storeItems(db, s, [item]);
+  // While the project has an incident open, merged PRs and resolved Sentry issues go on its timeline too.
+  if (s.kind === "github_prs") await onProjectEvent(db, s.scope_id, { kind: "pr", text: item.title, url: item.url ?? null, ref: item.external_id });
+  else if (p.data?.issue?.id) await onSentryResolved(db, s.scope_id, String(p.data.issue.id), item.title, item.url ?? null);
   await db.query("UPDATE sources SET last_run_at = now(), last_error = NULL, last_count = $2 WHERE id = $1", [id, r.added]);
   return { status: 200 as const, result: r.added ? "added" : r.updated ? "updated" : "unchanged" };
 }

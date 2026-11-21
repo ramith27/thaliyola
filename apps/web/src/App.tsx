@@ -27,6 +27,7 @@ import { SessionsPage } from "./pages/sessions";
 import { DesignPage } from "./pages/design";
 import { GuidePage } from "./pages/guide";
 import { PullRequestsPage } from "./pages/pulls";
+import { IncidentsPage } from "./pages/incidents";
 import { HistoryPage } from "./pages/history";
 import { Layout } from "./components/Layout";
 import { ProjectPage, ScopePage, SearchPage } from "./pages/browse";
@@ -280,6 +281,9 @@ function SignedInApp({ route, onSignOut }: { route: Route; onSignOut: () => Prom
       break;
     case "whats-new":
       page = <WhatsNewPage />;
+      break;
+    case "incidents":
+      page = <IncidentsPage id={id} scopes={scopes} />;
       break;
     case "security":
       page = id ? <VulnerabilityPage id={id} /> : <SecurityPage route={route} scopes={scopes} isAdmin={may(me, "security_admin")} />;

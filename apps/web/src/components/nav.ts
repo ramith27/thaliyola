@@ -8,7 +8,7 @@
 import type { IconName } from "./icons";
 import { can, type MeLike, type ScopeLike } from "./permissions";
 
-export type NavId = "home" | "review" | "inbox" | "sessions" | "security" | "graph" | "metrics" | "teams" | "skills" | "connect" | "whats-new" | "guide" | "trash" | "admin" | "account" | "search";
+export type NavId = "home" | "review" | "inbox" | "sessions" | "incidents" | "security" | "graph" | "metrics" | "teams" | "skills" | "connect" | "whats-new" | "guide" | "trash" | "admin" | "account" | "search";
 
 /** What a predicate may look at. `current` is the project or space the page belongs to (page meta), if any. */
 export interface NavContext {
@@ -26,7 +26,7 @@ export interface NavItem {
   /** Extra words the search overlay matches ("rca", "token", "notion"). */
   keywords: string;
   show?: (ctx: NavContext) => boolean;
-  count?: "review" | "inbox" | "sessions" | "security";
+  count?: "review" | "inbox" | "sessions" | "incidents" | "security";
   /** Route prefixes (path without "#/", optionally with a query key) that highlight this item. */
   activeOn: string[];
 }
@@ -36,6 +36,7 @@ export const PRIMARY_NAV: NavItem[] = [
   { id: "review", label: "Review", icon: "review", href: "#/review", keywords: "review queue proposals approve reject", count: "review", activeOn: ["review"] },
   { id: "inbox", label: "Inbox", icon: "inbox", href: "#/inbox", keywords: "inbox feeds sources slack notion triage", count: "inbox", activeOn: ["inbox", "sources", "new/paste?inbox"] },
   { id: "sessions", label: "Sessions", icon: "chat", href: "#/sessions", keywords: "sessions ask claude agents questions answers listen teammates", count: "sessions", activeOn: ["sessions"] },
+  { id: "incidents", label: "Incidents", icon: "alert", href: "#/incidents", keywords: "incidents outage down broken declare sev timeline rca sentry", count: "incidents", activeOn: ["incidents"] },
   { id: "security", label: "Security", icon: "shield", href: "#/security", keywords: "security vulnerabilities advisories cve dependencies", count: "security", activeOn: ["security"] },
 ];
 

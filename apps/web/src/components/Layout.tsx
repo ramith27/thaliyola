@@ -92,6 +92,8 @@ export interface NavCounts {
   inbox: number | null;
   /** Open questions addressed to the caller or their sessions. */
   sessions: number | null;
+  /** Open incidents in projects the caller can read. */
+  incidents: number | null;
   security: number | null;
 }
 
@@ -107,14 +109,15 @@ export function withSkillCounts(review: { toReview: number; pending: number }, s
 }
 
 export function useNavCounts(routeKey: string, skills = false): NavCounts {
-  const [counts, setCounts] = useState<NavCounts>({ review: null, inbox: null, sessions: null, security: null });
+  const [counts, setCounts] = useState<NavCounts>({ review: null, inbox: null, sessions: null, incidents: null, security: null });
   const load = useCallback(async () => {
-    const [review, inbox, security, skill, questions] = await Promise.allSettled([
+    const [review, inbox, security, skill, questions, incidents] = await Promise.allSettled([
       api<{ facets?: { to_review?: number; states?: Record<string, number> } }>("/revisions?state=pending&limit=1&facets=true"),
       api<{ counts?: Record<string, number> }>("/inbox?limit=1"),
       api<{ total?: number }>("/vulnerabilities?severity=critical&limit=1"),
       skills ? api<{ to_review: number; pending: number; feedback: number }>("/skills/review/counts") : Promise.resolve(null),
       api<{ questions?: { for_me: boolean }[] }>("/questions?status=open&limit=100"),
+      api<{ open?: number }>("/incidents?status=open&limit=20"),
     ]);
     setCounts((c) => ({
       review:
@@ -123,6 +126,7 @@ export function useNavCounts(routeKey: string, skills = false): NavCounts {
           : c.review,
       inbox: inbox.status === "fulfilled" ? (inbox.value.counts?.new ?? 0) : c.inbox,
       sessions: questions.status === "fulfilled" ? (questions.value.questions ?? []).filter((q) => q.for_me).length : c.sessions,
+      incidents: incidents.status === "fulfilled" ? (incidents.value.open ?? 0) : c.incidents,
       security: security.status === "fulfilled" ? (security.value.total ?? 0) : c.security,
     }));
   }, [skills]);
@@ -669,6 +673,8 @@ function NavRow({ item, active, counts }: { item: NavItem; active: boolean; coun
     badge = <CountBadge value={counts.inbox} tone="neutral" label={`, ${plural(counts.inbox, "new item")}`} />;
   } else if (item.count === "sessions" && counts.sessions) {
     badge = <CountBadge value={counts.sessions} tone="accent" label={`, ${plural(counts.sessions, "question")} waiting for you`} />;
+  } else if (item.count === "incidents" && counts.incidents) {
+    badge = <CountBadge value={counts.incidents} tone="danger" label={`, ${plural(counts.incidents, "open incident")}`} />;
   } else if (item.count === "security" && counts.security) {
     badge = <CountBadge value={counts.security} tone="danger" label={`, ${plural(counts.security, "critical vulnerability", "critical vulnerabilities")}`} />;
   }

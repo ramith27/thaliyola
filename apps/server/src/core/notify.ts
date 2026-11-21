@@ -18,7 +18,7 @@ import { routeExternal } from "./connections/routes.js";
  */
 
 export type NotificationKind =
-  | "review" | "decided" | "change" | "watch" | "stale" | "comment" | "assigned" | "invite" | "security" | "token" | "connection" | "access" | "release" | "skill" | "question";
+  | "review" | "decided" | "change" | "watch" | "stale" | "comment" | "assigned" | "invite" | "security" | "token" | "connection" | "access" | "release" | "skill" | "question" | "incident";
 
 export interface NotificationInput {
   kind: NotificationKind;
@@ -51,6 +51,7 @@ export const NOTIFICATION_KINDS: { kind: NotificationKind; label: string }[] = [
   { kind: "access", label: "Someone is waiting for access to Thaliyola" },
   { kind: "skill", label: "Skills: versions to review, problems reported, failed imports" },
   { kind: "question", label: "A question to me or my sessions is waiting" },
+  { kind: "incident", label: "An incident in a project I'm in" },
 ];
 
 const pending = new Set<Promise<unknown>>();

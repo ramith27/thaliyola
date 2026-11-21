@@ -190,7 +190,7 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
     try {
       const headers: Record<string, string | undefined> = {};
       for (const name of ["x-github-event", "sentry-hook-resource"]) headers[name] = req.header(name) ?? undefined;
-      const out = await receiveWebhook(db, String(req.params.id), String(req.params.token), headers, req.body);
+      const out = await receiveWebhook(db, String(req.params.id), String(req.params.token), headers, req.body, settings);
       if (out.status === 404) return void res.status(404).json({ error: "not found" });
       res.status(out.status).json({ result: out.result });
     } catch (err) {

@@ -1,0 +1,18 @@
+.incident-list { display: grid; gap: 0.6rem; }
+.incident-row { padding: 0.8rem 1rem; }
+.incident-row.is-open { border-left: 3px solid var(--danger); }
+.incident-row.is-mitigated { border-left: 3px solid var(--warn, #b45309); }
+.incident-title { display: block; margin-bottom: 0.2rem; }
+.incident-form { display: grid; gap: 0.6rem; margin-bottom: 1rem; }
+.incident-form label { display: grid; gap: 0.25rem; font-weight: 550; font-size: 0.9rem; }
+.incident-form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.8rem; }
+.incident-summary { max-width: 72ch; }
+.incident-controls { margin: 0.5rem 0 1rem; }
+.incident-timeline { display: grid; gap: 0.45rem; margin: 0 0 1rem; }
+.incident-event { display: grid; grid-template-columns: 11rem 7rem 1fr; gap: 0.6rem; align-items: baseline; }
+.incident-event.kind-declared span:last-child, .incident-event.kind-status span:last-child { font-weight: 600; }
+.incident-note { display: flex; gap: 0.5rem; }
+.incident-note input { flex: 1; }
+@media (max-width: 760px) { .incident-event { grid-template-columns: 1fr; gap: 0.15rem; } }
+.incident-event .badge { justify-self: start; }
+.incident-timeline + .incident-note, .card > h2:first-child { margin-top: 0; }

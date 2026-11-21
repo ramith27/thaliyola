@@ -59,7 +59,10 @@ export const SOURCE_FIELDS: Record<SourceKind, { label: string; needs?: keyof Co
   sentry_issues: {
     label: "Sentry resolved issues (webhook)",
     push: true,
-    fields: [{ key: "projects", label: "Only these Sentry projects", hint: "optional, comma-separated project slugs" }],
+    fields: [
+      { key: "projects", label: "Only these Sentry projects", hint: "optional, comma-separated project slugs" },
+      { key: "incidents", label: "Open incidents from alerts", hint: "on: a Sentry alert (issue or metric alert rule) opens an incident here, or joins the open one" },
+    ],
   },
   rss: { label: "RSS or Atom feed", fields: [{ key: "url", label: "Feed URL", required: true }] },
   web: {
