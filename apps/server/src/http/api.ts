@@ -39,6 +39,7 @@ import { checkPath, claimWork, listClaims, releaseWork, touchPath } from "../cor
 import { checkDesignDrift, latestDrift } from "../core/design-drift.js";
 import { exportSbom, licenceReport } from "../core/sbom.js";
 import { guideProgress } from "../core/guide.js";
+import { listBriefings, setBriefingMode, setGitWebhook } from "../core/briefings.js";
 import { getReadableScope, personalScope } from "../core/scopes.js";
 import { hideAdvisory, latestAdvisories, publishAdvisory, setAdvisoryResponse, setProjectTechnologies, stackOf, TECHNOLOGIES } from "../core/advisories.js";
 import { beginDependencyScan, detectProjectStack, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, securityOverview, updateVulnerability, uploadWithAuth } from "../core/security.js";
@@ -719,6 +720,10 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
       saveAnswer(ctx, { id: uuid.parse(req.params.id), ...z.object({ type: z.enum(["known_issue", "rca", "data_gotcha", "query_recipe", "incident"]), scope: z.string().optional() }).parse(req.body) }),
     ),
   );
+  // PR briefings.
+  router.get("/scopes/:slug/pr-briefings", handle("list_pr_briefings", (ctx, req) => listBriefings(ctx, String(req.params.slug), z.object({ number: z.coerce.number().int().optional(), limit: z.coerce.number().int().optional() }).parse(req.query))));
+  router.put("/scopes/:slug/pr-briefings", handle("set_pr_briefings", (ctx, req) => setBriefingMode(ctx, String(req.params.slug), z.object({ mode: z.enum(["off", "relevant", "always"]) }).parse(req.body).mode)));
+  router.post("/connections/:id/webhook", handle("set_git_webhook", (ctx, req) => setGitWebhook(ctx, uuid.parse(req.params.id))));
   router.post("/sources/:id/webhook", handle("rotate_source_webhook", (ctx, req) => rotateWebhook(ctx, uuid.parse(req.params.id))));
   router.post("/work-claims/release", handle("release_work", (ctx, req) => releaseWork(ctx, z.object({ session: z.string(), paths: z.array(z.string()).max(50).optional() }).parse(req.body))));
   router.get("/agent-sessions/check-path", handle("check_path", (ctx, req) => checkPath(ctx, pathRef.parse(req.query))));

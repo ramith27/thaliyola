@@ -1,0 +1,12 @@
+.pr-list { display: grid; gap: 0.6rem; }
+.pr-row { padding: 0.8rem 1rem; }
+.pr-head { display: flex; justify-content: space-between; gap: 0.6rem; align-items: baseline; }
+.pr-head .link-btn { text-align: left; }
+.pr-briefing h3 { font-size: 0.88rem; margin: 0.7rem 0 0.25rem; }
+.pr-briefing ul { margin: 0; padding-left: 1.1rem; }
+.pr-settings { margin-bottom: 1rem; }
+.pr-settings h3 { font-size: 0.92rem; margin: 0.9rem 0 0.35rem; }
+.pr-conn { display: flex; gap: 0.6rem; align-items: center; margin: 0.25rem 0; }
+.pr-hook { margin-top: 0.6rem; display: grid; gap: 0.5rem; }
+.pr-error { color: var(--danger); margin: 0.3rem 0 0; }
+.pr-settings h2 { margin-top: 0; }

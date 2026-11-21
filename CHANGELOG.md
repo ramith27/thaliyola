@@ -4,6 +4,8 @@
 
 ### Added
 
+- **Pull request briefings.** When a pull (merge) request opens or gets new commits, Thaliyola comments on it with what it knows about the changed files: docs whose facts cite them, contracts and their consumers, known issues, vulnerabilities, changed lockfiles, hard-coded colours from the last design check, and other sessions working there. Titles and links only, one comment edited in place. Opt-in per project (project → Pull requests), through a verified GitHub or GitLab webhook on the project's git connection (`POST /hooks/git/:connection`); its token must be able to write comments. `brief_changes` and `get_pr_briefing` for agents, a `review-pr` prompt. Migration `077_pr_briefings.sql`.
+
 - **Bots with roles in one step.** `thaliyola-admin create-token --in <project or space> [--role contributor]` gives a new bot its roles (Team and Library too), `thaliyola-admin grant` adds them later, and a bot created without roles gets a warning that it can't write. Admin › Service accounts › Give access offers the Team space and Library as well as projects.
 - **Session metrics.** Metrics has a *Sessions helping each other* section: questions answered (by sessions or people) and the answer rate, the median answer time and answers inside the asker's 45-second wait, answers kept as findings, handoffs accepted and files claimed, for the projects you can read (`sessions` in `GET /api/success`).
 - **Guide progress per person.** The Guide shows which features you and your agents have used (from the audit log, your sessions and projects), "You've used this" on each, the next thing to try, and a concrete tip where something is missing, such as the Claude Code plugin not installed or older than 0.3.0 (`progress` in `GET /api/guide`).

@@ -1,4 +1,5 @@
-import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes } from "node:crypto";
+import { verifyGitWebhook } from "../connections/webhooks.js";
 import type { Settings } from "../../config.js";
 import type { Db, Queryable } from "../../db/pool.js";
 import { audit } from "../audit.js";
@@ -877,10 +878,6 @@ export interface WebhookAnswer {
   body: Record<string, unknown>;
 }
 
-function sameText(a: string, b: string): boolean {
-  // Hash both so the comparison takes the same time whatever the lengths.
-  return timingSafeEqual(createHash("sha256").update(a).digest(), createHash("sha256").update(b).digest());
-}
 
 /** One webhook delivery: headers (lower-case names) and the raw body. Never throws for a client's mistake. */
 export async function receiveSkillWebhook(db: Db, settings: Settings, id: string, headers: Record<string, string | undefined>, raw: Buffer): Promise<WebhookAnswer> {
@@ -898,10 +895,7 @@ export async function receiveSkillWebhook(db: Db, settings: Settings, id: string
   }
   const gitlab = headers["x-gitlab-token"];
   const signature = headers["x-hub-signature-256"];
-  const ok =
-    !!secret &&
-    ((gitlab !== undefined && sameText(gitlab, secret)) ||
-      (signature !== undefined && sameText(signature, `sha256=${createHmac("sha256", secret).update(raw).digest("hex")}`)));
+  const ok = verifyGitWebhook(secret, headers, raw);
   if (!ok) {
     const last = refusalAudited.get(row.id) ?? 0;
     if (Date.now() - last > 60_000) {

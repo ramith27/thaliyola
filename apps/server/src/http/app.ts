@@ -19,6 +19,7 @@ import { isClaudeCode, type SkillMcpOpts } from "../mcp/skills.js";
 import { deliverableSkills, rankedForInstructions, skillPromptsFor } from "../core/skills/delivery.js";
 import { receiveSkillWebhook } from "../core/skills/sources.js";
 import { receiveWebhook } from "../core/sources.js";
+import { receiveGitWebhook } from "../core/briefings.js";
 import { SKILL_LIMITS } from "../core/skills/types.js";
 import type { RequestContext } from "../core/context.js";
 import { isAdmin } from "../core/permissions.js";
@@ -169,6 +170,18 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
       res.status(out.status).json(out.body);
     } catch (err) {
       console.error(`[skills] webhook failed: ${(err as Error).message}`);
+      res.status(500).json({ error: "webhook failed" });
+    }
+  });
+  // Pull-request webhooks of a git connection (PR briefings): the connection's webhook secret is the credential.
+  app.post("/hooks/git/:id", webhookRaw, async (req, res) => {
+    try {
+      const headers: Record<string, string | undefined> = {};
+      for (const name of ["x-gitlab-token", "x-gitlab-event", "x-hub-signature-256", "x-github-event"]) headers[name] = req.header(name) ?? undefined;
+      const out = await receiveGitWebhook(db, settings, String(req.params.id), headers, Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0));
+      res.status(out.status).json(out.body);
+    } catch (err) {
+      console.error(`[briefings] webhook failed: ${(err as Error).message}`);
       res.status(500).json({ error: "webhook failed" });
     }
   });

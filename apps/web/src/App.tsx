@@ -26,6 +26,7 @@ import { SecurityPage, VulnerabilityPage } from "./pages/security";
 import { SessionsPage } from "./pages/sessions";
 import { DesignPage } from "./pages/design";
 import { GuidePage } from "./pages/guide";
+import { PullRequestsPage } from "./pages/pulls";
 import { HistoryPage } from "./pages/history";
 import { Layout } from "./components/Layout";
 import { ProjectPage, ScopePage, SearchPage } from "./pages/browse";
@@ -233,6 +234,8 @@ function SignedInApp({ route, onSignOut }: { route: Route; onSignOut: () => Prom
           <ScopeSettingsPage slug={id!} scopes={scopes} me={me} route={route} />
         ) : route.path[2] === "design" ? (
           <DesignPage slug={id!} />
+        ) : route.path[2] === "pulls" ? (
+          <PullRequestsPage slug={id!} canManage={me.admin || (() => { const s = scopes.find((x) => x.slug === id); return !!s && can.manageScope(s); })()} />
         ) : (
           <ScopePage slug={id!} scopes={scopes} me={me} />
         );

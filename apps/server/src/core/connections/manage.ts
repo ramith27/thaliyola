@@ -57,13 +57,14 @@ export function connectionKinds(settings: Settings) {
 }
 
 const VIEW = `SELECT c.id, c.kind, c.name, c.scope_id, s.slug AS scope, s.name AS scope_name, s.kind AS scope_kind, co.slug AS component,
-                     c.config, c.secret_hints, octet_length(c.spec) AS spec_bytes, c.options, c.interval_minutes, c.enabled, c.health, c.failures, c.last_ok_at, c.last_run_at, c.last_error,
+                     c.config, c.secret_hints, c.webhook_secret_hint, octet_length(c.spec) AS spec_bytes, c.options, c.interval_minutes, c.enabled, c.health, c.failures, c.last_ok_at, c.last_run_at, c.last_error,
                      c.next_run_at, c.state->>'last_detail' AS last_detail, c.state->>'synced_at' AS synced_at, c.state->'sync' AS sync, c.state->>'last_warning' AS warning, c.created_at, c.updated_at,
                      coalesce(nullif(u.display_name, ''), u.email, u.subject) AS created_by, coalesce(u.email, u.subject) AS created_by_email
                 FROM connections c JOIN scopes s ON s.id = c.scope_id LEFT JOIN components co ON co.id = c.component_id LEFT JOIN users u ON u.id = c.created_by`;
 
 interface ViewRow {
   id: string;
+  webhook_secret_hint?: string | null;
   kind: ConnectionKind;
   name: string;
   scope_id: string;
@@ -172,7 +173,7 @@ export async function listConnections(ctx: RequestContext, slug: string) {
 }
 
 /** The connection, when the caller manages its project. Unreadable projects' connections don't exist. */
-async function manageable(ctx: RequestContext, id: string): Promise<ConnectionRow & { scope_kind: string }> {
+export async function manageable(ctx: RequestContext, id: string): Promise<ConnectionRow & { scope_kind: string }> {
   const { rows } = await ctx.db.query<ConnectionRow & { scope_kind: string }>("SELECT c.*, s.kind AS scope_kind FROM connections c JOIN scopes s ON s.id = c.scope_id WHERE c.id = $1", [id]);
   const row = rows[0];
   if (!row) throw new NotFoundError(`connection ${id}`);

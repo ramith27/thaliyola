@@ -121,6 +121,24 @@ const FEATURES: Feature[] = [
     docs: "README.md#repository-documentation",
   },
   {
+    id: "briefings",
+    area: "Projects",
+    title: "Pull request briefings",
+    what: "A comment on each pull request with what's known about the changed files: docs citing them, contracts and consumers, known issues, vulnerabilities, design drift, other sessions working there.",
+    enable: "Off by default. A Project admin turns it on (project → Pull requests) and adds the webhook to the git host; the git connection's token must be able to write pull-request comments.",
+    use: [
+      "Project → Pull requests: choose when to comment, then Set up the webhook on the GitHub or GitLab connection and paste the URL and secret into the repository's webhooks.",
+      "Every opened or updated pull request gets one comment, edited in place on new pushes.",
+      "Before opening a pull request, ask Claude for brief_changes on your diff, or run review-pr.",
+    ],
+    commands: [
+      { kind: "prompt", cmd: "/mcp__thaliyola__review-pr [number]", what: "Review a pull request (or this branch) with what the team knows" },
+      { kind: "tool", cmd: "brief_changes · get_pr_briefing", what: "The briefing for local changes, or a pull request's" },
+      { kind: "page", cmd: "Project → Pull requests", what: "Settings, webhook, every briefing" },
+    ],
+    docs: "README.md#pull-request-briefings",
+  },
+  {
     id: "design",
     area: "Projects",
     title: "Design systems shared between projects",

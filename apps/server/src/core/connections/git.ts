@@ -201,3 +201,47 @@ export async function readRepo(c: ConnTarget, env: DriverEnv, repository: string
   if (size > MAX_FILE_BYTES || f.encoding === "none" || (!f.content && size > 0)) return { kind: "file", path: p, ref: r ?? null, size, content: null, too_large: true };
   return { kind: "file", path: p, ref: r ?? null, size, content: Buffer.from(f.content ?? "", "base64") };
 }
+
+// ---- Pull requests (PR briefings) ------------------------------------------------------------------------------
+
+/** At most this many changed files are read from a pull request (GitHub lists up to 3,000; briefings need the gist). */
+export const MAX_PR_FILES = 300;
+
+/** The paths a pull (merge) request changes, renames included under their new name. */
+export async function prFiles(c: ConnTarget, env: DriverEnv, repository: string, number: number): Promise<string[]> {
+  const repo = repoPathOf(c, repository);
+  const b = repoBase(c, env, repo);
+  const headers = gitHeaders(c);
+  if (c.config.provider === "gitlab") {
+    const r = await callJson<{ changes?: { new_path?: string; old_path?: string }[] }>(`${b}/merge_requests/${number}/changes`, "http", env, "GitLab", { headers, maxBytes: 20 * 1024 * 1024, truncate: false });
+    return [...new Set((r.changes ?? []).map((f) => f.new_path ?? f.old_path ?? "").filter(Boolean))].slice(0, MAX_PR_FILES);
+  }
+  const out: string[] = [];
+  for (let page = 1; out.length < MAX_PR_FILES && page <= 3; page++) {
+    const list = await callJson<{ filename: string }[]>(`${b}/pulls/${number}/files?per_page=100&page=${page}`, "http", env, "GitHub", { headers });
+    out.push(...list.map((f) => f.filename));
+    if (list.length < 100) break;
+  }
+  return [...new Set(out)].slice(0, MAX_PR_FILES);
+}
+
+/**
+ * Creates the briefing comment on a pull (merge) request, or edits the one posted before (by id). Returns its id.
+ * A comment deleted by someone is posted again.
+ */
+export async function upsertPrComment(c: ConnTarget, env: DriverEnv, repository: string, number: number, body: string, commentId: string | null): Promise<string> {
+  const repo = repoPathOf(c, repository);
+  const b = repoBase(c, env, repo);
+  const headers = { ...gitHeaders(c), "content-type": "application/json" };
+  const gitlab = c.config.provider === "gitlab";
+  const what = gitlab ? "GitLab" : "GitHub";
+  if (commentId && /^\d+$/.test(commentId)) {
+    const url = gitlab ? `${b}/merge_requests/${number}/notes/${commentId}` : `${b}/issues/comments/${commentId}`;
+    const res = await call(url, "http", env, { method: gitlab ? "PUT" : "PATCH", headers, body: JSON.stringify({ body }) });
+    if (res.status >= 200 && res.status < 300) return commentId;
+    if (res.status !== 404) failWith(res, what);
+  }
+  const url = gitlab ? `${b}/merge_requests/${number}/notes` : `${b}/issues/${number}/comments`;
+  const created = await callJson<{ id: number | string }>(url, "http", env, what, { method: "POST", headers, body: JSON.stringify({ body }) });
+  return String(created.id);
+}

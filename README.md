@@ -474,6 +474,17 @@ Thaliyola can keep a living wiki for every repository, written by your own codin
 - **Reading:** pages render Mermaid diagrams; a Sources panel lists each fact with a link to the exact lines on GitHub, GitLab or Bitbucket and flags stale ones. Pages refresh live while an agent writes (`/api/events`, server-sent events; nginx needs buffering off for it, see `deploy/native/nginx-thaliyola.conf`).
 - **Static site:** project settings → General → Download as a static site gives a zip with a self-contained reader (search, folders, diagrams, sources) to host anywhere (`GET /api/export/site?scope=`). The Markdown export follows the Open Knowledge Format (front matter with `kind` and provenance, `index.md`, `log.md`).
 
+## Pull request briefings
+
+When a pull (merge) request opens or gets new commits, Thaliyola can comment on it with what it already knows about the changed files, so reviewers and the author see it where they work:
+- **Docs that describe this code:** pages whose facts cite the changed files (from repository documentation), or whose sources cover them: they may need updating.
+- **Contracts** the repository provides, and the repositories and projects that consume them (a members-only project is only counted, never named).
+- **Known issues** in that repository, those mentioning a changed file first; **vulnerabilities** located in the changed files, and changed lockfiles; **design**: hard-coded colours in the changed files from the last drift check; and **other sessions** working on those files right now.
+- Titles and links only (anyone who can see the pull request reads the comment), redacted, one comment per pull request edited in place on later pushes. Nothing reads the code: only file paths are matched.
+- **Turning it on:** project → **Pull requests** (or `#/scope/<project>/pulls`): choose *When there's something to say* or *Always*, then **Set up the webhook** on the project's GitHub or GitLab connection: copy the URL and secret into the repository's webhooks (GitHub: *Pull requests* events, content type JSON; GitLab: *Merge request events*). The connection's token must be able to write pull-request comments (GitHub *Pull requests: write*, GitLab `api`). Webhooks are verified (GitHub signature, GitLab token), limited to 60 a minute per connection, and answered at once; the briefing is built and posted afterwards. Failures (such as a read-only token) show on the Pull requests page.
+- **For agents:** `brief_changes` gives the same briefing for local changes before a pull request exists, `get_pr_briefing` returns a pull request's, and `/mcp__thaliyola__review-pr [number]` reviews a pull request (or the current branch) against them.
+- API: `GET`/`PUT /api/scopes/:slug/pr-briefings`, `POST /api/connections/:id/webhook` (new secret, shown once), `POST /hooks/git/:connection` (the webhook).
+
 ## Design systems
 
 Each project (and Team and Library) can keep its design system as structured tokens, so every session and project builds UI with the same values:

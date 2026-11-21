@@ -37,6 +37,7 @@ import { answerQuestion, askSession, declineQuestion, getAnswer, handoffSession,
 import { claimWork, listClaims, releaseWork } from "../core/coordination.js";
 import { checkDesignDrift } from "../core/design-drift.js";
 import { exportSbom, licenceReport } from "../core/sbom.js";
+import { briefChanges, listBriefings } from "../core/briefings.js";
 import { beginDependencyScan, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, updateVulnerability } from "../core/security.js";
 import { createOrRequestProject, decideProjectRequest, listProjectRequests } from "../core/project-requests.js";
 import { setProjectParent } from "../core/hierarchy.js";
@@ -1660,6 +1661,28 @@ export function buildMcpServer(callerCtx: RequestContext, opts: { skills?: Skill
     (args) => run("decline_question", args.id, () => declineQuestion(ctx, args)),
   );
 
+  server.registerTool(
+    "brief_changes",
+    {
+      title: "What's known about the files you changed",
+      description:
+        "Before opening a pull request (or reviewing one): what Thaliyola knows about these files: docs whose facts cite them, contracts this repository provides and their consumers, " +
+        "known issues, vulnerabilities located there, design drift, and other sessions working on them. paths = git diff --name-only. The same briefing is commented on pull requests when the project turns PR briefings on.",
+      inputSchema: { project: z.string(), component: z.string().optional().describe("The repository (component slug)"), paths: z.array(z.string()).min(1).max(500) },
+      annotations: { readOnlyHint: true },
+    },
+    (args) => run("brief_changes", null, () => briefChanges(ctx, args)),
+  );
+  server.registerTool(
+    "get_pr_briefing",
+    {
+      title: "A pull request's briefing",
+      description: "The briefing Thaliyola made for a pull (merge) request in a project (by number), or the project's recent ones.",
+      inputSchema: { project: z.string(), number: z.number().int().optional() },
+      annotations: { readOnlyHint: true },
+    },
+    ({ project, number }) => run("get_pr_briefing", null, () => listBriefings(ctx, project, { number, limit: number ? 1 : 20 })),
+  );
   server.registerTool(
     "get_sbom",
     {
