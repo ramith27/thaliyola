@@ -485,6 +485,13 @@ When a pull (merge) request opens or gets new commits, Thaliyola can comment on 
 - **For agents:** `brief_changes` gives the same briefing for local changes before a pull request exists, `get_pr_briefing` returns a pull request's, and `/mcp__thaliyola__review-pr [number]` reviews a pull request (or the current branch) against them.
 - API: `GET`/`PUT /api/scopes/:slug/pr-briefings`, `POST /api/connections/:id/webhook` (new secret, shown once), `POST /hooks/git/:connection` (the webhook).
 
+## Decisions that stay true
+
+- **Revisit dates:** every new decision gets a revisit date six months out (decisions recorded before 1.2 got one no sooner than a month from the upgrade). The decision's page shows *Revisit by …* and its owner, or someone who reviews in the project, changes it (3, 6 or 12 months; `set_revisit_date`, `PUT /api/articles/:id/revisit`).
+- **Reminders:** when any article's review date passes, its owner (else the project's reviewers) is told once, in the app and by email, with what to do: confirm it still holds, update it, or mark it superseded. Moving the date re-arms the reminder.
+- **Possible conflicts:** decisions in the same project (or the Library) whose *Choice* sections say nearly the same thing about the same subject show up in Review → Suggestions as **Decisions that may conflict**, with *First replaces second*, *Second replaces first* (links them with `supersedes` and marks the older one superseded) or *Not a conflict* (`resolve_decision_conflict`, `POST /api/decisions/conflicts`). Similarity only finds candidates; people decide. Needs search by meaning.
+- **Before recording one:** `create_article` with type `decision` and `record_design_decision` return `similar_decisions` when existing decisions read like the new one, so a contradiction is noticed when it's written.
+
 ## Who knows what
 
 Thaliyola works out who knows what from what people did: versions of articles and findings they wrote or approved, proposals they reviewed or commented on, questions they (or their sessions) answered, documentation runs they started, and articles they own. Each counts toward the item's project, repositories, entities (services, tables, metrics…) and tags, and fades with a 180-day half-life, so recent work counts most. It's rebuilt nightly by the maintenance job.

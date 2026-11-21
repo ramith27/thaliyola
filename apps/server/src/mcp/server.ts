@@ -40,6 +40,7 @@ import { exportSbom, licenceReport } from "../core/sbom.js";
 import { briefChanges, listBriefings } from "../core/briefings.js";
 import { addIncidentNote, declareIncident, getIncident, listIncidents, updateIncident } from "../core/incidents.js";
 import { findExperts } from "../core/expertise.js";
+import { resolveConflict, setRevisitDate, similarDecisions } from "../core/decisions.js";
 import { beginDependencyScan, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, updateVulnerability } from "../core/security.js";
 import { createOrRequestProject, decideProjectRequest, listProjectRequests } from "../core/project-requests.js";
 import { setProjectParent } from "../core/hierarchy.js";
@@ -1328,7 +1329,17 @@ export function buildMcpServer(callerCtx: RequestContext, opts: { skills?: Skill
         request_review: reviewArg,
       },
     },
-    ({ request_review, ...args }) => run("create_article", null, () => createArticle(withReview(request_review), args)),
+    ({ request_review, ...args }) =>
+      run("create_article", null, async () => {
+        const r = await createArticle(withReview(request_review), args);
+        if (args.type !== "decision") return r;
+        // A new decision: show the ones that read like it, so a contradiction is noticed now, not in a year.
+        const choice = /##\s*Choice\s*\n([\s\S]*?)(\n##\s|$)/i.exec(args.body_md ?? "")?.[1] ?? "";
+        const slug = args.scope ?? (r as { scope?: string }).scope ?? ctx.project;
+        const scopeId = slug ? (await ctx.db.query<{ id: string }>("SELECT id FROM scopes WHERE slug = $1", [slug])).rows[0]?.id : undefined;
+        const similar = scopeId ? (await similarDecisions(ctx, scopeId, choice).catch(() => [])).filter((d) => d.id !== (r as { article_id?: string }).article_id) : [];
+        return similar.length ? { ...(r as object), similar_decisions: similar, check: "Decisions like this one exist: if the new one replaces one, link it with link_entries kind supersedes; otherwise say how they differ." } : r;
+      }),
   );
 
   server.registerTool(
@@ -1663,6 +1674,24 @@ export function buildMcpServer(callerCtx: RequestContext, opts: { skills?: Skill
     (args) => run("decline_question", args.id, () => declineQuestion(ctx, args)),
   );
 
+  server.registerTool(
+    "set_revisit_date",
+    {
+      title: "Set when an article is revisited",
+      description: "When an article (usually a decision) should be looked at again: a date or months from today. Its owner is reminded once the date passes. For its owner or someone who reviews in its project.",
+      inputSchema: { id: z.string().uuid(), date: z.string().optional().describe("YYYY-MM-DD"), months: z.number().int().min(1).max(36).optional() },
+    },
+    (args) => run("set_revisit_date", args.id, () => setRevisitDate(ctx, args)),
+  );
+  server.registerTool(
+    "resolve_decision_conflict",
+    {
+      title: "Resolve a possible decision conflict",
+      description: "For a pair from get_suggestions' conflicts: 'supersedes' (a replaces b; b is marked superseded) or 'not_a_conflict'. Only when your person has decided which holds.",
+      inputSchema: { a: z.string().uuid(), b: z.string().uuid(), outcome: z.enum(["supersedes", "not_a_conflict"]) },
+    },
+    (args) => run("resolve_decision_conflict", args.a, () => resolveConflict(ctx, args)),
+  );
   server.registerTool(
     "find_experts",
     {

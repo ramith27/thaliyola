@@ -332,6 +332,8 @@ export function fileToBase64(file: File): Promise<string> {
 }
 
 export interface Article {
+  /** When it should be looked at again (decisions get one when created). */
+  review_due?: string | null;
   id: string;
   title: string;
   type: string;

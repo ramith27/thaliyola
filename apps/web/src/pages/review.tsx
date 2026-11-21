@@ -2157,6 +2157,7 @@ interface Suggestions {
     suggested_article: { id: string; title: string; type: string; version: number } | null;
   }[];
   duplicates: { similarity: number; a: { id: string; title: string; scope: string }; b: { id: string; title: string; scope: string } }[];
+  conflicts?: { similarity: number; a: { id: string; title: string; scope: string }; b: { id: string; title: string; scope: string } }[];
   note?: string;
 }
 
@@ -2298,6 +2299,48 @@ function SuggestionsTab({ sugg, tasks, refresh }: { sugg: ApiResult<Suggestions>
           </>
         )}
       </Section>
+
+      {data && (data.conflicts?.length ?? 0) > 0 && (
+        <Section title="Decisions that may conflict" description="Decisions whose choices are about the same thing. Mark the one that holds as superseding the other, or say they don't conflict.">
+          <div className="rv-dupes">
+            {data.conflicts!.map((d) => {
+              const key = `c:${d.a.id}:${d.b.id}`;
+              return (
+                <Card key={key} padding="sm" className="rv-dupe">
+                  <div className="rv-dupe-pair">
+                    {[d.a, d.b].map((x) => (
+                      <div key={x.id} className="rv-dupe-side">
+                        <a href={href(`/article/${x.id}`)}>{x.title}</a>
+                        <LocationLabel scope={x.scope} />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="rv-dupe-foot">
+                    <Badge tone="neutral">{Math.round(d.similarity * 100)}% alike</Badge>
+                    {done[key] ? (
+                      <span className="rv-done">
+                        <I name="check" size={14} /> {done[key]!.label}
+                      </span>
+                    ) : (
+                      <>
+                        <Button size="sm" loading={!!busy[key]} onClick={() => void act(key, () => api("/decisions/conflicts", { method: "POST", body: { a: d.a.id, b: d.b.id, outcome: "supersedes" } }), "First supersedes second")}>
+                          First replaces second
+                        </Button>
+                        <Button size="sm" loading={!!busy[key]} onClick={() => void act(key, () => api("/decisions/conflicts", { method: "POST", body: { a: d.b.id, b: d.a.id, outcome: "supersedes" } }), "Second supersedes first")}>
+                          Second replaces first
+                        </Button>
+                        <Button size="sm" variant="ghost" loading={!!busy[key]} onClick={() => void act(key, () => api("/decisions/conflicts", { method: "POST", body: { a: d.a.id, b: d.b.id, outcome: "not_a_conflict" } }), "Not a conflict")}>
+                          Not a conflict
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </Section>
+      )}
     </div>
   );
 }

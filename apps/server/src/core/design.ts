@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { similarDecisions } from "./decisions.js";
 import { withTx, type Queryable } from "../db/pool.js";
 import { audit } from "./audit.js";
 import { ForbiddenError, NotFoundError, ValidationError, type RequestContext } from "./context.js";
@@ -433,7 +434,9 @@ export async function recordDesignDecision(
     `## Choice\n\n${input.choice.trim()}`,
     `## Consequences\n\n${input.consequences?.trim() || "_Not recorded._"}`,
   ].join("\n\n");
+  const similar = await similarDecisions(ctx, scope.id, input.choice).catch(() => []);
   const r = await newArticle(ctx, { scope: scope.slug, type: "decision", title: input.title.trim().slice(0, 200), body_md: body, path: "Design decisions", tags: ["design"] });
+  if (similar.length) Object.assign(r as object, { similar_decisions: similar, check: "Decisions like this one exist: if the new one replaces one, link it with supersedes (or say how they differ)." });
   emitChanged();
   return r;
 }

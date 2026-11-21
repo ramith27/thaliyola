@@ -97,6 +97,7 @@ const FEATURES: Feature[] = [
       { kind: "page", cmd: "Review", what: "Proposals, suggestions, new project requests" },
       { kind: "prompt", cmd: "/mcp__thaliyola__curate", what: "Work through curation tasks" },
       { kind: "prompt", cmd: "/mcp__thaliyola__review-stale", what: "Re-verify entries nobody checked recently" },
+      { kind: "tool", cmd: "set_revisit_date · resolve_decision_conflict", what: "When a decision is revisited; settle possible conflicts" },
       { kind: "tool", cmd: "get_tasks · complete_task · move_entry · verify_entry", what: "Curation tools" },
     ],
     page: "/review",

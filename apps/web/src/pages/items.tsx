@@ -333,6 +333,7 @@ function ItemView({ kind, item, me, scopes, live }: { kind: Kind; item: Item; me
               Never verified
             </Badge>
           ),
+          article && item.type === "decision" ? <RevisitDate id={item.id} due={(item as { review_due?: string | null }).review_due ?? null} /> : null,
         ]}
       />
       {libraryCopy ? (
@@ -1884,5 +1885,38 @@ export function NewFindingPage({ route, scopes, findingTypes }: { route: Route; 
         </FormActions>
       </form>
     </Page>
+  );
+}
+
+/** A decision's revisit date, and changing it (its owner or a reviewer; the server says if you can't). */
+function RevisitDate({ id, due }: { id: string; due: string | null }) {
+  const [value, setValue] = useState(due);
+  const [error, setError] = useState<string | null>(null);
+  const past = value ? new Date(value) < new Date() : false;
+  return (
+    <span className={`it-revisit${past ? " is-due" : ""}`}>
+      {value ? `Revisit by ${new Date(value).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}` : "No revisit date"}{" "}
+      <select
+        aria-label="Change when this decision is revisited"
+        value=""
+        onChange={async (e) => {
+          const months = Number(e.target.value);
+          if (!months) return;
+          setError(null);
+          try {
+            const r = await api<{ review_due: string }>(`/articles/${id}/revisit`, { method: "PUT", body: { months } });
+            setValue(r.review_due);
+          } catch (err) {
+            setError((err as Error).message);
+          }
+        }}
+      >
+        <option value="">Change…</option>
+        <option value="3">In 3 months</option>
+        <option value="6">In 6 months</option>
+        <option value="12">In a year</option>
+      </select>
+      {error && <span className="it-revisit-error"> {error}</span>}
+    </span>
   );
 }

@@ -1,5 +1,6 @@
 import type { RequestContext } from "./context.js";
 import { resolveScopeFilter } from "./scopes.js";
+import { decisionConflicts } from "./decisions.js";
 
 /**
  * Deterministic suggestions for reviewers and scheduled agents (no LLM):
@@ -79,7 +80,9 @@ export async function listSuggestions(ctx: RequestContext, opts: { scope?: strin
     return true;
   });
 
+  const conflicts = await decisionConflicts(ctx, scopeIds, limit);
   return {
+    conflicts,
     promote: clusters.map((r) => ({
       finding: { id: r.id, title: r.title, scope: r.scope },
       recurrences: r.recurrences,

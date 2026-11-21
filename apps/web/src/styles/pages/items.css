@@ -247,3 +247,6 @@
 .it-tag-added { color: var(--ok); }
 .it-tag-removed { color: var(--danger); }
 .it-version-tags { color: var(--muted); }
+.it-revisit select { font-size: 0.8rem; padding: 0 0.2rem; margin-left: 0.25rem; }
+.it-revisit.is-due { color: var(--danger); font-weight: 600; }
+.it-revisit-error { color: var(--danger); }
