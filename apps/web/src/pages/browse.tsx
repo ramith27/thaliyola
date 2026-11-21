@@ -850,6 +850,7 @@ export function ProjectPage({ slug, route, me, scopes = [] }: { slug: string; ro
           ...(manage ? [{ id: "repos", label: "Manage repositories", icon: "git-branch" as const, href: href(`/scope/${slug}/settings`, { tab: "repos" }) }] : []),
           { id: "design", label: "Design system", icon: "sliders" as const, href: href(`/scope/${slug}/design`) },
           { id: "pulls", label: "Pull requests", icon: "git-branch" as const, href: href(`/scope/${slug}/pulls`) },
+          { id: "brief", label: "What happened lately", icon: "clock" as const, href: href(`/project/${slug}/brief`) },
           { id: "all", label: "All articles", icon: "doc", href: href(`/scope/${slug}`) },
           { id: "graph", label: "Open in graph", icon: "graph", href: href("/graph", { scope: slug }) },
           { id: "export", label: "Export as Markdown", icon: "download", onSelect: doExport },

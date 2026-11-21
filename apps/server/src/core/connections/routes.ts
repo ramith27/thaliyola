@@ -1,4 +1,5 @@
 import pg from "pg";
+import { briefLines, buildProjectBrief } from "../brief.js";
 import type { Settings } from "../../config.js";
 import { whenCommitted, type Db, type Queryable } from "../../db/pool.js";
 import { audit } from "../audit.js";
@@ -490,7 +491,9 @@ export async function buildDigest(db: Queryable, settings: Settings, scope: { id
      ) x ORDER BY verified LIMIT $2`,
     [scope.id, LIMIT],
   );
-  if (!published.rows.length && !waiting.rows.length && !stale.rows.length) return null;
+  // Weekly: the project's brief (incidents, merged pull requests, decisions…) too.
+  const brief = frequency === "weekly" && scope.slug !== "team" && scope.slug !== "library" ? briefLines(await buildProjectBrief(db, scope, 7), (p) => absolute(settings, `#${p}`) ?? `#${p}`) : [];
+  if (!published.rows.length && !waiting.rows.length && !stale.rows.length && !brief.length) return null;
 
   const link = (path: string, label: string) => {
     const url = absolute(settings, path);
@@ -499,6 +502,7 @@ export async function buildDigest(db: Queryable, settings: Settings, scope: { id
   };
   const more = (n: number, shown: number) => (n > shown ? `\n…and ${n - shown} more` : "");
   const parts = [`*${slackEscape(scope.name)}: ${frequency === "daily" ? "daily" : "weekly"} digest*`];
+  if (brief.length) parts.push(`*This week*\n${brief.map((l) => `• ${slackEscape(outside(l).slice(0, 400))}`).join("\n")}`);
   const totals = { published: published.rows[0]?.n ?? 0, waiting: waiting.rows[0]?.n ?? 0, stale: stale.rows[0]?.n ?? 0 };
   if (totals.published)
     parts.push(

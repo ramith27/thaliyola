@@ -43,6 +43,7 @@ import { listBriefings, setBriefingMode, setGitWebhook } from "../core/briefings
 import { addIncidentNote, declareIncident, getIncident, listIncidents, updateIncident } from "../core/incidents.js";
 import { findExperts, knowsAbout } from "../core/expertise.js";
 import { resolveConflict, setRevisitDate } from "../core/decisions.js";
+import { getProjectBrief } from "../core/brief.js";
 import { getReadableScope, personalScope } from "../core/scopes.js";
 import { hideAdvisory, latestAdvisories, publishAdvisory, setAdvisoryResponse, setProjectTechnologies, stackOf, TECHNOLOGIES } from "../core/advisories.js";
 import { beginDependencyScan, detectProjectStack, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, securityOverview, updateVulnerability, uploadWithAuth } from "../core/security.js";
@@ -723,6 +724,7 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
       saveAnswer(ctx, { id: uuid.parse(req.params.id), ...z.object({ type: z.enum(["known_issue", "rca", "data_gotcha", "query_recipe", "incident"]), scope: z.string().optional() }).parse(req.body) }),
     ),
   );
+  router.get("/scopes/:slug/brief", handle("get_project_brief", (ctx, req) => getProjectBrief(ctx, String(req.params.slug), z.coerce.number().int().optional().parse(req.query.weeks))));
   // Decisions: revisit dates and possible conflicts.
   router.put("/articles/:id/revisit", handle("set_revisit_date", (ctx, req) => setRevisitDate(ctx, { id: uuid.parse(req.params.id), ...z.object({ date: z.string().optional(), months: z.number().int().optional() }).parse(req.body) })));
   router.post("/decisions/conflicts", handle("resolve_decision_conflict", (ctx, req) => resolveConflict(ctx, z.object({ a: uuid, b: uuid, outcome: z.enum(["supersedes", "not_a_conflict"]) }).parse(req.body))));

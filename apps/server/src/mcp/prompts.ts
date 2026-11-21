@@ -51,6 +51,7 @@ Before changing code:
 2. Open the contracts this component provides or consumes, and any decisions or design docs related to the task (get_article, by section where possible).
 3. For UI work, open the library UI component specs, tokens and screen specs it uses (their screenshots via get_asset when it helps).
 4. Search for known issues in the area (search_knowledge with type known_issue).
+5. If you haven't worked in this project in the last two weeks (or don't know), get_project_brief: recent incidents, merged pull requests and decisions change what's safe to touch.
 
 While working, follow the contracts and decisions. If the change needs a contract change, say so before making it.
 

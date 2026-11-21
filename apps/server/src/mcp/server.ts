@@ -41,6 +41,7 @@ import { briefChanges, listBriefings } from "../core/briefings.js";
 import { addIncidentNote, declareIncident, getIncident, listIncidents, updateIncident } from "../core/incidents.js";
 import { findExperts } from "../core/expertise.js";
 import { resolveConflict, setRevisitDate, similarDecisions } from "../core/decisions.js";
+import { getProjectBrief } from "../core/brief.js";
 import { beginDependencyScan, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, updateVulnerability } from "../core/security.js";
 import { createOrRequestProject, decideProjectRequest, listProjectRequests } from "../core/project-requests.js";
 import { setProjectParent } from "../core/hierarchy.js";
@@ -1674,6 +1675,18 @@ export function buildMcpServer(callerCtx: RequestContext, opts: { skills?: Skill
     (args) => run("decline_question", args.id, () => declineQuestion(ctx, args)),
   );
 
+  server.registerTool(
+    "get_project_brief",
+    {
+      title: "What happened in a project lately",
+      description:
+        "A project's last week(s): incidents, pull requests merged, decisions made or due for a revisit, resolved Sentry issues, new articles and findings, vulnerabilities opened and fixed, design drift, who was most active. " +
+        "Read it before working in a project you haven't touched for a while.",
+      inputSchema: { project: z.string(), weeks: z.number().int().min(1).max(12).optional() },
+      annotations: { readOnlyHint: true },
+    },
+    ({ project, weeks }) => run("get_project_brief", null, () => getProjectBrief(ctx, project, weeks)),
+  );
   server.registerTool(
     "set_revisit_date",
     {

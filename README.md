@@ -492,6 +492,12 @@ When a pull (merge) request opens or gets new commits, Thaliyola can comment on 
 - **Possible conflicts:** decisions in the same project (or the Library) whose *Choice* sections say nearly the same thing about the same subject show up in Review → Suggestions as **Decisions that may conflict**, with *First replaces second*, *Second replaces first* (links them with `supersedes` and marks the older one superseded) or *Not a conflict* (`resolve_decision_conflict`, `POST /api/decisions/conflicts`). Similarity only finds candidates; people decide. Needs search by meaning.
 - **Before recording one:** `create_article` with type `decision` and `record_design_decision` return `similar_decisions` when existing decisions read like the new one, so a contradiction is noticed when it's written.
 
+## Project briefs
+
+What happened in a project lately, for people joining or coming back and for agents that haven't worked there for a while: incidents, pull requests merged (from a GitHub merged-PR source), decisions made and decisions due for a revisit, resolved Sentry issues, new articles and findings, vulnerabilities opened and fixed (and critical ones open), session answers kept, the design drift trend, and who was most active.
+- **Where:** project menu → **What happened lately** (`#/project/<slug>/brief`, this week, two or four weeks); in the **weekly email** for each project you watch (up to five); in the weekly digest of the project's Slack or Trello route; `get_project_brief` over MCP (the `start-coding` prompt reads it when a session hasn't worked in the project for two weeks); `GET /api/scopes/:slug/brief?weeks=`.
+- Titles only, from projects the reader can read.
+
 ## Who knows what
 
 Thaliyola works out who knows what from what people did: versions of articles and findings they wrote or approved, proposals they reviewed or commented on, questions they (or their sessions) answered, documentation runs they started, and articles they own. Each counts toward the item's project, repositories, entities (services, tables, metrics…) and tags, and fades with a 180-day half-life, so recent work counts most. It's rebuilt nightly by the maintenance job.

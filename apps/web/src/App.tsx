@@ -28,6 +28,7 @@ import { DesignPage } from "./pages/design";
 import { GuidePage } from "./pages/guide";
 import { PullRequestsPage } from "./pages/pulls";
 import { IncidentsPage } from "./pages/incidents";
+import { BriefPage } from "./pages/brief";
 import { HistoryPage } from "./pages/history";
 import { Layout } from "./components/Layout";
 import { ProjectPage, ScopePage, SearchPage } from "./pages/browse";
@@ -242,7 +243,7 @@ function SignedInApp({ route, onSignOut }: { route: Route; onSignOut: () => Prom
         );
       break;
     case "project":
-      page = <ProjectPage slug={id!} route={route} me={me} scopes={scopes} />;
+      page = route.path[2] === "brief" ? <BriefPage slug={id!} /> : <ProjectPage slug={id!} route={route} me={me} scopes={scopes} />;
       break;
     case "article":
       page = <ArticlePage id={id!} route={route} me={me} scopes={scopes} />;

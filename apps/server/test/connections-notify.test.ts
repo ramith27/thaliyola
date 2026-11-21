@@ -140,7 +140,7 @@ describe("setting up routes", () => {
     const list = await listRoutes(o, "billing");
     expect(list.routes).toHaveLength(1);
     expect(list.destinations.map((d) => d.name)).toEqual(["Billing board", "Billing channel"]);
-    expect(list.kinds.map((k) => k.kind)).toEqual(["review", "decided", "comment", "change", "stale", "security", "connection"]);
+    expect(list.kinds.map((k) => k.kind)).toEqual(["review", "decided", "comment", "change", "stale", "security", "incident", "connection"]);
     expect(list.digests).toEqual({ hour: 8, day: 1 });
     expect(JSON.stringify(list)).not.toMatch(/xoxb|tk-secret|v1\$/);
 

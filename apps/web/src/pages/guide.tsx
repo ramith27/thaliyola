@@ -288,7 +288,8 @@ const FEATURES: Feature[] = [
       "Manage members and teams in settings → Members and access.",
     ],
     commands: [
-      { kind: "tool", cmd: "create_project · list_projects · get_project_context", what: "Project tools" },
+      { kind: "tool", cmd: "create_project · list_projects · get_project_context · get_project_brief", what: "Project tools (and what happened lately)" },
+      { kind: "page", cmd: "Project → What happened lately", what: "The project's brief: incidents, merged PRs, decisions, new knowledge" },
       { kind: "page", cmd: "+ New project · Project → Settings · Teams", what: "Create and manage" },
     ],
   },

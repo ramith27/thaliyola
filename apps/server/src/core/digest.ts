@@ -1,4 +1,5 @@
 import type { Settings } from "../config.js";
+import { briefLines, buildProjectBrief } from "./brief.js";
 import type { Db } from "../db/pool.js";
 import { sendEmail } from "./notify.js";
 
@@ -72,6 +73,18 @@ async function digestFor(db: Db, p: Person) {
     [p.id],
   );
   const unread = (await db.query<{ n: number }>("SELECT count(*)::int AS n FROM notifications WHERE user_id = $1 AND read_at IS NULL", [p.id])).rows[0]!.n;
+  // The week in each project this person watches (at most five).
+  const watched = (
+    await db.query<{ id: string; slug: string; name: string }>(
+      "SELECT s.id, s.slug, s.name FROM watches w JOIN scopes s ON s.id = w.target_id WHERE w.user_id = $1 AND w.target_kind = 'scope' AND s.kind = 'project' AND s.status = 'active' ORDER BY s.name LIMIT 5",
+      [p.id],
+    )
+  ).rows;
+  const briefs: string[] = [];
+  for (const s of watched) {
+    const lines = briefLines(await buildProjectBrief(db, s, 7), (path) => `#${path}`);
+    if (lines.length) briefs.push(`${s.name}:\n${lines.map((l) => `  • ${l}`).join("\n")}`);
+  }
   const gaps = p.metrics
     ? (
         await db.query<{ query: string; n: number }>(
@@ -85,6 +98,7 @@ async function digestFor(db: Db, p: Person) {
   if (changes.rows.length) parts.push(`New and updated (${changes.rows.length}):\n${changes.rows.map((c) => `• ${c.summary} — ${c.scope}`).join("\n")}`);
   if (toReview.rows.length) parts.push(`Waiting for your review:\n${toReview.rows.map((r) => `• ${r.summary}`).join("\n")}`);
   if (stale.rows.length) parts.push(`Yours to re-check (not verified recently):\n${stale.rows.map((s) => `• ${s.title}`).join("\n")}`);
+  if (briefs.length) parts.push(`This week in projects you watch:\n${briefs.join("\n")}`);
   if (answers.rows.length)
     parts.push(
       `Sessions answered each other; worth keeping? (Sessions page → Save as a finding)\n${answers.rows.map((a) => `• ${a.question.split("\n")[0]!.slice(0, 120)} — ${a.scope}`).join("\n")}`,
