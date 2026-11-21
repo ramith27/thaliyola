@@ -39,6 +39,7 @@ import { checkDesignDrift } from "../core/design-drift.js";
 import { exportSbom, licenceReport } from "../core/sbom.js";
 import { briefChanges, listBriefings } from "../core/briefings.js";
 import { addIncidentNote, declareIncident, getIncident, listIncidents, updateIncident } from "../core/incidents.js";
+import { findExperts } from "../core/expertise.js";
 import { beginDependencyScan, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, updateVulnerability } from "../core/security.js";
 import { createOrRequestProject, decideProjectRequest, listProjectRequests } from "../core/project-requests.js";
 import { setProjectParent } from "../core/hierarchy.js";
@@ -1662,6 +1663,18 @@ export function buildMcpServer(callerCtx: RequestContext, opts: { skills?: Skill
     (args) => run("decline_question", args.id, () => declineQuestion(ctx, args)),
   );
 
+  server.registerTool(
+    "find_experts",
+    {
+      title: "Who knows about this",
+      description:
+        "The people who know most about a topic (a service, table, metric, tag or words), a project, or a project's repository, from what they wrote, reviewed, answered and documented (recent work counts most), " +
+        "with their online sessions. To ask them, ask_session with to 'expert:<topic>' (their online sessions first, else the top person).",
+      inputSchema: { topic: z.string().optional(), project: z.string().optional(), component: z.string().optional(), limit: z.number().int().min(1).max(20).optional() },
+      annotations: { readOnlyHint: true },
+    },
+    (args) => run("find_experts", null, () => findExperts(ctx, args)),
+  );
   const severityLevel = z.enum(["sev1", "sev2", "sev3", "sev4"]).describe("sev1 = everyone down or data at risk … sev4 = minor");
   server.registerTool(
     "declare_incident",

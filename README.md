@@ -485,6 +485,13 @@ When a pull (merge) request opens or gets new commits, Thaliyola can comment on 
 - **For agents:** `brief_changes` gives the same briefing for local changes before a pull request exists, `get_pr_briefing` returns a pull request's, and `/mcp__thaliyola__review-pr [number]` reviews a pull request (or the current branch) against them.
 - API: `GET`/`PUT /api/scopes/:slug/pr-briefings`, `POST /api/connections/:id/webhook` (new secret, shown once), `POST /hooks/git/:connection` (the webhook).
 
+## Who knows what
+
+Thaliyola works out who knows what from what people did: versions of articles and findings they wrote or approved, proposals they reviewed or commented on, questions they (or their sessions) answered, documentation runs they started, and articles they own. Each counts toward the item's project, repositories, entities (services, tables, metrics…) and tags, and fades with a 180-day half-life, so recent work counts most. It's rebuilt nightly by the maintenance job.
+- **Seeing it:** a **Who knows this** card on each project's overview (for the chosen repository) and each topic page, with **Ask** (to their online session, else to them); `find_experts` (a topic, a project, or project and repository) over MCP; `GET /api/experts`, `GET /api/users/:id/expertise`.
+- **Asking:** `ask_session` with `to: "expert:<topic>"` (or `/thaliyola:ask expert <topic> <question>`) asks the top three experts' online sessions at once and collects their answers; with none online it goes to the top expert in person, who is notified.
+- **Privacy:** a caller only sees expertise built from projects they can read, so a members-only project's work never shows up for outsiders. Personal spaces and service accounts never count, and anyone can leave the map with the `hide_expertise` preference.
+
 ## Incidents
 
 When something is broken right now, declare an **incident** in the project: everyone with a role there (and anyone watching it) is told in the app, by email and on the project's Slack or Trello routes (the new *incident* kind), and the incident's **timeline** fills itself while it's open:

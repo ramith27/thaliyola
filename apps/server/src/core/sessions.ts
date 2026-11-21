@@ -3,6 +3,7 @@ import type { Settings } from "../config.js";
 import type { Db, Queryable } from "../db/pool.js";
 import { claimsBySession, transferClaims } from "./coordination.js";
 import { onProjectEvent, openIncidentsIn } from "./incidents.js";
+import { findExperts } from "./expertise.js";
 import { ForbiddenError, NotFoundError, ValidationError, type RequestContext } from "./context.js";
 import { emitChanged, waitFor, wake } from "./events.js";
 import { notify, reviewersFor } from "./notify.js";
@@ -293,6 +294,21 @@ export async function askSession(
     )
   ).rows[0]!.n;
   if (recent >= ASKS_PER_HOUR) throw new ValidationError(`that's ${ASKS_PER_HOUR} questions in the last hour; wait a little`);
+  const minutesFor = Math.min(Math.max(Math.round(input.expires_minutes ?? 30), 1), 240);
+  // "expert:<topic>": the people who know most about it (who-knows-what), their online sessions first.
+  const expert = /^expert:\s*(.+)$/i.exec(input.to.trim());
+  if (expert && kind === "question") {
+    const found = (await findExperts(ctx, { topic: expert[1]!, limit: 3 })).experts;
+    if (!found.length) throw new NotFoundError(`anyone who knows about "${expert[1]}" yet (ask the project instead, or find_experts with other words)`);
+    const sessions = found.flatMap((e) => e.online_sessions).filter((h) => !from || h !== from.handle).slice(0, 5);
+    if (sessions.length) {
+      const rows = (await ctx.db.query<{ id: string; handle: string }>("SELECT id, handle FROM agent_sessions WHERE handle = ANY($1)", [sessions])).rows;
+      const r = await askEveryone(ctx, { from, target: { to_session_id: null, to_user_id: null, to_scope_id: null, to_component: null, label: `experts on ${expert[1]}`, online: true, owners: [] }, question, context, minutes: minutesFor }, limits, input.wait_seconds, rows);
+      if (r) return { ...r, experts: found.map((e) => ({ name: e.name, score: e.score })) };
+    }
+    // Nobody online: the top expert, in person (notified now).
+    return askSession(ctx, { ...input, to: found[0]!.email ?? input.to.replace(/^expert:/i, "") });
+  }
   const target = await resolveTarget(ctx, input.to);
   if (from && target.to_session_id === from.id) throw new ValidationError("a session can't ask itself");
   const minutes = Math.min(Math.max(Math.round(input.expires_minutes ?? 30), 1), 240);
@@ -339,10 +355,11 @@ async function askEveryone(
   a: { from: SessionRow | null; target: Target; question: string; context: string; minutes: number },
   limits: { maxWaitMs?: number; signal?: AbortSignal },
   waitSeconds: number | undefined,
+  chosen?: { id: string; handle: string }[],
 ) {
   const t = a.target;
   if (t.to_session_id) throw new ValidationError("everyone works with a project (or project/repository) or a person's email, not one session");
-  const { rows: sessions } = await ctx.db.query<{ id: string; handle: string }>(
+  const { rows: sessions } = chosen ? { rows: chosen } : await ctx.db.query<{ id: string; handle: string }>(
     `SELECT s.id, s.handle FROM agent_sessions s
       WHERE ${ONLINE} AND ($1::uuid IS NULL OR s.id <> $1)
         AND (($2::uuid IS NOT NULL AND s.scope_id = $2 AND s.visibility = 'project' AND ($3::text IS NULL OR s.component = $3)) OR ($4::uuid IS NOT NULL AND s.user_id = $4 AND (s.visibility = 'project' OR s.user_id = $5)))

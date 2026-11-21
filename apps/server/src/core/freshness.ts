@@ -1,4 +1,5 @@
 import { sendDigests } from "./digest.js";
+import { rebuildExpertise } from "./expertise.js";
 import type { Settings } from "../config.js";
 import type { Db } from "../db/pool.js";
 import { onStale } from "./notify.js";
@@ -79,6 +80,13 @@ export function startJobs(db: Db, opts: { findingDays: number; articleDays: numb
         await db.query("DELETE FROM invitations WHERE expires_at < now() - interval '30 days' AND accepted_at IS NULL");
         if (opts.settings) await db.query("DELETE FROM search_log WHERE at < now() - make_interval(days => $1)", [opts.settings.searchLogDays]);
         if (stale.findings || stale.articles) log(`marked ${stale.findings} finding(s) and ${stale.articles} article(s) possibly stale`);
+        // Who knows what: rebuilt about once a day.
+        const due = (await db.query("SELECT 1 FROM job_runs WHERE name = 'expertise' AND last_run > now() - interval '20 hours'")).rowCount === 0;
+        if (due) {
+          const n = await rebuildExpertise(db);
+          await db.query("INSERT INTO job_runs (name, last_run) VALUES ('expertise', now()) ON CONFLICT (name) DO UPDATE SET last_run = now()");
+          log(`rebuilt who-knows-what (${n} rows)`);
+        }
       } finally {
         await client.query("SELECT pg_advisory_unlock($1)", [LOCK]);
       }

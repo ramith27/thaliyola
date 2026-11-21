@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { WhoKnows } from "../components/who-knows";
 import type { Folder, Me, Notice as NoticeT, ScopeInfo, SearchHit } from "../api";
 import { api, getToken } from "../api";
 import { useBoot } from "../components/boot";
@@ -899,16 +900,19 @@ export function ProjectPage({ slug, route, me, scopes = [] }: { slug: string; ro
       ) : tab === "sub" ? (
         <SubProjects name={name} slug={slug} subs={subs} scopes={scopes} manage={manage} />
       ) : (
-        <ProjectOverview
-          slug={slug}
-          data={data}
-          refreshing={ctx.loading}
-          reload={ctx.reload}
-          error={ctx.error}
-          component={component}
-          onComponent={(c) => setQs({ component: c || undefined })}
-          canEdit={can.inScope(info, "propose", me)}
-        />
+        <>
+          <ProjectOverview
+            slug={slug}
+            data={data}
+            refreshing={ctx.loading}
+            reload={ctx.reload}
+            error={ctx.error}
+            component={component}
+            onComponent={(c) => setQs({ component: c || undefined })}
+            canEdit={can.inScope(info, "propose", me)}
+          />
+          <WhoKnows project={slug} component={component || undefined} />
+        </>
       )}
     </Page>
   );

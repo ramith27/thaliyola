@@ -41,6 +41,7 @@ import { exportSbom, licenceReport } from "../core/sbom.js";
 import { guideProgress } from "../core/guide.js";
 import { listBriefings, setBriefingMode, setGitWebhook } from "../core/briefings.js";
 import { addIncidentNote, declareIncident, getIncident, listIncidents, updateIncident } from "../core/incidents.js";
+import { findExperts, knowsAbout } from "../core/expertise.js";
 import { getReadableScope, personalScope } from "../core/scopes.js";
 import { hideAdvisory, latestAdvisories, publishAdvisory, setAdvisoryResponse, setProjectTechnologies, stackOf, TECHNOLOGIES } from "../core/advisories.js";
 import { beginDependencyScan, detectProjectStack, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, securityOverview, updateVulnerability, uploadWithAuth } from "../core/security.js";
@@ -721,6 +722,14 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
       saveAnswer(ctx, { id: uuid.parse(req.params.id), ...z.object({ type: z.enum(["known_issue", "rca", "data_gotcha", "query_recipe", "incident"]), scope: z.string().optional() }).parse(req.body) }),
     ),
   );
+  // Who knows what.
+  router.get(
+    "/experts",
+    handle("find_experts", (ctx, req) =>
+      findExperts(ctx, z.object({ topic: z.string().max(200).optional(), project: z.string().optional(), component: z.string().optional(), limit: z.coerce.number().int().optional() }).parse(req.query)),
+    ),
+  );
+  router.get("/users/:id/expertise", handle("knows_about", async (ctx, req) => ({ topics: await knowsAbout(ctx, uuid.parse(req.params.id)) })));
   // Incidents.
   router.get("/incidents", handle("list_incidents", (ctx, req) => listIncidents(ctx, z.object({ project: z.string().optional(), status: z.enum(["open", "all"]).optional(), limit: z.coerce.number().int().optional() }).parse(req.query))));
   router.post(

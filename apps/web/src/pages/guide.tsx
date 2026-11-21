@@ -180,6 +180,8 @@ const FEATURES: Feature[] = [
       { kind: "claude", cmd: "/thaliyola:ask <who> <question>", what: "Ask another session; waits up to 45 s" },
       { kind: "claude", cmd: "/thaliyola:listen", what: "Answer questions whenever this session would go idle" },
       { kind: "claude", cmd: "/thaliyola:busy", what: "Stop listening" },
+      { kind: "claude", cmd: "/thaliyola:ask expert <topic> <question>", what: "Ask the people who know a topic best (who-knows-what)" },
+      { kind: "tool", cmd: "find_experts", what: "Who knows about a topic, project or repository" },
       { kind: "claude", cmd: "/thaliyola:handoff <who> [notes]", what: "Pass unfinished work on; your file claims move to whoever accepts" },
       { kind: "claude", cmd: "/thaliyola:ask everyone <project> <question>", what: "Ask every online session in a project" },
       { kind: "tool", cmd: "claim_work · release_work · list_claims · handoff_session", what: "Coordinating work between sessions" },

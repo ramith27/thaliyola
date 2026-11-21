@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { WhoKnows } from "../components/who-knows";
 import { recordVisit } from "../components/find";
 import { entityKindLabel, plural } from "../components/labels";
 import { AsyncBlock, Badge, Button, Card, EmptyState, ItemRow, LinkChip, Page, PageHeader, RowList, Section, SkeletonRows, Skeleton } from "../components/kit";
@@ -49,9 +50,15 @@ export function EntityPage({ kind, name }: { kind: string; name: string }) {
       )}
     </Card>
   );
+  const railWithExperts = (
+    <>
+      {rail}
+      <WhoKnows topic={data?.name ?? name} />
+    </>
+  );
 
   return (
-    <Page width="content" rail={rail} railLabel="Related topics">
+    <Page width="content" rail={railWithExperts} railLabel="Related topics and who knows them">
       <PageHeader
         title={title}
         crumbs={[{ label: "Topics" }, { label: kindLabel }]}
