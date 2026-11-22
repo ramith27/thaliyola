@@ -1,0 +1,11 @@
+# nginx for the website: listens on $PORT (hosts like Tricknowtech set it; 3000 by default).
+server {
+    listen ${PORT};
+    listen [::]:${PORT};
+    root /usr/share/nginx/html;
+    index index.html;
+    location / { try_files $uri $uri/ =404; }
+    location /images/ { expires 7d; add_header Cache-Control "public"; }
+    gzip on;
+    gzip_types text/css application/javascript image/svg+xml;
+}
