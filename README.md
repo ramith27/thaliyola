@@ -820,6 +820,18 @@ Tests run against a real Postgres database (`TEST_DATABASE_URL`, default `postgr
 pnpm test
 ```
 
+## Public demo and website
+
+**Try it:** [thaliyola-demo.tricknowtech.app](https://thaliyola-demo.tricknowtech.app), reset every 12 hours. Sign in with one click as Dana (Administrator), Alex or Sam (contributors) or Rita (viewer).
+
+The demo is the root `Dockerfile`: Thaliyola and its own Postgres 16 with pgvector in one container (Unix socket only), with `DEMO_MODE=true`. On start and every `DEMO_RESET_HOURS` it wipes the database and seeds a showcase (two projects, a design system with drift, sessions asking each other, an incident, a pull request briefing, vulnerabilities). Visitors sign in with one click (no passwords and no dev tokens); mail, connections, sources and scans are off, and the server refuses outbound requests except the search model's download. **Never set `DEMO_MODE` on a real install: it deletes everything.**
+
+```sh
+docker build -t thaliyola-demo . && docker run -p 3000:3000 -e PUBLIC_URL=http://localhost:3000 thaliyola-demo
+```
+
+The project website is `site/index.html`, served by nginx: `docker build -f site/Dockerfile -t thaliyola-site .`
+
 ## Sign-in
 
 Choose with `AUTH_MODE`:

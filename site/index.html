@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thaliyola · Your team's knowledge in every Claude session</title>
+<meta name="description" content="Thaliyola is an open-source MCP server that gives every Claude session on your team the same reviewed knowledge: docs, decisions, contracts, incidents and past investigations. Sessions can even ask each other.">
+<meta property="og:title" content="Thaliyola: your team's knowledge in every Claude session">
+<meta property="og:description" content="An open-source, self-hosted knowledge base for Claude Code and claude.ai. Agents write, people review, every session knows.">
+<meta property="og:image" content="images/home.png">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #faf7f0; --surface: #ffffff; --surface-2: #f3eee2; --ink: #1d1a14; --muted: #5c5547; --line: #e4dccb;
+  --accent: #8a5a14; --accent-ink: #ffffff; --leaf: #cf9638; --leaf-soft: #f6e7c6; --code-bg: #1d1a14; --code-ink: #f3ead6;
+  --shadow: 0 1px 2px rgba(40, 30, 10, .06), 0 12px 32px -12px rgba(40, 30, 10, .18);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14120e; --surface: #1d1a15; --surface-2: #25211a; --ink: #f2ecdf; --muted: #b3a991; --line: #3a3428;
+    --accent: #e8b852; --accent-ink: #1d1a14; --leaf: #e8b852; --leaf-soft: #3a2f19; --code-bg: #0d0c09; --code-ink: #f3ead6;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 12px 32px -12px rgba(0, 0, 0, .6);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14120e; --surface: #1d1a15; --surface-2: #25211a; --ink: #f2ecdf; --muted: #b3a991; --line: #3a3428;
+  --accent: #e8b852; --accent-ink: #1d1a14; --leaf: #e8b852; --leaf-soft: #3a2f19; --code-bg: #0d0c09; --code-ink: #f3ead6;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 12px 32px -12px rgba(0, 0, 0, .6);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 17px/1.6 Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+img { max-width: 100%; height: auto; display: block; }
+h1, h2, h3 { font-family: Fraunces, Georgia, serif; font-weight: 650; letter-spacing: -0.01em; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(2.3rem, 5.2vw, 3.9rem); }
+h2 { font-size: clamp(1.75rem, 3.4vw, 2.5rem); }
+h3 { font-size: 1.2rem; font-weight: 500; }
+p { margin: 0; }
+code, pre { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .86em; }
+.wrap { max-width: 1160px; margin: 0 auto; padding: 0 24px; }
+.eyebrow { font-size: .8rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
+.lede { color: var(--muted); font-size: 1.15rem; max-width: 640px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 10px; font-weight: 600; font-size: .98rem; text-decoration: none; border: 1px solid var(--line); background: var(--surface); transition: transform .12s ease, box-shadow .12s ease; }
+.btn:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.btn svg { width: 18px; height: 18px; }
+
+/* Nav */
+header.nav { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+header.nav .wrap { display: flex; align-items: center; gap: 28px; height: 64px; }
+.brand { display: flex; align-items: center; gap: 10px; font-family: Fraunces, Georgia, serif; font-weight: 650; font-size: 1.25rem; text-decoration: none; }
+.brand img { width: 30px; height: 30px; }
+nav.links { display: flex; gap: 22px; margin-left: auto; font-size: .95rem; }
+nav.links a { text-decoration: none; color: var(--muted); }
+nav.links a:hover { color: var(--ink); }
+header.nav .btn { padding: 8px 14px; font-size: .9rem; }
+.theme { background: none; border: 1px solid var(--line); border-radius: 8px; width: 36px; height: 36px; color: var(--muted); cursor: pointer; display: grid; place-items: center; }
+.theme svg { width: 18px; height: 18px; }
+
+/* Hero */
+.hero { padding: 84px 0 40px; text-align: center; }
+.hero h1 { max-width: 880px; margin: 0 auto 22px; }
+.hero h1 em { font-style: normal; color: var(--accent); }
+.hero .lede { margin: 0 auto 32px; }
+.hero .ctas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.hero .note { margin-top: 18px; font-size: .88rem; color: var(--muted); }
+.shot { border-radius: 14px; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
+.shot .bar { display: flex; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.shot .bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+.hero .shot { margin: 56px auto 0; max-width: 1060px; }
+
+/* Name */
+.name { padding: 56px 0; }
+.name .card { display: grid; grid-template-columns: auto 1fr; gap: 28px; align-items: center; background: var(--leaf-soft); border-radius: 16px; padding: 28px 32px; }
+.name .ml { font-family: Fraunces, Georgia, serif; font-size: 2.4rem; color: var(--accent); }
+.name p { color: var(--ink); max-width: 760px; }
+
+/* Sections */
+section.block { padding: 88px 0; }
+section.block.alt { background: var(--surface-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.head { max-width: 720px; margin-bottom: 48px; }
+.head h2 { margin-bottom: 14px; }
+
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; counter-reset: step; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 26px; }
+.step::before { counter-increment: step; content: counter(step); display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--leaf-soft); color: var(--accent); font-weight: 600; margin-bottom: 16px; }
+.step h3 { margin-bottom: 8px; }
+.step p { color: var(--muted); font-size: .97rem; }
+pre.code { margin: 28px 0 0; background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 12px; overflow-x: auto; line-height: 1.55; }
+pre.code .c { color: #a39a85; }
+
+.feature { display: grid; grid-template-columns: 1fr 1.25fr; gap: 56px; align-items: center; padding: 40px 0; }
+.feature + .feature { border-top: 1px solid var(--line); }
+.feature.flip .text { order: 2; }
+.feature .text h3 { font-size: 1.6rem; font-weight: 650; margin-bottom: 14px; }
+.feature .text p { color: var(--muted); margin-bottom: 14px; }
+.feature ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.feature li { padding-left: 26px; position: relative; font-size: .97rem; }
+.feature li::before { content: ""; position: absolute; left: 4px; top: .62em; width: 10px; height: 10px; border-radius: 3px; background: var(--leaf); transform: rotate(-14deg); }
+
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
+.tile img { aspect-ratio: 16 / 10; object-fit: cover; object-position: top left; border-bottom: 1px solid var(--line); }
+.tile .t { padding: 20px 22px 24px; }
+.tile h3 { margin-bottom: 6px; font-weight: 650; }
+.tile p { color: var(--muted); font-size: .95rem; }
+
+.principles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+.principle { border-top: 3px solid var(--leaf); padding-top: 18px; }
+.principle h3 { margin-bottom: 8px; font-weight: 650; }
+.principle p { color: var(--muted); font-size: .95rem; }
+
+.host { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.host > *, .steps > *, .grid > *, .feature > *, .principles > * { min-width: 0; }
+.host .opt { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 26px; }
+.host .opt h3 { font-weight: 650; margin-bottom: 8px; }
+.host .opt p { color: var(--muted); font-size: .95rem; }
+.host pre.code { margin-top: 18px; font-size: .82rem; }
+
+.cta { text-align: center; padding: 96px 0; }
+.cta h2 { margin-bottom: 16px; }
+.cta .lede { margin: 0 auto 30px; }
+.cta .ctas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+footer { border-top: 1px solid var(--line); padding: 32px 0; color: var(--muted); font-size: .9rem; }
+footer .wrap { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+footer .brand { font-size: 1.05rem; color: var(--ink); }
+footer .brand img { width: 24px; height: 24px; }
+footer nav { margin-left: auto; display: flex; gap: 18px; }
+footer a { text-decoration: none; }
+footer a:hover { color: var(--ink); }
+
+@media (max-width: 900px) {
+  nav.links { display: none; }
+  header.nav .wrap { gap: 12px; }
+  header.nav .btn { margin-left: auto; }
+  .steps, .grid, .host { grid-template-columns: 1fr; }
+  .principles { grid-template-columns: 1fr 1fr; }
+  .feature, .feature.flip { grid-template-columns: 1fr; gap: 24px; }
+  .feature.flip .text { order: 0; }
+  .name .card { grid-template-columns: 1fr; gap: 10px; padding: 24px; }
+  section.block { padding: 64px 0; }
+  .hero { padding: 56px 0 24px; }
+}
+@media (max-width: 520px) {
+  .wrap { padding: 0 16px; }
+  .principles { grid-template-columns: 1fr; }
+  body { font-size: 16px; }
+  .brand span { display: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#"><img src="favicon.svg" alt=""><span>Thaliyola</span></a>
+    <nav class="links">
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#self-host">Self-host</a>
+      <a href="https://github.com/ramith27/thaliyola">GitHub</a>
+    </nav>
+    <button class="theme" id="theme" type="button" aria-label="Switch between light and dark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+    </button>
+    <a class="btn primary" href="https://thaliyola-demo.tricknowtech.app">Try the demo</a>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <div class="eyebrow">Open source · Self-hosted · MCP</div>
+      <h1>Your team's knowledge, in <em>every Claude session</em></h1>
+      <p class="lede">Thaliyola is a shared knowledge base for Claude Code and claude.ai. Docs, decisions, API contracts, incidents and past investigations live in one place. Agents write them, people review them, and every session on the team starts out knowing them.</p>
+      <div class="ctas">
+        <a class="btn primary" href="https://thaliyola-demo.tricknowtech.app">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3 14 9-14 9V3Z"/></svg>
+          Try the live demo
+        </a>
+        <a class="btn" href="https://github.com/ramith27/thaliyola">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+          Self-host it
+        </a>
+      </div>
+      <p class="note">The demo resets every 12 hours. Sign in as one of the demo team with one click.</p>
+      <div class="shot"><div class="bar"><i></i><i></i><i></i></div><img src="images/home.png" alt="Thaliyola's home page: search the team's knowledge, setup checklist and spaces" width="1440" height="900"></div>
+    </div>
+  </section>
+
+  <section class="name">
+    <div class="wrap">
+      <div class="card">
+        <div class="ml" lang="ml">തളിയോല</div>
+        <p><strong>Thaliyola</strong> is Malayalam for the palm-leaf manuscripts Kerala used to write knowledge down and keep it for the next generation. It's the same idea for a team that works with AI: what one session learns, the next one already knows.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block alt" id="how">
+    <div class="wrap">
+      <div class="head">
+        <div class="eyebrow">How it works</div>
+        <h2>The server keeps the knowledge. Claude does the thinking.</h2>
+        <p class="lede" style="margin-top:14px">Thaliyola runs no language model. Your Claude clients reason; Thaliyola stores, searches, checks and versions what they find, and people decide what gets published.</p>
+      </div>
+      <div class="steps">
+        <div class="step"><h3>Connect Claude</h3><p>Add Thaliyola to Claude Code or claude.ai as a remote MCP server. The Claude Code plugin loads the project's context at the start of every session.</p></div>
+        <div class="step"><h3>Agents write, people review</h3><p>Sessions save what they learn: findings, decisions, runbooks, contracts. Agent-written content waits in Review until someone on the team approves it.</p></div>
+        <div class="step"><h3>Every session knows</h3><p>The next session, on any laptop, searches the team's knowledge first. When it changes, the people and codebases that depend on it hear about it.</p></div>
+      </div>
+<pre class="code"><span class="c"># Connect Claude Code to your Thaliyola</span>
+claude mcp add --transport http thaliyola https://thaliyola.example.com/mcp \
+  --header "Authorization: Bearer $THALIYOLA_TOKEN"</pre>
+    </div>
+  </section>
+
+  <section class="block" id="features">
+    <div class="wrap">
+      <div class="head">
+        <div class="eyebrow">Features</div>
+        <h2>Knowledge that reaches people when it matters</h2>
+      </div>
+
+      <div class="feature">
+        <div class="text">
+          <h3>Sessions that ask each other</h3>
+          <p>Your backend session can ask the frontend team's session how the timeline reads order events, and get an answer from code that's actually open.</p>
+          <ul>
+            <li>Ask a person, a project, everyone listening, or whoever knows the topic best, from an experts map built from who wrote, reviewed and answered what</li>
+            <li>Ask from Slack with <code>/thaliyola</code>, and get the answer in the thread</li>
+            <li>Claim the files you're changing so two sessions don't collide</li>
+            <li>Hand work over to a teammate with a summary and next steps</li>
+          </ul>
+        </div>
+        <div class="shot"><img src="images/sessions.png" alt="Sessions page: who can be asked, listening or busy" loading="lazy"></div>
+      </div>
+
+      <div class="feature flip">
+        <div class="text">
+          <h3>Pull request briefings</h3>
+          <p>When a pull request opens, Thaliyola comments with what the team already knows about the files it touches.</p>
+          <ul>
+            <li>Docs that describe the changed code and may need updating</li>
+            <li>API contracts and the teams that consume them</li>
+            <li>Known issues, open vulnerabilities and design drift in those files</li>
+          </ul>
+        </div>
+        <div class="shot"><img src="images/pulls.png" alt="Pull requests briefed for a project" loading="lazy"></div>
+      </div>
+
+      <div class="feature">
+        <div class="text">
+          <h3>Incidents with a timeline that fills itself</h3>
+          <p>Declare an incident from the app, from Claude, from Slack or from a Sentry alert. Everyone in the project hears about it, including their Claude sessions.</p>
+          <ul>
+            <li>Notes, merged PRs, Sentry events and sessions' answers land on the timeline</li>
+            <li>Resolving it drafts the RCA for review</li>
+          </ul>
+        </div>
+        <div class="shot"><img src="images/incident.png" alt="An incident with severity, status and timeline" loading="lazy"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block alt">
+    <div class="wrap">
+      <div class="head">
+        <div class="eyebrow">And more</div>
+        <h2>Everything a team's knowledge needs</h2>
+      </div>
+      <div class="grid">
+        <div class="tile"><img src="images/graph.png" alt="Knowledge graph" loading="lazy"><div class="t"><h3>Knowledge graph</h3><p>Projects, components, contracts and the items that depend on them. A change reaches every consumer as an impact notice.</p></div></div>
+        <div class="tile"><img src="images/design.png" alt="Design system" loading="lazy"><div class="t"><h3>Design systems</h3><p>Tokens a project inherits from the Library, contrast checks, Figma sync, and drift reports from the code.</p></div></div>
+        <div class="tile"><img src="images/security.png" alt="Security" loading="lazy"><div class="t"><h3>Security</h3><p>Vulnerabilities in your dependencies, SBOMs and licences, and a fix-it prompt for Claude.</p></div></div>
+        <div class="tile"><img src="images/brief.png" alt="Project brief" loading="lazy"><div class="t"><h3>Weekly project briefs</h3><p>What happened: incidents, decisions, new knowledge, pull requests. By email and Slack to people who watch the project.</p></div></div>
+        <div class="tile"><img src="images/project-frontend.png" alt="A project's articles by folder" loading="lazy"><div class="t"><h3>Decisions that stay true</h3><p>Design docs, contracts and decisions per project. Decisions get a revisit date, and new ones are checked against the old ones for conflicts.</p></div></div>
+        <div class="tile"><img src="images/guide.png" alt="Guide" loading="lazy"><div class="t"><h3>A guide built in</h3><p>Every feature, whether it's switched on, how to use it and every command, in the app itself.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="wrap">
+      <div class="head">
+        <div class="eyebrow">Principles</div>
+        <h2>Built for teams that care where their knowledge lives</h2>
+      </div>
+      <div class="principles">
+        <div class="principle"><h3>Your server, your data</h3><p>Self-hosted on your own machine or cloud, with Postgres. Nothing leaves it unless you connect it.</p></div>
+        <div class="principle"><h3>People approve</h3><p>Agent-written content goes through review before it's published. Every change is versioned.</p></div>
+        <div class="principle"><h3>Permissions everywhere</h3><p>Spaces, project visibility and roles apply to people, Claude sessions, Slack and webhooks alike.</p></div>
+        <div class="principle"><h3>No model on the server</h3><p>Search by meaning runs a small local embedding model. The reasoning stays in the Claude you already use.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block alt" id="self-host">
+    <div class="wrap">
+      <div class="head">
+        <div class="eyebrow">Self-host</div>
+        <h2>Running in minutes</h2>
+        <p class="lede" style="margin-top:14px">Docker Compose, or a native install on Debian or Ubuntu with systemd, daily backups, off-site copies and monthly restore checks. Sign in with passwords, Google, Okta, Entra or Cloudflare Access.</p>
+      </div>
+      <div class="host">
+        <div class="opt">
+          <h3>Docker</h3>
+          <p>Thaliyola and Postgres 16 with pgvector.</p>
+<pre class="code">git clone https://github.com/ramith27/thaliyola
+cd thaliyola && cp .env.example .env
+docker compose up -d --build</pre>
+        </div>
+        <div class="opt">
+          <h3>Native install</h3>
+          <p>One script installs Node, Postgres and the service, and prints your admin password.</p>
+<pre class="code">git clone https://github.com/ramith27/thaliyola
+cd thaliyola
+sudo ADMIN_EMAIL=you@example.com \
+  deploy/native/install.sh</pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta">
+    <div class="wrap">
+      <h2>See it with a team already in it</h2>
+      <p class="lede">The demo has two projects, a design system, an incident in progress, sessions asking each other and a pull request briefing. Click around; it resets every 12 hours.</p>
+      <div class="ctas">
+        <a class="btn primary" href="https://thaliyola-demo.tricknowtech.app">Open the demo</a>
+        <a class="btn" href="https://github.com/ramith27/thaliyola#readme">Read the docs</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#"><img src="favicon.svg" alt="">Thaliyola</a>
+    <span>MIT licensed</span>
+    <nav>
+      <a href="https://thaliyola-demo.tricknowtech.app">Demo</a>
+      <a href="https://github.com/ramith27/thaliyola">GitHub</a>
+      <a href="https://github.com/ramith27/thaliyola/blob/main/docs/install.md">Install guide</a>
+      <a href="https://github.com/ramith27/thaliyola/blob/main/CHANGELOG.md">Changelog</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var root = document.documentElement, btn = document.getElementById("theme");
+  try { var t = localStorage.getItem("theme"); if (t) root.dataset.theme = t; } catch (e) {}
+  btn.addEventListener("click", function () {
+    var dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+    try { localStorage.setItem("theme", root.dataset.theme); } catch (e) {}
+  });
+})();
+</script>
+</body>
+</html>

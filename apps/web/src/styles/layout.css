@@ -387,3 +387,4 @@ dialog.search-overlay::backdrop { background: var(--scrim); }
   .more-actions.open .more-items, dialog.search-overlay { animation-name: fade-in; }
 }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.demo-banner { background: var(--warn-soft, #fcf3e0); border-bottom: 1px solid var(--border); padding: 0.45rem 1rem; font-size: 0.88rem; }

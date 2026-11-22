@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
+import { DEMO_PEOPLE, demoAccount, lastReset, nextReset } from "../core/demo.js";
+import { startSession } from "../auth/local.js";
 import { oidcRouter, signInOptions } from "../auth/oidc.js";
-import { Router, type Request, type Response } from "express";
+import express, { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { sessionToken } from "../auth/index.js";
 import { changePassword, createApiToken, listApiTokens, login, logout, revokeApiToken, ROTATION_GRACE_DAYS, rotateApiToken, SESSION_COOKIE, sessionHash } from "../auth/local.js";
@@ -67,8 +69,25 @@ export function publicAuthRouter(db: Db, settings: Settings) {
   const perAccount = new LoginThrottle(db, "login", 10, 15 * 60_000);
   const perIp = new LoginThrottle(db, "login-ip", 50, 15 * 60_000);
 
-  router.get("/config", (_req, res) => {
-    res.json({ mode: settings.authMode, ...(settings.authMode === "local" ? signInOptions(settings) : {}) });
+  router.get("/config", async (_req, res, next) => {
+    try {
+      const demo = settings.demo && settings.authMode === "local" ? { accounts: DEMO_PEOPLE.map(({ key, name, role }) => ({ key, name, role })), resets_at: nextReset(settings, await lastReset(db)).toISOString() } : undefined;
+      res.json({ mode: settings.authMode, ...(settings.authMode === "local" ? signInOptions(settings) : {}), ...(demo ? { demo } : {}) });
+    } catch (err) {
+      next(err);
+    }
+  });
+  // The public demo: sign in as one of the demo people with one click (only with DEMO_MODE=true).
+  router.post("/demo", express.json({ limit: "1kb" }), async (req, res, next) => {
+    try {
+      if (!settings.demo || settings.authMode !== "local") return void res.status(404).json({ error: "not a demo server" });
+      const id = await demoAccount(db, String((req.body as { as?: unknown })?.as ?? ""));
+      if (!id) return void res.status(404).json({ error: "no such demo account" });
+      setSessionCookie(req, res, settings, await startSession(db, id, { ttlHours: Math.min(settings.sessionTtlHours, 12), userAgent: req.header("user-agent") }));
+      res.json({ ok: true });
+    } catch (err) {
+      next(err);
+    }
   });
   // Sign-in with OpenID Connect providers (Google, Okta, Entra…), next to passwords.
   if (settings.authMode === "local" && settings.oidc?.providers.length) router.use("/oidc", oidcRouter(db, settings, (req, res, token) => setSessionCookie(req, res, settings, token)));

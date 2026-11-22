@@ -96,6 +96,9 @@ const Env = z
     OIDC_PROVIDERS: z.string().optional(),
     OIDC_ALLOWED_DOMAINS: z.string().optional(),
     OIDC_ONLY: z.enum(["true", "false"]).optional(),
+    // The public demo: wiped and re-seeded every DEMO_RESET_HOURS, one-click demo accounts. Never on a real install.
+    DEMO_MODE: z.enum(["true", "false"]).default("false"),
+    DEMO_RESET_HOURS: z.coerce.number().min(1).max(168).default(12),
     SLACK_API_URL: z.string().url().optional(),
     NOTION_TOKEN: z.string().optional(),
     TAVILY_API_KEY: z.string().optional(),
@@ -218,6 +221,7 @@ export function settingsFrom(config: Config): Settings {
     smtpUrl: config.SMTP_URL,
     mailFrom: config.MAIL_FROM,
     slackWebhookUrl: config.SLACK_WEBHOOK_URL,
+    demo: config.DEMO_MODE === "true" ? { resetHours: config.DEMO_RESET_HOURS } : undefined,
     oidc: config.OIDC?.length
       ? {
           providers: config.OIDC,
@@ -343,6 +347,8 @@ export interface Settings {
   /** Team sources; absent in tests that don't use them. */
   sources?: { enabled: boolean; slackToken?: string; notionToken?: string; tavilyKey?: string; allowPrivate: boolean };
   /** Vulnerability matching; `fetch` is injected in tests. */
+  /** The public demo (core/demo.ts). */
+  demo?: { resetHours: number };
   /** Sign-in with OpenID Connect providers (auth/oidc.ts); local mode only. */
   oidc?: { providers: OidcProvider[]; allowedDomains: string[]; only: boolean; fetch?: typeof fetch };
   /** The /thaliyola slash command (core/slack-app.ts). */

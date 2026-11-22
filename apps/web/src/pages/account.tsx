@@ -76,12 +76,29 @@ export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
   usePageMeta({ title: "Sign in" });
   // Sign-in with the organisation's provider (OpenID Connect), when the server offers it.
   const [options, setOptions] = useState<{ providers: { name: string; label: string }[]; password: boolean }>({ providers: [], password: true });
+  const [demo, setDemo] = useState<{ accounts: { key: string; name: string; role: string }[]; resets_at: string } | null>(null);
   useEffect(() => {
     fetch("/auth/config", { credentials: "same-origin" })
       .then((r) => r.json())
-      .then((c: { providers?: { name: string; label: string }[]; password?: boolean }) => setOptions({ providers: c.providers ?? [], password: c.password !== false }))
+      .then((c: { providers?: { name: string; label: string }[]; password?: boolean; demo?: { accounts: { key: string; name: string; role: string }[]; resets_at: string } }) => {
+        setOptions({ providers: c.providers ?? [], password: c.password !== false });
+        setDemo(c.demo ?? null);
+      })
       .catch(() => undefined);
   }, []);
+  async function tryAs(key: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await fetch("/auth/demo", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ as: key }) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({ error: "couldn't sign in" }))).error);
+      onSignedIn();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
   const returnTo = `/${window.location.hash}`;
 
   async function submit(e: FormEvent) {
@@ -107,8 +124,22 @@ export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
   }
 
   return (
-    <GateCard title="Sign in to Thaliyola" description={<p>Your team's knowledge base.</p>} footer={<p className="pp-gate-hint">Forgot your password? Ask an Administrator or User manager to reset it.</p>}>
-      {options.providers.length > 0 && (
+    <GateCard title="Sign in to Thaliyola" description={<p>Your team's knowledge base.</p>} footer={demo ? undefined : <p className="pp-gate-hint">Forgot your password? Ask an Administrator or User manager to reset it.</p>}>
+      {demo && (
+        <div className="pp-gate-demo">
+          <p>
+            <strong>This is the public demo.</strong> Sign in as one of the demo team with one click. Everything resets every 12 hours (next at{" "}
+            {new Date(demo.resets_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}).
+          </p>
+          {demo.accounts.map((a) => (
+            <Button key={a.key} size="lg" block variant={a.key === "dana" ? "primary" : undefined} disabled={busy} onClick={() => void tryAs(a.key)}>
+              Try as {a.name} · {a.role}
+            </Button>
+          ))}
+          {error ? <ErrorState compact error={error} /> : null}
+        </div>
+      )}
+      {!demo && options.providers.length > 0 && (
         <div className="pp-gate-sso">
           {options.providers.map((p) => (
             <Button key={p.name} size="lg" block href={`/auth/oidc/${encodeURIComponent(p.name)}/start?return=${encodeURIComponent(returnTo)}`}>
@@ -118,7 +149,7 @@ export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
           {options.password && <p className="pp-gate-or">or with your Thaliyola password</p>}
         </div>
       )}
-      {options.password && (
+      {options.password && !demo && (
       <form ref={formRef} className="pp-gate-form" noValidate onSubmit={submit}>
         <Field label="Email" error={errors.email}>
           <TextInput type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />

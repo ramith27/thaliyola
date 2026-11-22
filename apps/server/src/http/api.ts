@@ -45,6 +45,7 @@ import { findExperts, knowsAbout } from "../core/expertise.js";
 import { resolveConflict, setRevisitDate } from "../core/decisions.js";
 import { getProjectBrief } from "../core/brief.js";
 import { systemHealth } from "../core/health.js";
+import { lastReset, nextReset } from "../core/demo.js";
 import { getReadableScope, personalScope } from "../core/scopes.js";
 import { hideAdvisory, latestAdvisories, publishAdvisory, setAdvisoryResponse, setProjectTechnologies, stackOf, TECHNOLOGIES } from "../core/advisories.js";
 import { beginDependencyScan, detectProjectStack, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, securityOverview, updateVulnerability, uploadWithAuth } from "../core/security.js";
@@ -232,6 +233,7 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
       const roles = await orgRolesOf(ctx.db, settings, ctx.actor.id);
       const byConfig = !!ctx.actor.email && settings.adminEmails.includes(ctx.actor.email.toLowerCase());
       return {
+        ...(settings.demo ? { demo: { resets_at: nextReset(settings, await lastReset(ctx.db)).toISOString(), reset_hours: settings.demo.resetHours } } : {}),
         id: ctx.actor.id,
         email: ctx.actor.email,
         name: ctx.actor.name ?? null,

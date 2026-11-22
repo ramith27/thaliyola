@@ -404,6 +404,7 @@ export async function updateSystemSettings(ctx: RequestContext, patch: Record<st
   assertAdmin(ctx);
   const entries = Object.entries(patch);
   if (!entries.length) throw new ValidationError("nothing to change");
+  if (ctx.settings.demo && "slack_webhook_url" in patch) throw new ValidationError("the Slack webhook can't be set in the demo");
   const checked = entries.map(([key, value]) => {
     const def = SYSTEM_SETTINGS[key];
     if (!def) throw new ValidationError(`unknown setting '${key}'`);

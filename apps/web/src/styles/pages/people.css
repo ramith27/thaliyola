@@ -222,3 +222,5 @@
 .pp-gate-sso { display: grid; gap: 0.5rem; margin-bottom: 0.8rem; }
 .pp-gate-or { text-align: center; color: var(--muted); font-size: 0.85rem; margin: 0.4rem 0 0; }
 .health-jobs td { vertical-align: top; }
+.pp-gate-demo { display: grid; gap: 0.5rem; }
+.pp-gate-demo p { margin: 0 0 0.3rem; font-size: 0.92rem; }

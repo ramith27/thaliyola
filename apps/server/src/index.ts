@@ -18,6 +18,7 @@ import { drainSteps, Lifecycle, shutdown } from "./http/lifecycle.js";
 import { loadSystemSettings, startSystemSettingsSync } from "./core/system.js";
 import { startReleaseCatalog } from "./core/releases.js";
 import { versionLabel } from "./core/version.js";
+import { lockOutbound, startDemoJobs } from "./core/demo.js";
 
 const config = loadConfig();
 const db = createPool(config.DATABASE_URL);
@@ -39,6 +40,13 @@ const settings = settingsFrom(config);
 const overridden = await loadSystemSettings(db, settings);
 if (overridden) console.log(`[settings] ${overridden} setting${overridden === 1 ? "" : "s"} changed by admins (System settings) override the environment`);
 const settingsSync = startSystemSettingsSync(db, settings, (msg) => console.error(`[settings] ${msg}`));
+// The public demo: wiped and re-seeded now if due, then every DEMO_RESET_HOURS.
+if (settings.demo) {
+  if (config.AUTH_MODE !== "local") throw new Error("DEMO_MODE needs AUTH_MODE=local (the demo signs people in with one-click demo accounts)");
+  console.warn(`[demo] DEMO_MODE is on: all data is wiped every ${settings.demo.resetHours} hours`);
+  lockOutbound();
+  await startDemoJobs(db, settings).first;
+}
 
 const embedder =
   config.EMBEDDINGS === "local" ? new LocalEmbedder(undefined, config.EMBEDDING_CACHE_DIR) : config.EMBEDDINGS === "hash" ? new HashingEmbedder() : undefined;

@@ -411,6 +411,15 @@ export function Layout({ me, scopes, route, children }: { me: Me; scopes: ScopeI
           </div>
         </header>
         <main id="main" tabIndex={-1} className="content" ref={mainRef}>
+          {me.demo && (
+            <div className="demo-banner" role="note">
+              <strong>Demo.</strong> Everything here is wiped and re-seeded every {me.demo.reset_hours} hours (next at{" "}
+              {new Date(me.demo.resets_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}). Try anything; don't put real data here.{" "}
+              <a href="https://github.com/ramith27/thaliyola" target="_blank" rel="noopener noreferrer">
+                Run your own
+              </a>
+            </div>
+          )}
           {adminTab && (
             <div className="shell-admin-tabs">
               <AdminTabs current={adminTab} />

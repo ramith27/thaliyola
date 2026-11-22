@@ -53,6 +53,8 @@ export async function api<T = any>(path: string, init: { method?: string; body?:
 // ---- Shapes returned by the API (only the fields the UI uses) ----------------
 
 export interface Me {
+  /** The public demo: when everything is wiped and re-seeded next. */
+  demo?: { resets_at: string; reset_hours: number };
   id: string;
   email: string | null;
   /** Display name (Account page, set_my_name, Manage people, or the company sign-in); null when not set. */
