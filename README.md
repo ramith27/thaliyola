@@ -6,6 +6,8 @@ A shared team knowledge base exposed as a remote [MCP](https://modelcontextproto
 
 The server holds no LLM. Clients (Claude Code, claude.ai, scheduled agents) do the reasoning; Thaliyola stores, searches, validates and versions. Agent-written content goes through human review before it is published.
 
+**Website:** [thaliyola.tricknowtech.app](https://thaliyola.tricknowtech.app) · **Live demo:** [thaliyola-demo.tricknowtech.app](https://thaliyola-demo.tricknowtech.app) (one-click sign-in, resets every 12 hours)
+
 | Home | Knowledge graph | Project |
 |---|---|---|
 | ![Home: search, setup checklist and spaces](docs/images/home.png) | ![Knowledge graph](docs/images/graph.png) | ![A project's articles by folder](docs/images/project-frontend.png) |
@@ -830,7 +832,7 @@ The demo is the root `Dockerfile`: Thaliyola and its own Postgres 16 with pgvect
 docker build -t thaliyola-demo . && docker run -p 3000:3000 -e PUBLIC_URL=http://localhost:3000 thaliyola-demo
 ```
 
-The project website is `site/index.html`, served by nginx: `docker build -f site/Dockerfile -t thaliyola-site .`
+The project website, [thaliyola.tricknowtech.app](https://thaliyola.tricknowtech.app), is `site/index.html`, served by nginx: `docker build -f site/Dockerfile -t thaliyola-site .`
 
 ## Sign-in
 
