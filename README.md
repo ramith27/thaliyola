@@ -489,7 +489,7 @@ Paths in a project's repositories with something an agent must know before editi
 - **Never edit:** you're asked every time Claude edits a matching file, with the reason. It's your call, and each time is recorded. For generated code, migrations, vendored files.
 - **Heads-up:** Claude is told something (who to talk to, what to keep in mind) as it edits; nothing is stopped.
 - Paths are globs: `src/payments/**`, `migrations/*.sql`, `**/secrets.ts`, a folder like `infra/`. A rule can be limited to one repository.
-- Agents see a project's rules in `get_project_context` (and `list_project_rules`) before they start, so clients without the plugin follow them too. The settings tab shows what happened lately: stopped until read, edited after reading, person asked, Claude told.
+- Agents see a project's rules in `get_project_context` (and `list_project_rules`) before they start, and the repository's AGENTS.md block lists them, so Codex, Cursor, Copilot, Gemini CLI and other tools without the plugin follow them too (they aren't enforced there). The settings tab shows what happened lately: stopped until read, edited after reading, person asked, Claude told.
 - API: `GET`/`POST /api/scopes/:slug/rules`, `PUT`/`DELETE /api/scopes/:slug/rules/:id`, `GET /api/scopes/:slug/rules/events`. Migration `087_project_rules.sql`.
 
 ## Facts with dates

@@ -31,7 +31,10 @@ export const AGENTS_MD = `## Team knowledge (Thaliyola)
 - Before investigating a bug or alert, search Thaliyola (search_knowledge) with the symptom as it first appeared.
 - Before changing code, call get_project_context and handle open impact notices.
 - After confirming a root cause or making a design decision, propose it to Thaliyola. Never include secrets.
-- To write or refresh this repository's docs, follow Thaliyola's docs_begin flow (every fact needs file and line evidence).`;
+- To write or refresh this repository's docs, follow Thaliyola's docs_begin flow (every fact needs file and line evidence).
+- To answer how something works, call answer_sources and cite its sources; rate_source the ones you relied on.
+- Before editing files another session may be on, claim_work them; follow the project's rules for agents (listed by get_project_context).
+- For this repository's full block, with its rules and pages, ask Thaliyola for get_agents_md_block.`;
 
 export function hostGuides(s: Setup): HostGuide[] {
   const auth = { Authorization: `Bearer ${s.token}`, ...extraHeaders(s) };
@@ -102,6 +105,17 @@ export function hostGuides(s: Setup): HostGuide[] {
       note: "Put the snippet below in .kiro/steering/thaliyola.md so every session follows it.",
     },
     {
+      id: "chatgpt",
+      name: "ChatGPT",
+      steps: [
+        {
+          label: "ChatGPT → Settings → Apps & Connectors → Advanced settings: turn on Developer mode, then Create a connector",
+          text: `MCP server URL: ${s.url}\nAuthentication: OAuth`,
+        },
+      ],
+      note: "ChatGPT signs in to Thaliyola with OAuth (no token to paste) and asks before each write. Its connectors don't read AGENTS.md: put the snippet below in the project's or a custom GPT's instructions.",
+    },
+    {
       id: "other",
       name: "Other",
       steps: [{ label: "Any client with remote MCP over HTTP (streamable HTTP) and custom headers", text: json({ mcpServers: { thaliyola: { type: "http", url: s.url, headers: auth } } }) }],
@@ -122,6 +136,7 @@ export const INSTRUCTIONS_FILE: Record<string, string> = {
   windsurf: "the repository's AGENTS.md",
   opencode: "the repository's AGENTS.md",
   kiro: ".kiro/steering/thaliyola.md",
+  chatgpt: "a ChatGPT project's instructions",
   other: "AGENTS.md (or the tool's instructions file)",
   all: "the repository's AGENTS.md (or each tool's instructions file)",
 };

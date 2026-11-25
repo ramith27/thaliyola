@@ -74,3 +74,15 @@ describe("rules for agents", () => {
     expect(c.rules.find((r) => r.kind === "read_first")!.read_first).toEqual({ id: runbook, title: "Changing money code" });
   });
 });
+
+describe("rules for every tool", () => {
+  it("are written into the AGENTS.md block Codex, Cursor, Copilot and Gemini read", async () => {
+    const { agentsMdBlock } = await import("../src/core/docs.js");
+    const block = await agentsMdBlock(await as("dev@example.com"), "pay", "api");
+    expect(block).toMatch(/Rules for editing this repository/);
+    expect(block).toMatch(/Never edit `migrations\/\*\.sql` without asking your person first: Migrations are generated/);
+    expect(block).toMatch(/Before editing `src\/money\/\*\*`, read "Changing money code" \(`get_article` [0-9a-f-]{36}\)/);
+    expect(block).toMatch(/When editing `src\/money\/fx\.ts`: FX rates come from treasury/);
+    expect(block).toMatch(/answer_sources/);
+  });
+});

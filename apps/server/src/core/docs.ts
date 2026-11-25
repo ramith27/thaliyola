@@ -1,3 +1,4 @@
+import { rulesFor } from "./rules.js";
 import { withTx } from "../db/pool.js";
 import { audit } from "./audit.js";
 import { cleanRepoUrl } from "./bootstrap.js";
@@ -488,6 +489,20 @@ export async function docsFinish(ctx: RequestContext, input: { run_id: string; s
 export async function agentsMdBlock(ctx: RequestContext, project: string, component?: string) {
   const scope = await getReadableScope(ctx, project);
   const pages = await existingPages(ctx, scope.id, component ?? "");
+  // The project's rules for agents: the Claude Code plugin enforces them; every other tool reads them here.
+  const rules = await rulesFor(ctx.db, scope.id, component ?? null);
+  const ruleLines = rules.length
+    ? [
+        "",
+        "Rules for editing this repository (follow them before every edit):",
+        ...rules.slice(0, 30).map((r) => {
+          const where = r.paths.map((p) => `\`${p}\``).join(", ");
+          if (r.kind === "never_edit") return `- Never edit ${where} without asking your person first: ${r.message}`;
+          if (r.kind === "read_first") return `- Before editing ${where}, read "${r.article?.title ?? "the linked page"}"${r.article ? ` (\`get_article\` ${r.article.id})` : ""}: ${r.message}`;
+          return `- When editing ${where}: ${r.message}`;
+        }),
+      ]
+    : [];
   const lines = [
     "<!-- THALIYOLA:START (managed by Thaliyola; edits inside this block are replaced) -->",
     "## Team knowledge (Thaliyola)",
@@ -498,6 +513,9 @@ export async function agentsMdBlock(ctx: RequestContext, project: string, compon
     "- Before investigating a bug or alert, `search_knowledge` with the symptom as it first appeared.",
     "- After confirming a root cause or making a decision, capture it (`propose_finding`, `create_article`); people review it.",
     "- When code changes, keep the docs current: run the `update-docs` prompt (or `docs_begin` with mode `update` and the changed files).",
+    "- To answer how something works, `answer_sources` with the question; cite its sources and say when they're stale or disagree. Afterwards, `rate_source` the ones you relied on.",
+    "- Before editing files another session may be working on, `claim_work` the paths (it says who else is there); `release_work` when done.",
+    ...ruleLines,
     ...(pages.length ? ["", "Documentation pages for this repository:", ...pages.slice(0, 25).map((p: { title: string; folder: string }) => `- ${p.title}${p.folder ? ` (${p.folder})` : ""}`)] : []),
     "<!-- THALIYOLA:END -->",
   ];

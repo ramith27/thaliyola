@@ -4,6 +4,7 @@
 
 ### Added
 
+- **Other AI tools follow the rules too.** The repository's AGENTS.md block (read by Codex, Cursor, Copilot, Gemini CLI, Windsurf and others) now lists the project's rules for agents and how to use `answer_sources`, `claim_work` and `rate_source`. Connect Claude › Other agents has ChatGPT (developer-mode connector, OAuth sign-in).
 - **Architecture diagrams.** Project pages draw their repositories and the contracts between them (with other projects, Library items used) from what Thaliyola knows; `get_architecture` gives agents the Mermaid, and docs runs start the architecture page from it. A `.thaliyola/wiki.json` in the repository steers which pages a docs run writes.
 - **Rules for agents.** Project admins set paths with a *read first* page, *never edit*, or a *heads-up* (Settings › Rules for agents, `set_project_rule`). The Claude Code plugin 0.5.0 enforces them on every edit (stops the first edit until the page is read, asks you for never-edit paths, tells Claude the heads-up); agents see them in `get_project_context`; what happened is recorded. Migration `087_project_rules.sql`.
 - **Facts with dates.** Articles and findings can carry *valid from* and *valid until* (on the page or `set_valid_dates`). Search shows what's true today; `as_of` on `search_knowledge` and `answer_sources` finds what was true on a date, superseded items included; superseding an item ends it today and starts its replacement. Migration `086_validity.sql`.
