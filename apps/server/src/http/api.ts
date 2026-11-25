@@ -52,6 +52,7 @@ import { rateSource, recordRead, usefulnessOf } from "../core/usefulness.js";
 import { setValidDates } from "../core/validity.js";
 import { deleteRule, listRules, ruleEvents, setRule } from "../core/rules.js";
 import { architectureDiagram } from "../core/architecture.js";
+import { fileKnowledge } from "../core/file-knowledge.js";
 import { getReadableScope, personalScope } from "../core/scopes.js";
 import { hideAdvisory, latestAdvisories, publishAdvisory, setAdvisoryResponse, setProjectTechnologies, stackOf, TECHNOLOGIES } from "../core/advisories.js";
 import { beginDependencyScan, detectProjectStack, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, securityOverview, updateVulnerability, uploadWithAuth } from "../core/security.js";
@@ -1184,6 +1185,10 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
     message: z.string().min(1).max(500),
     enabled: z.boolean().optional(),
   });
+  router.get(
+    "/files/knowledge",
+    handle("file_knowledge", (ctx, req) => fileKnowledge(ctx, z.object({ repo: z.string().min(3).max(500), path: z.string().min(1).max(500) }).parse(req.query))),
+  );
   router.get("/scopes/:slug/architecture", handle("get_architecture", (ctx, req) => architectureDiagram(ctx, String(req.params.slug))));
   router.get("/scopes/:slug/rules", handle("list_project_rules", (ctx, req) => listRules(ctx, String(req.params.slug))));
   router.get("/scopes/:slug/rules/events", handle("rule_events", (ctx, req) => ruleEvents(ctx, String(req.params.slug))));

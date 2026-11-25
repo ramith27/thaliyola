@@ -86,3 +86,20 @@ describe("rules for every tool", () => {
     expect(block).toMatch(/answer_sources/);
   });
 });
+
+describe("what's known about one file (the editor panel)", () => {
+  it("finds the project from the remote, the rules and the facts citing the file, and nothing for strangers", async () => {
+    const { fileKnowledge } = await import("../src/core/file-knowledge.js");
+    const scope = (await db.query("SELECT id FROM scopes WHERE slug = 'pay'")).rows[0].id;
+    const page = await insertArticle(db, { scopeId: scope, type: "system", title: "Charging", body: "## Flow\nCharges once." });
+    await db.query("INSERT INTO doc_pages (scope_id, component, key, article_id, sources) VALUES ($1, 'api', 'charging', $2, '{}')", [scope, page]);
+    await db.query(`INSERT INTO claims (article_id, section, text, evidence) VALUES ($1, 'Flow', 'Charges are idempotent', '[{"path":"src/money/charge.ts","start":5,"end":20}]')`, [page]);
+    const k = await fileKnowledge(await as("dev@example.com"), { repo: "https://github.com/acme/pay", path: "./src/money/charge.ts" });
+    expect(k).toMatchObject({ known: true, project: "pay", repository: "api", path: "src/money/charge.ts" });
+    if (!k.known) throw new Error("unreachable");
+    expect(k.rules.map((r) => r.kind)).toEqual(["read_first"]);
+    expect(k.facts).toEqual([expect.objectContaining({ article: "Charging", text: "Charges are idempotent", start: 5, end: 20 })]);
+    await db.query("UPDATE scopes SET visibility = 'members' WHERE id = $1", [scope]);
+    expect((await fileKnowledge(await as("stranger@example.com"), { repo: REPO, path: "src/money/charge.ts" })).known).toBe(false);
+  });
+});

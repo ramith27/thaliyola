@@ -1,0 +1,28 @@
+{
+  "name": "thaliyola",
+  "displayName": "Thaliyola",
+  "description": "What your team knows about the file you're editing: documented facts, rules for agents, known issues, contracts, vulnerabilities and who else is working on it.",
+  "version": "0.1.0",
+  "publisher": "thaliyola",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/ramith27/thaliyola" },
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Other"],
+  "main": "./extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "views": { "explorer": [{ "id": "thaliyola.file", "name": "Thaliyola" }] },
+    "commands": [
+      { "command": "thaliyola.setToken", "title": "Thaliyola: Set access token" },
+      { "command": "thaliyola.refresh", "title": "Thaliyola: Refresh", "icon": "$(refresh)" }
+    ],
+    "menus": { "view/title": [{ "command": "thaliyola.refresh", "when": "view == thaliyola.file", "group": "navigation" }] },
+    "configuration": {
+      "title": "Thaliyola",
+      "properties": {
+        "thaliyola.url": { "type": "string", "default": "", "description": "Your Thaliyola server, e.g. https://kb.example.com" },
+        "thaliyola.highlightFacts": { "type": "boolean", "default": true, "description": "Mark lines that documented facts cite, with the fact on hover." }
+      }
+    }
+  }
+}

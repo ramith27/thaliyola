@@ -761,6 +761,10 @@ Re-importing creates new versions only for skills that changed, and they wait fo
 
 **Cloudflare Access.** The sync script sends only `Authorization: Bearer <token>`, so behind Cloudflare Access let these paths through with a bypass or service-token policy, as for `/mcp` and `/connect.sh`: `/skills-sync.py`, `/api/skills/sync` and `/api/skills/sync/*`. Thaliyola still checks the token on them; the script reports an Access sign-in page as "blocked by Cloudflare Access".
 
+## VS Code side panel
+
+`integrations/vscode` is a VS Code extension: **Explorer › Thaliyola** shows what the team knows about the file you're editing (found from its git remote): the project's rules for it, documented facts citing its lines (those lines are marked, with the fact on hover), docs, contracts and their consumers, known issues, vulnerabilities and other sessions working on it. Package it with `npx @vscode/vsce package`, install the `.vsix`, set `thaliyola.url` and run *Thaliyola: Set access token*. API: `GET /api/files/knowledge?repo=<remote>&path=<file>`.
+
 ## Agent integrations
 
 [`integrations/`](integrations) has everything needed to make agents use Thaliyola by default:
