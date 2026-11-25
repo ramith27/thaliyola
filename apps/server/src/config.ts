@@ -101,6 +101,14 @@ const Env = z
     DEMO_RESET_HOURS: z.coerce.number().min(1).max(168).default(12),
     SLACK_API_URL: z.string().url().optional(),
     NOTION_TOKEN: z.string().optional(),
+    // Confluence Cloud sources: the site (https://acme.atlassian.net), and an account's email and API token.
+    CONFLUENCE_URL: z.string().url().optional(),
+    CONFLUENCE_EMAIL: z.string().optional(),
+    CONFLUENCE_TOKEN: z.string().optional(),
+    // Linear sources: a personal API key (Settings › API) of an account in the teams to import.
+    LINEAR_API_KEY: z.string().optional(),
+    // Google Drive sources: a service account's JSON key; share the folders to import with its email.
+    GOOGLE_SERVICE_ACCOUNT_JSON: z.string().optional(),
     TAVILY_API_KEY: z.string().optional(),
     // Let feeds and page watches reach private networks (intranet wikis). Off: only public addresses
     SOURCES_ALLOW_PRIVATE: z.enum(["true", "false"]).default("false"),
@@ -261,6 +269,9 @@ export function settingsFrom(config: Config): Settings {
       slackToken: config.SLACK_BOT_TOKEN || undefined,
       notionToken: config.NOTION_TOKEN || undefined,
       tavilyKey: config.TAVILY_API_KEY || undefined,
+      confluence: config.CONFLUENCE_URL && config.CONFLUENCE_EMAIL && config.CONFLUENCE_TOKEN ? { url: config.CONFLUENCE_URL, email: config.CONFLUENCE_EMAIL, token: config.CONFLUENCE_TOKEN } : undefined,
+      linearKey: config.LINEAR_API_KEY || undefined,
+      googleServiceAccount: config.GOOGLE_SERVICE_ACCOUNT_JSON || undefined,
       allowPrivate: config.SOURCES_ALLOW_PRIVATE === "true",
     },
     security: {
@@ -345,7 +356,16 @@ export interface Settings {
   /** Connections; absent in tests that don't use them. */
   connections?: ConnectionSettings;
   /** Team sources; absent in tests that don't use them. */
-  sources?: { enabled: boolean; slackToken?: string; notionToken?: string; tavilyKey?: string; allowPrivate: boolean };
+  sources?: {
+    enabled: boolean;
+    slackToken?: string;
+    notionToken?: string;
+    tavilyKey?: string;
+    confluence?: { url: string; email: string; token: string };
+    linearKey?: string;
+    googleServiceAccount?: string;
+    allowPrivate: boolean;
+  };
   /** Vulnerability matching; `fetch` is injected in tests. */
   /** The public demo (core/demo.ts). */
   demo?: { resetHours: number };

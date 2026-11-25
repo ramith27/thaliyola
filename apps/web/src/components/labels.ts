@@ -327,6 +327,9 @@ export const SOURCE_KIND: Record<string, string> = {
   tavily: "Web search",
   github_prs: "GitHub merged PRs",
   sentry_issues: "Sentry resolved issues",
+  confluence: "Confluence",
+  linear: "Linear",
+  gdrive: "Google Drive",
 };
 
 export const REPO_KIND: Record<string, string> = {

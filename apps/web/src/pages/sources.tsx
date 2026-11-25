@@ -56,7 +56,7 @@ import { pickFilters, SavedViews } from "../components/saved-views";
 import { draftArticle, draftFinding, setPrefill } from "../paste";
 import { href, navigate, type Route } from "../router";
 
-type Kind = "rss" | "web" | "hackernews" | "slack" | "notion" | "tavily" | "github_prs" | "sentry_issues";
+type Kind = "rss" | "web" | "hackernews" | "slack" | "notion" | "tavily" | "github_prs" | "sentry_issues" | "confluence" | "linear" | "gdrive";
 
 interface KindInfo {
   kind: Kind;
@@ -123,7 +123,19 @@ interface FullItem {
   url: string | null;
 }
 
-const KIND_ICON: Record<Kind, IconName> = { rss: "rss", web: "globe", hackernews: "hash", slack: "message", notion: "doc", tavily: "search", github_prs: "code", sentry_issues: "alert" };
+const KIND_ICON: Record<Kind, IconName> = {
+  rss: "rss",
+  web: "globe",
+  hackernews: "hash",
+  slack: "message",
+  notion: "doc",
+  tavily: "search",
+  github_prs: "code",
+  sentry_issues: "alert",
+  confluence: "doc",
+  linear: "check-circle",
+  gdrive: "doc",
+};
 const PUSH: ReadonlySet<string> = new Set(["github_prs", "sentry_issues"]);
 
 interface Webhook {
@@ -159,11 +171,14 @@ const KIND_DESCRIPTION: Record<Kind, string> = {
   rss: "New posts from an RSS or Atom feed.",
   web: "Changes to a web page, or to one part of it.",
   hackernews: "Hacker News stories that match your search.",
-  slack: "Busy threads from a Slack channel.",
+  slack: "Busy threads from a Slack channel, or only the ones someone marks with a reaction.",
   notion: "Pages shared with your Notion integration.",
   tavily: "New web search results for a query.",
   github_prs: "Pull requests as they're merged, sent by a GitHub webhook: what was fixed and why.",
   sentry_issues: "Errors as they're resolved in Sentry, sent by a webhook: where, how often and what fixed them.",
+  confluence: "Pages of a Confluence space as they change. Pages with view restrictions are never imported.",
+  linear: "Issues as a Linear team completes them, with their comments (by label, if you like). Private teams aren't imported.",
+  gdrive: "Google Docs in a Drive folder shared with Thaliyola's service account, as they change.",
 };
 
 const kindLabel = (k: string) => SOURCE_KIND[k] ?? k;

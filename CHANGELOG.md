@@ -4,6 +4,7 @@
 
 ### Added
 
+- **More sources.** Confluence spaces (pages with view restrictions are never imported), Linear teams' completed issues with comments (private teams refused), Google Drive folders of Docs (only what's shared with the service account), and Slack threads marked with a reaction such as :pushpin:. Credentials in `CONFLUENCE_*`, `LINEAR_API_KEY`, `GOOGLE_SERVICE_ACCOUNT_JSON`. Migration `088_more_sources.sql`.
 - **Other AI tools follow the rules too.** The repository's AGENTS.md block (read by Codex, Cursor, Copilot, Gemini CLI, Windsurf and others) now lists the project's rules for agents and how to use `answer_sources`, `claim_work` and `rate_source`. Connect Claude › Other agents has ChatGPT (developer-mode connector, OAuth sign-in).
 - **Architecture diagrams.** Project pages draw their repositories and the contracts between them (with other projects, Library items used) from what Thaliyola knows; `get_architecture` gives agents the Mermaid, and docs runs start the architecture page from it. A `.thaliyola/wiki.json` in the repository steers which pages a docs run writes.
 - **Rules for agents.** Project admins set paths with a *read first* page, *never edit*, or a *heads-up* (Settings › Rules for agents, `set_project_rule`). The Claude Code plugin 0.5.0 enforces them on every edit (stops the first edit until the page is read, asks you for never-edit paths, tells Claude the heads-up); agents see them in `get_project_context`; what happened is recorded. Migration `087_project_rules.sql`.

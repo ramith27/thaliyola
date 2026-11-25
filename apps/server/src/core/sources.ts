@@ -32,7 +32,15 @@ export interface SourceRow {
 
 export function connectorEnv(settings: Settings): ConnectorEnv {
   const s = settings.sources;
-  return { slackToken: s?.slackToken, notionToken: s?.notionToken, tavilyKey: s?.tavilyKey, allowPrivate: s?.allowPrivate ?? false };
+  return {
+    slackToken: s?.slackToken,
+    notionToken: s?.notionToken,
+    tavilyKey: s?.tavilyKey,
+    confluence: s?.confluence,
+    linearKey: s?.linearKey,
+    googleServiceAccount: s?.googleServiceAccount,
+    allowPrivate: s?.allowPrivate ?? false,
+  };
 }
 
 /** Which kinds this server can run (credentials are environment variables). */
