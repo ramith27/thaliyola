@@ -46,7 +46,8 @@ A project can declare that it **uses** an item from the library or from another 
 
 | Tool | Purpose |
 |---|---|
-| `search_knowledge` | Hybrid keyword and semantic search over article sections and findings. Defaults to the current project + team + library |
+| `search_knowledge` | Hybrid keyword and semantic search over article sections and findings. Defaults to the current project + team + library. `as_of: YYYY-MM-DD` searches what was true on that date |
+| `set_valid_dates` | When an article or finding is true: `valid_from`, `valid_until`. Expired items leave search; superseding one sets its end date on its own |
 | `rate_source` | After using an article or finding: helpful, or outdated / wrong with what's changed. Helpful items rank higher; the owner hears about reports, and two people's reports mark it possibly stale |
 | `answer_sources` | Evidence for answering a question: the best sections, numbered for citing, each with how fresh it is (possibly stale, old, or facts that no longer match the code), where sources disagree (two decisions on the same question, a project item and a Library one, a known issue newer than the doc), open incidents and pull requests on the topic, and the experts when little is known. Claude writes the answer from them |
 | `get_article` | One article, or one section of it, with relations, source links and entities |
@@ -479,6 +480,14 @@ Thaliyola can keep a living wiki for every repository, written by your own codin
 - **Settings:** project settings → Documentation holds instructions for agents (audience, required pages, things to leave out) and gitignore-style ignore rules, shows each repository's documented commit, and gives the managed AGENTS.md block.
 - **Reading:** pages render Mermaid diagrams; a Sources panel lists each fact with a link to the exact lines on GitHub, GitLab or Bitbucket and flags stale ones. Pages refresh live while an agent writes (`/api/events`, server-sent events; nginx needs buffering off for it, see `deploy/native/nginx-thaliyola.conf`).
 - **Static site:** project settings → General → Download as a static site gives a zip with a self-contained reader (search, folders, diagrams, sources) to host anywhere (`GET /api/export/site?scope=`). The Markdown export follows the Open Knowledge Format (front matter with `kind` and provenance, `index.md`, `log.md`).
+
+## Facts with dates
+
+Articles and findings can say when they're true: **valid from** (inclusive) and **valid until** (exclusive). Set them on the page (*When is this true?*, for people who may verify it) or with `set_valid_dates`.
+- Search shows only what's true today: expired items drop out, and an item that starts later says *Takes effect on …*.
+- **What was true then:** `search_knowledge` and `answer_sources` take `as_of: YYYY-MM-DD` (`?as_of=` in the API) and find the items valid on that date, superseded ones included, each marked *Superseded on …: this was true then, not now*. Items count from when they were created unless they have an earlier start.
+- **Superseding closes the dates:** when one item supersedes another (a reviewer resolving a conflict, a promotion, any `supersedes` link) or an item is marked superseded, the old one ends today and the new one starts today. Existing superseded items got an end date from their last change.
+- API: `PUT /api/items/:id/validity`. Migration `086_validity.sql`.
 
 ## Usefulness
 

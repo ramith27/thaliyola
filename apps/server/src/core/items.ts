@@ -116,6 +116,8 @@ export async function getArticle(ctx: RequestContext, id: string, section?: stri
     components: await componentSlugs(ctx.db, a.component_ids),
     version: a.version,
     review_due: a.review_due,
+    valid_from: dateOnly(a.valid_from),
+    valid_until: dateOnly(a.valid_until),
     last_verified_at: a.last_verified_at,
     updated_at: a.updated_at,
     sections: sections.map((s) => s.heading).filter(Boolean),
@@ -169,6 +171,8 @@ export async function getFinding(ctx: RequestContext, id: string, opts: { skipRe
     author: f.author,
     author_name: f.author_name ?? null,
     version: f.version,
+    valid_from: dateOnly(f.valid_from),
+    valid_until: dateOnly(f.valid_until),
     last_verified_at: f.last_verified_at,
     created_at: f.created_at,
     updated_at: f.updated_at,
@@ -204,4 +208,11 @@ export async function browseKb(ctx: RequestContext, scopeSlug: string, pathPrefi
     node.articles.push({ id: r.id, title: r.title, type: r.type, status: r.status });
   }
   return { scope: { slug: scope.slug, kind: scope.kind, name: scope.name }, path: prefix, tree: root };
+}
+
+/** A date column as YYYY-MM-DD (pg returns a Date at local midnight). */
+function dateOnly(d: Date | string | null | undefined): string | null {
+  if (!d) return null;
+  if (typeof d === "string") return d.slice(0, 10);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }

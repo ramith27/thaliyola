@@ -1451,3 +1451,6 @@ button.switch:disabled .switch-thumb { background: var(--border-strong); }
 .useful-form textarea { width: 100%; }
 .useful-reports { margin: 0; padding-left: 1.1rem; }
 .rv-unused li { padding: 0.25rem 0; }
+.it-valid { display: inline-flex; gap: 0.3rem; align-items: baseline; font-size: 0.85rem; }
+.it-valid.is-due { color: var(--warn); }
+.it-valid-form { display: inline-flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; font-size: 0.85rem; }

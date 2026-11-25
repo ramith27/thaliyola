@@ -49,6 +49,7 @@ import { systemHealth } from "../core/health.js";
 import { lastReset, nextReset } from "../core/demo.js";
 import { gatherAnswer } from "../core/answer.js";
 import { rateSource, recordRead, usefulnessOf } from "../core/usefulness.js";
+import { setValidDates } from "../core/validity.js";
 import { getReadableScope, personalScope } from "../core/scopes.js";
 import { hideAdvisory, latestAdvisories, publishAdvisory, setAdvisoryResponse, setProjectTechnologies, stackOf, TECHNOLOGIES } from "../core/advisories.js";
 import { beginDependencyScan, detectProjectStack, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, securityOverview, updateVulnerability, uploadWithAuth } from "../core/security.js";
@@ -745,8 +746,8 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
   router.get(
     "/answer",
     handle("answer_sources", (ctx, req) => {
-      const q = z.object({ q: z.string().min(3).max(1000), project: z.string().optional(), limit: z.coerce.number().int().optional() }).parse(req.query);
-      return gatherAnswer(ctx, { question: q.q, project: q.project, limit: q.limit, source: "web" });
+      const q = z.object({ q: z.string().min(3).max(1000), project: z.string().optional(), as_of: z.string().optional(), limit: z.coerce.number().int().optional() }).parse(req.query);
+      return gatherAnswer(ctx, { question: q.q, project: q.project, as_of: q.as_of, limit: q.limit, source: "web" });
     }),
   );
   router.get("/users/:id/expertise", handle("knows_about", async (ctx, req) => ({ topics: await knowsAbout(ctx, uuid.parse(req.params.id)) })));
@@ -1140,6 +1141,7 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
           statuses: list.pipe(z.array(z.enum(STATUSES)).optional()),
           limit: z.coerce.number().int().min(1).max(25).optional(),
           prefix: z.enum(["true", "false"]).optional(),
+          as_of: z.string().optional(),
         })
         .parse(req.query);
       return searchKnowledge(ctx, {
@@ -1150,6 +1152,7 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
         statuses: q.statuses,
         limit: q.limit ?? 20,
         prefix: q.prefix === "true",
+        asOf: q.as_of,
         source: "web",
       });
     }),
@@ -1169,6 +1172,12 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
       recordRead(ctx.db, "finding", String(req.params.id));
       return f;
     }),
+  );
+  router.put(
+    "/items/:id/validity",
+    handle("set_valid_dates", (ctx, req) =>
+      setValidDates(ctx, { id: uuid.parse(req.params.id), ...z.object({ valid_from: z.string().nullable().optional(), valid_until: z.string().nullable().optional() }).parse(req.body) }),
+    ),
   );
   router.get("/items/:id/usefulness", handle("usefulness", (ctx, req) => usefulnessOf(ctx, uuid.parse(req.params.id))));
   router.post(

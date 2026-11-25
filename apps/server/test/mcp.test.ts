@@ -58,7 +58,7 @@ describe("MCP over streamable HTTP", () => {
       "list_skill_sources", "list_skills", "list_stale_entries", "list_suggestions", "list_teams", "list_vulnerabilities", "move_entry", "promote_finding", "propose_article_edit", "propose_finding",
       "propose_skill", "propose_skill_edit", "publish_advisory", "publish_release", "query_database", "rate_source", "read_repo_file", "record_design_decision", "record_security_review", "register_session", "release_work",
       "report_skill_problem", "report_vulnerability", "resolve_claims", "resolve_decision_conflict", "resolve_inbox_item", "review_proposal", "review_skill_version", "save_personal_note", "save_role", "save_team", "scan_dependencies",
-      "search_knowledge", "set_account_status", "set_advisory_response", "set_my_name", "set_project_access", "set_project_parent", "set_project_visibility", "set_revisit_date", "set_team_membership", "set_user_roles",
+      "search_knowledge", "set_account_status", "set_advisory_response", "set_my_name", "set_project_access", "set_project_parent", "set_project_visibility", "set_revisit_date", "set_team_membership", "set_user_roles", "set_valid_dates",
       "share_to_library", "sync_skill_source", "unassign_skill", "unpublish_release", "update_design_system", "update_finding", "update_incident", "update_vulnerability", "upload_asset", "verify_entry", "wait_for_questions",
       "whats_new",
     ]);

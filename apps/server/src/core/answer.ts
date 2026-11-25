@@ -26,6 +26,8 @@ export interface AnswerSource {
   last_verified_at: string | null;
   freshness: "fresh" | "old" | "possibly_stale" | "facts_drifted";
   note?: string;
+  /** When it's true (set when the item has dates). */
+  valid?: { from: string | null; until: string | null };
 }
 
 export interface Disagreement {
@@ -49,11 +51,11 @@ const SECTION_CHARS = 1500;
 /** Not verified or changed for this long: "old". */
 const OLD_DAYS = 180;
 
-export async function gatherAnswer(ctx: RequestContext, input: { question: string; project?: string; limit?: number; source?: "web" | "mcp" }): Promise<AnswerBrief> {
+export async function gatherAnswer(ctx: RequestContext, input: { question: string; project?: string; as_of?: string; limit?: number; source?: "web" | "mcp" }): Promise<AnswerBrief> {
   const question = input.question.trim().replace(/\s+/g, " ");
   if (question.length < 3) throw new ValidationError("question: what you want to know");
   const limit = Math.min(Math.max(input.limit ?? 6, 1), 12);
-  const found = await searchKnowledge(ctx, { query: question.slice(0, 500), project: input.project, limit: limit + 2, source: input.source });
+  const found = await searchKnowledge(ctx, { query: question.slice(0, 500), project: input.project, asOf: input.as_of, limit: limit + 2, source: input.source });
   // Source of truth first, then findings, best match first within each; then keep the strongest overall.
   const hits = [...found.articles, ...found.findings].sort((a, b) => b.score - a.score).slice(0, limit);
   const sources = await withSections(ctx, hits);
@@ -132,7 +134,8 @@ async function withSections(ctx: RequestContext, hits: SearchHit[]): Promise<Ans
       updated_at: h.updated_at,
       last_verified_at: h.last_verified_at,
       freshness,
-      ...(note ? { note } : {}),
+      ...(h.valid ? { valid: h.valid } : {}),
+      ...(note ?? h.warning ? { note: note ?? h.warning } : {}),
     };
   });
 }

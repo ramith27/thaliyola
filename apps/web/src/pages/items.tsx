@@ -335,6 +335,15 @@ function ItemView({ kind, item, me, scopes, live }: { kind: Kind; item: Item; me
             </Badge>
           ),
           article && item.type === "decision" ? <RevisitDate id={item.id} due={(item as { review_due?: string | null }).review_due ?? null} /> : null,
+          verifiable || item.status === "superseded" ? (
+            <ValidDates
+              key={`${item.id}-${(item as { valid_from?: string | null }).valid_from}-${(item as { valid_until?: string | null }).valid_until}`}
+              id={item.id}
+              from={(item as { valid_from?: string | null }).valid_from ?? null}
+              until={(item as { valid_until?: string | null }).valid_until ?? null}
+              onSaved={live.reload}
+            />
+          ) : null,
         ]}
       />
       {libraryCopy ? (
@@ -1887,6 +1896,63 @@ export function NewFindingPage({ route, scopes, findingTypes }: { route: Route; 
         </FormActions>
       </form>
     </Page>
+  );
+}
+
+/** When an item is true (from, until), and changing it (people who may verify it; the server says if you can't). */
+function ValidDates({ id, from, until, onSaved }: { id: string; from: string | null; until: string | null; onSaved(): void }) {
+  const [editing, setEditing] = useState(false);
+  const [f, setF] = useState(from ?? "");
+  const [u, setU] = useState(until ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const today = new Date().toISOString().slice(0, 10);
+  const fmt = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  const label =
+    until && until <= today
+      ? `Stopped being true ${fmt(until)}`
+      : from && from > today
+        ? `Takes effect ${fmt(from)}${until ? `, until ${fmt(until)}` : ""}`
+        : from || until
+          ? `True${from ? ` from ${fmt(from)}` : ""}${until ? ` until ${fmt(until)}` : ""}`
+          : null;
+  if (!editing)
+    return (
+      <span className={`it-valid${until && until <= today ? " is-due" : ""}`}>
+        {label ?? ""}{" "}
+        <button className="link-btn small" onClick={() => setEditing(true)} aria-label="Set when this is true">
+          {label ? "Change" : "When is this true?"}
+        </button>
+      </span>
+    );
+  return (
+    <form
+      className="it-valid-form"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setError(null);
+        try {
+          await api(`/items/${id}/validity`, { method: "PUT", body: { valid_from: f || null, valid_until: u || null } });
+          setEditing(false);
+          onSaved();
+        } catch (err) {
+          setError((err as Error).message);
+        }
+      }}
+    >
+      <label>
+        True from <input type="date" value={f} onChange={(e) => setF(e.target.value)} />
+      </label>{" "}
+      <label>
+        until <input type="date" value={u} onChange={(e) => setU(e.target.value)} />
+      </label>{" "}
+      <button className="btn btn-small btn-primary" type="submit">
+        Save
+      </button>{" "}
+      <button className="btn btn-small" type="button" onClick={() => setEditing(false)}>
+        Cancel
+      </button>
+      {error && <span className="it-revisit-error"> {error}</span>}
+    </form>
   );
 }
 

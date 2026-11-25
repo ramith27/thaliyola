@@ -19,6 +19,8 @@ export interface SearchInput {
   limit?: number;
   /** Search as you type: the last word also matches as a prefix ("conv" finds "conversion"). */
   prefix?: boolean;
+  /** What was true on this date (YYYY-MM-DD): items valid then, superseded ones included. Default: today. */
+  asOf?: string;
   /** Where the search came from, for the hit rate and knowledge gaps; unset searches aren't logged. */
   source?: "web" | "mcp";
 }
@@ -38,6 +40,8 @@ export interface SearchHit {
   score: number;
   match: "keyword" | "semantic" | "keyword+semantic";
   warning?: string;
+  /** When the item is true: from (inclusive) until (exclusive), when set. */
+  valid?: { from: string | null; until: string | null };
 }
 
 /** The last word as a tsquery prefix term (`conv:*`), or null. Only letters, digits and underscores survive. */
@@ -87,7 +91,16 @@ export async function searchKnowledge(ctx: RequestContext, input: SearchInput): 
   }
   const readable = await readableScopes(ctx);
   if (readable !== null) where.push(`c.scope_id = ANY(${p(readable)}::uuid[])`);
-  where.push(`coalesce(a.status, f.status) = ANY(${p(input.statuses?.length ? input.statuses : DEFAULT_STATUSES)}::text[])`);
+  const asOf = input.asOf ? checkDate(input.asOf) : null;
+  where.push(`coalesce(a.status, f.status) = ANY(${p(input.statuses?.length ? input.statuses : asOf ? [...DEFAULT_STATUSES, "superseded"] : DEFAULT_STATUSES)}::text[])`);
+  if (asOf) {
+    const d = p(asOf);
+    where.push(`coalesce(a.valid_from, f.valid_from, coalesce(a.created_at, f.created_at)::date) <= ${d}::date`);
+    where.push(`(coalesce(a.valid_until, f.valid_until) IS NULL OR coalesce(a.valid_until, f.valid_until) > ${d}::date)`);
+  } else {
+    // What has stopped being true is history: only an as_of search finds it.
+    where.push("(coalesce(a.valid_until, f.valid_until) IS NULL OR coalesce(a.valid_until, f.valid_until) > current_date)");
+  }
   if (input.types?.length) where.push(`coalesce(a.type, f.type) = ANY(${p(input.types)}::text[])`);
   if (input.tags?.length) where.push(`coalesce(a.tags, f.tags) && ${p(input.tags)}::text[]`);
   if (input.updatedAfter) where.push(`coalesce(a.updated_at, f.updated_at) >= ${p(input.updatedAfter)}::timestamptz`);
@@ -183,7 +196,7 @@ export async function searchKnowledge(ctx: RequestContext, input: SearchInput): 
       SELECT DISTINCT ON (c.parent_kind, c.parent_id)
              c.parent_kind, c.parent_id, c.heading, c.ord, c.text, c.scope_id, (${usesLinked}) AS via_uses_link, fused.sim, fused.keyword_match,
              fused.rrf
-               * CASE coalesce(a.status, f.status) WHEN 'published' THEN 1.0 WHEN 'possibly_stale' THEN 0.6 ELSE 0.4 END
+               * CASE coalesce(a.status, f.status) WHEN 'published' THEN 1.0 WHEN 'possibly_stale' THEN 0.6 WHEN 'superseded' THEN ${asOf ? "1.0" : "0.4"} ELSE 0.4 END
                * CASE WHEN c.scope_id = ${currentProject} THEN 1.15 ELSE 1.0 END
                -- Used items up to 10% higher; helpful up to 10% higher, reported outdated or wrong up to 25% lower.
                * least(1.10, 1 + 0.02 * ln(1 + coalesce(use.used, 0)))
@@ -205,6 +218,7 @@ export async function searchKnowledge(ctx: RequestContext, input: SearchInput): 
            coalesce(a.status, f.status) AS status,
            coalesce(a.last_verified_at, f.last_verified_at) AS last_verified_at,
            coalesce(a.updated_at, f.updated_at) AS updated_at,
+           coalesce(a.valid_from, f.valid_from)::text AS valid_from, coalesce(a.valid_until, f.valid_until)::text AS valid_until,
            s.slug AS scope_slug, s.kind AS scope_kind
       FROM top
       CROSS JOIN q
@@ -229,7 +243,14 @@ export async function searchKnowledge(ctx: RequestContext, input: SearchInput): 
     updated_at: r.updated_at.toISOString(),
     score: Number(Number(r.score).toFixed(5)),
     match: r.keyword_match ? (r.sim !== null ? "keyword+semantic" : "keyword") : "semantic",
-    ...(r.status === "possibly_stale" ? { warning: "Not verified recently; confirm before relying on it." } : {}),
+    ...(r.valid_from || r.valid_until ? { valid: { from: r.valid_from, until: r.valid_until } } : {}),
+    ...(r.status === "possibly_stale"
+      ? { warning: "Not verified recently; confirm before relying on it." }
+      : r.valid_from && !asOf && r.valid_from > today()
+        ? { warning: `Takes effect on ${r.valid_from}; until then, what it replaces still holds.` }
+        : r.status === "superseded"
+          ? { warning: `Superseded${r.valid_until ? ` on ${r.valid_until}` : ""}: this was true then, not now.` }
+          : {}),
   }));
   if (input.source && !input.prefix) logSearch(ctx, input.source, query, hits);
   return {
@@ -247,4 +268,13 @@ function logSearch(ctx: RequestContext, source: "web" | "mcp", query: string, hi
       .query("INSERT INTO search_log (actor_id, source, results, keyword_hits, query) VALUES ($1, $2, $3, $4, $5)", [ctx.actor.id, source, hits.length, keywordHits, text])
       .catch((err) => console.error(`[search] log failed: ${(err as Error).message}`)),
   );
+}
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+/** A YYYY-MM-DD date that exists. */
+export function checkDate(s: string): string {
+  const d = s.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || Number.isNaN(Date.parse(`${d}T00:00:00Z`)) || new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) !== d) throw new ValidationError(`${s} isn't a date (YYYY-MM-DD)`);
+  return d;
 }
