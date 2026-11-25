@@ -48,6 +48,7 @@ A project can declare that it **uses** an item from the library or from another 
 |---|---|
 | `search_knowledge` | Hybrid keyword and semantic search over article sections and findings. Defaults to the current project + team + library. `as_of: YYYY-MM-DD` searches what was true on that date |
 | `set_valid_dates` | When an article or finding is true: `valid_from`, `valid_until`. Expired items leave search; superseding one sets its end date on its own |
+| `get_architecture` | A Mermaid diagram of a project from what Thaliyola knows: repositories, the contracts each provides and who consumes them (other projects included, hidden ones unnamed), contracts it consumes, Library items it uses |
 | `rate_source` | After using an article or finding: helpful, or outdated / wrong with what's changed. Helpful items rank higher; the owner hears about reports, and two people's reports mark it possibly stale |
 | `answer_sources` | Evidence for answering a question: the best sections, numbered for citing, each with how fresh it is (possibly stale, old, or facts that no longer match the code), where sources disagree (two decisions on the same question, a project item and a Library one, a known issue newer than the doc), open incidents and pull requests on the topic, and the experts when little is known. Claude writes the answer from them |
 | `get_article` | One article, or one section of it, with relations, source links and entities |
@@ -506,6 +507,12 @@ Thaliyola counts how often each article and finding is read (in the app, over MC
 - **Search** ranks items people use up to 10% higher, helpful ones up to 10% higher, and reported ones up to 25% lower; other signals (matching, published, current project) still come first.
 - **Review › Suggestions › Nobody reads these:** published over six months ago, not opened, found or quoted since, and nothing depends on them (decisions are records and never listed).
 - API: `GET /api/items/:id/usefulness`, `POST /api/items/:id/feedback`. Migration `085_usefulness.sql`.
+
+## Architecture diagrams and the repository wiki
+
+- **Architecture:** each project page draws its repositories and the contracts between them as a diagram, from the contracts' *provided by* and *consumed by* links: here and in other projects (a project you can't read shows as *projects you can't see*, never by name), contracts nobody consumes yet, contracts consumed from elsewhere, and the Library items it uses. `get_architecture` gives the same Mermaid to agents; `GET /api/scopes/:slug/architecture`.
+- **Docs runs** (repository documentation) start the architecture page from it and add what the code shows.
+- **Steering a docs run:** a `.thaliyola/wiki.json` in the repository (`{"pages": [{"title", "folder"?, "purpose", "sources"?: [paths]}], "ignore"?: [globs]}`) makes the first run plan exactly those pages, in that order.
 
 ## Pull request briefings
 

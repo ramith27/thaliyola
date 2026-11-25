@@ -1464,3 +1464,4 @@ button.switch:disabled .switch-thumb { background: var(--border-strong); }
 .rules-new label { display: grid; gap: 0.25rem; font-size: var(--fs-md); }
 .rules-new textarea, .rules-new input { width: 100%; }
 .rules-events { display: grid; gap: 0.3rem; }
+.br-architecture { overflow-x: auto; padding: var(--space-2) 0; }

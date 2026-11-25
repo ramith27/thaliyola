@@ -1,3 +1,4 @@
+import { MermaidDiagram } from "../components/mermaid";
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { WhoKnows } from "../components/who-knows";
 import type { Folder, Me, Notice as NoticeT, ScopeInfo, SearchHit } from "../api";
@@ -912,6 +913,7 @@ export function ProjectPage({ slug, route, me, scopes = [] }: { slug: string; ro
             onComponent={(c) => setQs({ component: c || undefined })}
             canEdit={can.inScope(info, "propose", me)}
           />
+          <ArchitectureCard slug={slug} />
           <WhoKnows project={slug} component={component || undefined} />
         </>
       )}
@@ -1313,6 +1315,19 @@ function SubProjects({ name, slug, subs, scopes, manage }: { name: string; slug:
           }
         />
       )}
+    </Section>
+  );
+}
+
+/** The project's repositories and the contracts between them (and other projects), drawn from what Thaliyola knows. */
+function ArchitectureCard({ slug }: { slug: string }) {
+  const { data } = useApi<{ mermaid: string; repositories: string[]; contracts: number; note: string }>(`/scopes/${encodeURIComponent(slug)}/architecture`);
+  if (!data || !data.repositories.length || (!data.contracts && data.repositories.length < 2)) return null;
+  return (
+    <Section title="Architecture" description="Repositories and the contracts between them, from what Thaliyola knows. Docs runs start their architecture page from this.">
+      <div className="br-architecture">
+        <MermaidDiagram code={data.mermaid} />
+      </div>
     </Section>
   );
 }

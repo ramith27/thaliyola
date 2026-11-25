@@ -43,6 +43,7 @@ import { gatherAnswer } from "../core/answer.js";
 import { rateSource, recordRead } from "../core/usefulness.js";
 import { setValidDates } from "../core/validity.js";
 import { deleteRule, listRules, setRule } from "../core/rules.js";
+import { architectureDiagram } from "../core/architecture.js";
 import { findExperts } from "../core/expertise.js";
 import { resolveConflict, setRevisitDate, similarDecisions } from "../core/decisions.js";
 import { getProjectBrief } from "../core/brief.js";
@@ -277,6 +278,18 @@ export function buildMcpServer(callerCtx: RequestContext, opts: { skills?: Skill
         recordRead(ctx.db, "finding", args.id);
         return f;
       }),
+  );
+  server.registerTool(
+    "get_architecture",
+    {
+      title: "A project's architecture diagram",
+      description:
+        "A Mermaid flowchart of a project built from what Thaliyola knows: its repositories, the contracts each provides and who consumes them (here and in other projects), contracts it consumes, and Library items it uses. " +
+        "Use it for the architecture page of a docs run, or to explain how the pieces connect.",
+      inputSchema: { project: z.string() },
+      annotations: { readOnlyHint: true },
+    },
+    ({ project }) => run("get_architecture", null, () => architectureDiagram(ctx, project)),
   );
   const ruleKind = z.enum(["read_first", "never_edit", "heads_up"]);
   server.registerTool(

@@ -286,7 +286,8 @@ export async function docsBegin(
     ...(mode === "update" ? { affected_pages: affected, unmapped_changes: unmapped.slice(0, 200) } : {}),
     next:
       mode === "init"
-        ? "Research the repository (code and tests), then docs_submit_plan with the pages: an overview first, then architecture, key flows, data model, APIs/contracts, runbooks. Respect ignore."
+        ? "Research the repository (code and tests), then docs_submit_plan with the pages: an overview first, then architecture, key flows, data model, APIs/contracts, runbooks. Respect ignore. " +
+          "If the repository has .thaliyola/wiki.json ({\"pages\": [{\"title\", \"folder\"?, \"purpose\", \"sources\"?: [paths]}], \"ignore\"?: [globs]}), plan exactly those pages in that order and skip what it ignores."
         : "docs_submit_plan with the affected pages to rewrite, plus new pages if unmapped_changes add something worth documenting. Nothing worth writing? docs_finish with a summary.",
   };
 }
@@ -365,7 +366,8 @@ export async function docsNextPage(ctx: RequestContext, input: { run_id: string 
     claims,
     how:
       "Read the sources, then docs_submit_page with the whole page in Markdown and its claims: each factual statement with evidence (repo://path#Lstart-Lend at this commit). " +
-      "Use Mermaid diagrams (```mermaid) where they help, only for what the code shows. On an update, keep what is still true, rewrite what changed, and drop stale claims that no longer hold.",
+      "Use Mermaid diagrams (```mermaid) where they help, only for what the code shows. On the architecture page, start from get_architecture (the project's repositories and contracts as Thaliyola knows them) and add what the code shows. " +
+      "On an update, keep what is still true, rewrite what changed, and drop stale claims that no longer hold.",
   };
 }
 
