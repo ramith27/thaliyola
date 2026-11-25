@@ -47,6 +47,7 @@ A project can declare that it **uses** an item from the library or from another 
 | Tool | Purpose |
 |---|---|
 | `search_knowledge` | Hybrid keyword and semantic search over article sections and findings. Defaults to the current project + team + library |
+| `answer_sources` | Evidence for answering a question: the best sections, numbered for citing, each with how fresh it is (possibly stale, old, or facts that no longer match the code), where sources disagree (two decisions on the same question, a project item and a Library one, a known issue newer than the doc), open incidents and pull requests on the topic, and the experts when little is known. Claude writes the answer from them |
 | `get_article` | One article, or one section of it, with relations, source links and entities |
 | `get_finding` | One finding with relations, source links and review history |
 | `browse_kb` | Folder tree of articles in a scope |
@@ -488,6 +489,18 @@ When a pull (merge) request opens or gets new commits, Thaliyola can comment on 
 - **Turning it on:** project → **Pull requests** (or `#/scope/<project>/pulls`): choose *When there's something to say* or *Always*, then **Set up the webhook** on the project's GitHub or GitLab connection: copy the URL and secret into the repository's webhooks (GitHub: *Pull requests* events, content type JSON; GitLab: *Merge request events*). The connection's token must be able to write pull-request comments (GitHub *Pull requests: write*, GitLab `api`). Webhooks are verified (GitHub signature, GitLab token), limited to 60 a minute per connection, and answered at once; the briefing is built and posted afterwards. Failures (such as a read-only token) show on the Pull requests page.
 - **For agents:** `brief_changes` gives the same briefing for local changes before a pull request exists, `get_pr_briefing` returns a pull request's, and `/mcp__thaliyola__review-pr [number]` reviews a pull request (or the current branch) against them.
 - API: `GET`/`PUT /api/scopes/:slug/pr-briefings`, `POST /api/connections/:id/webhook` (new secret, shown once), `POST /hooks/git/:connection` (the webhook).
+
+**Docs check.** A commit status, `thaliyola/docs`, on each pull request: which documented facts cite lines it changes, moves or deletes, read from the pull request's diff (cited line ranges against its hunks; nothing else in the code is read).
+- *Report, never block* (`warn`) passes and says how many facts to check; *Block until the docs are checked* (`block`) fails until a reviewer clicks **The docs are fine (or updated)** on the Pull requests page, for that commit (a new push needs a new look). Facts whose lines only move, from edits above them or a renamed file, never block.
+- The briefing comment lists the facts to check. **When the pull request merges**, facts whose lines only moved now cite their new lines, and facts whose lines changed or were deleted are marked stale (the docs page shows them, `answer_sources` flags them, and the next CI docs run re-checks them).
+- Turn it on next to PR briefings (it works with briefings off too). The token also needs to write commit statuses (GitHub *Commit statuses: write*, GitLab `api`), and the webhook needs merge events (GitHub *Pull requests* covers them).
+- API: `PUT /api/scopes/:slug/pr-docs-check` (`off`, `warn`, `block`), `POST /api/scopes/:slug/pr-briefings/:id/acknowledge-docs`.
+
+**Questions in pull requests.** Anyone in a pull request can ask `@thaliyola <question>` in a comment, a review comment (it knows the file and line) or a GitLab thread.
+- Thaliyola replies in the same thread with what the repository's project, Team and Library know: up to four short excerpts with links, how fresh each is, where they disagree and open incidents. Other projects are never read, even members-only ones the repository's project uses.
+- The question is also relayed to the project's Claude sessions; if one picks it up within 4 hours, its answer (or why it can't answer) is posted in the thread.
+- Off by default, because replies quote knowledge where everyone who can see the pull request reads them: turn it on in project → **Pull requests**, and add comment events to the webhook (GitHub *Issue comments* and *Pull request review comments*, GitLab *Comments*). Comments Thaliyola or bots wrote are ignored; at most 5 questions an hour per pull request and 30 per project.
+- The Pull requests page lists the questions asked and what happened to each. API: `GET`/`PUT /api/scopes/:slug/pr-questions`.
 
 ## Decisions that stay true
 

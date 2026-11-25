@@ -206,6 +206,26 @@ async function seedShowcase(db: Db, settings: Settings) {
        '{"docs":[],"contracts":[],"known_issues":[],"vulnerabilities":[{"id":"00000000-0000-0000-0000-000000000000","title":"Refund lookup builds SQL from the order id","severity":"high","location":"src/refunds/handler.ts#L22-L30"}],"lockfiles":["package-lock.json"],"design":null,"working_here":[]}', 2, 'posted')`,
     [orders],
   );
-  await db.query("UPDATE scopes SET pr_briefings = 'relevant' WHERE id = $1", [orders]);
+  await db.query("UPDATE scopes SET pr_briefings = 'relevant', pr_docs_check = 'block', pr_questions = 'on' WHERE id = $1", [orders]);
+  // The docs check on that pull request, and a question asked in it that a session answered.
+  const doc = (await db.query<{ id: string; title: string }>("SELECT id, title FROM articles WHERE scope_id = $1 AND type <> 'decision' ORDER BY created_at LIMIT 1", [orders])).rows[0];
+  if (doc) {
+    const check = {
+      facts: [
+        { claim_id: "00000000-0000-0000-0000-000000000001", article_id: doc.id, article: doc.title, path: "src/refunds/handler.ts", start: 22, end: 41, outcome: "changed" },
+        { claim_id: "00000000-0000-0000-0000-000000000002", article_id: doc.id, article: doc.title, path: "src/refunds/handler.ts", start: 60, end: 72, outcome: "moved", to: { path: "src/refunds/handler.ts", start: 68, end: 80 } },
+      ],
+      changed: 1,
+      removed: 0,
+      moved: 1,
+      unknown: 0,
+    };
+    await db.query("UPDATE pr_briefings SET docs_check = $2, docs_state = 'failure', head_sha = '4f2a9c1' WHERE scope_id = $1", [orders, JSON.stringify(check)]);
+  }
+  await db.query(
+    `INSERT INTO pr_questions (scope_id, component, repo_key, provider, number, comment_id, author, question, path, line, confidence, sources, status)
+     VALUES ($1, 'backend', 'github.com/example/orders-api', 'github', 214, '1001', 'sam', 'Does the timeline show partial refunds once this merges?', 'src/refunds/handler.ts', 30, 'partial', 2, 'answered')`,
+    [orders],
+  );
   await rebuildExpertise(db);
 }

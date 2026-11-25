@@ -34,14 +34,80 @@ interface Row {
   status: "pending" | "posted" | "skipped" | "failed";
   error: string | null;
   updated_at: string;
+  docs_check: DocsCheck | null;
+  docs_state: "success" | "failure" | "pending" | null;
+  docs_ack_by: string | null;
+  merged_at: string | null;
+  docs_applied_at: string | null;
 }
+interface DocsCheck {
+  facts: { claim_id: string; article_id: string; article: string; path: string; start: number; end: number; outcome: "changed" | "removed" | "moved" | "unknown"; to?: { path: string; start: number; end: number } }[];
+  changed: number;
+  removed: number;
+  moved: number;
+  unknown: number;
+}
+type DocsMode = "off" | "warn" | "block";
+const OUTCOME: Record<DocsCheck["facts"][number]["outcome"], string> = { changed: "lines changed", removed: "file deleted", unknown: "diff too large to check", moved: "moves" };
 type Mode = "off" | "relevant" | "always";
+interface Question {
+  id: string;
+  repository: string;
+  provider: string;
+  number: number;
+  author: string | null;
+  question: string;
+  path: string | null;
+  line: number | null;
+  confidence: "good" | "partial" | "none" | null;
+  sources: number;
+  status: "replied" | "relayed" | "answered" | "declined" | "failed";
+  error: string | null;
+  created_at: string;
+}
+const Q_STATUS: Record<Question["status"], string> = { replied: "Replied", relayed: "Asked sessions", answered: "Session answered", declined: "Session couldn't answer", failed: "Couldn't reply" };
+
+/** Questions asked with @thaliyola in this project's pull requests. */
+function QuestionList({ rows }: { rows: Question[] }) {
+  return (
+    <>
+      <h2 className="pr-section">Questions asked in pull requests</h2>
+      <ul className="plain pr-list">
+        {rows.map((q) => (
+          <li key={q.id} className="card pr-row">
+            <div className="pr-head">
+              <span>
+                <strong>
+                  {q.repository}
+                  {q.provider === "gitlab" ? "!" : "#"}
+                  {q.number}
+                </strong>{" "}
+                {q.question}
+              </span>
+              <span className={`badge ${q.status === "answered" ? "badge-published" : q.status === "failed" ? "badge-danger" : "badge-type"}`}>{Q_STATUS[q.status]}</span>
+            </div>
+            <div className="small muted">
+              {q.author ? `${q.author} · ` : ""}
+              {q.path ? `${q.path}${q.line ? `:${q.line}` : ""} · ` : ""}
+              {q.sources ? `${q.sources} source${q.sources === 1 ? "" : "s"} quoted` : "nothing known yet"} · {formatDate(q.created_at)}
+            </div>
+            {q.error && <p className="small pr-error">{q.error}</p>}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
 
 const STATUS: Record<Row["status"], string> = { pending: "Working", posted: "Commented", skipped: "Nothing to say", failed: "Couldn't comment" };
 
 export function PullRequestsPage({ slug, canManage }: { slug: string; canManage: boolean }) {
-  const { data, error, reload } = useApi<{ project: string; mode: Mode; briefings: Row[] }>(`/scopes/${encodeURIComponent(slug)}/pr-briefings`);
-  useLiveRefresh(reload);
+  const { data, error, reload } = useApi<{ project: string; mode: Mode; questions: "off" | "on"; docs_check: DocsMode; briefings: Row[] }>(`/scopes/${encodeURIComponent(slug)}/pr-briefings`);
+  const questions = useApi<Question[]>(`/scopes/${encodeURIComponent(slug)}/pr-questions`);
+  useLiveRefresh(() => {
+    reload();
+    questions.reload();
+  });
   const [open, setOpen] = useState<string | null>(null);
   if (error) return <ErrorBox error={error} />;
   if (!data) return <Loading />;
@@ -55,8 +121,10 @@ export function PullRequestsPage({ slug, canManage }: { slug: string; canManage:
         crumbs={[{ label: slug, href: href(`/project/${slug}`) }, { label: "Pull requests", muted: true }]}
         meta={<span className="muted small">What Thaliyola knew about each pull request's changed files, as it commented on it.</span>}
       />
-      {canManage && <BriefingSettings slug={slug} mode={data.mode} onChanged={reload} />}
+      {canManage && <BriefingSettings slug={slug} mode={data.mode} questions={data.questions} docsMode={data.docs_check} onChanged={reload} />}
       {!canManage && data.mode === "off" && <Notice>PR briefings are off for this project; a Project admin turns them on here.</Notice>}
+      {(questions.data?.length ?? 0) > 0 && <QuestionList rows={questions.data!} />}
+      <h2 className="pr-section">Briefings</h2>
       {data.briefings.length === 0 ? (
         <p className="muted">No pull requests briefed yet.</p>
       ) : (
@@ -70,7 +138,10 @@ export function PullRequestsPage({ slug, canManage }: { slug: string; canManage:
                   </strong>{" "}
                   {r.title}
                 </button>
-                <span className={`badge ${r.status === "posted" ? "badge-published" : r.status === "failed" ? "badge-danger" : "badge-type"}`}>{STATUS[r.status]}</span>
+                <span className="pr-badges">
+                  {r.docs_check && <DocsBadge r={r} />}
+                  <span className={`badge ${r.status === "posted" ? "badge-published" : r.status === "failed" ? "badge-danger" : "badge-type"}`}>{STATUS[r.status]}</span>
+                </span>
               </div>
               <div className="small muted">
                 {r.author ? `${r.author} · ` : ""}
@@ -86,12 +157,75 @@ export function PullRequestsPage({ slug, canManage }: { slug: string; canManage:
                 )}
               </div>
               {r.error && <p className="small pr-error">{r.error}</p>}
+              {open === r.id && r.docs_check && <DocsCheckView slug={slug} r={r} canAcknowledge={canManage} onChanged={reload} />}
               {open === r.id && <BriefingView b={r.briefing} />}
             </li>
           ))}
         </ul>
       )}
     </Page>
+  );
+}
+
+function DocsBadge({ r }: { r: Row }) {
+  const d = r.docs_check!;
+  const look = d.changed + d.removed + d.unknown;
+  if (r.docs_applied_at) return <span className="badge badge-type">Docs updated on merge</span>;
+  if (!look) return <span className="badge badge-published">Docs fine</span>;
+  if (r.docs_ack_by) return <span className="badge badge-published">Docs acknowledged</span>;
+  return <span className={`badge ${r.docs_state === "failure" ? "badge-danger" : "badge-warning"}`}>{look} fact{look === 1 ? "" : "s"} to check</span>;
+}
+
+/** The facts a pull request affects, and (reviewers) acknowledging them so a blocking check passes. */
+function DocsCheckView({ slug, r, canAcknowledge, onChanged }: { slug: string; r: Row; canAcknowledge: boolean; onChanged(): void }) {
+  const d = r.docs_check!;
+  const [error, setError] = useState<Error | null>(null);
+  const look = d.facts.filter((f) => f.outcome !== "moved");
+  return (
+    <div className="pr-briefing small">
+      <h3>Docs check</h3>
+      {d.facts.length === 0 ? (
+        <p className="muted">No documented facts cite the lines this changes.</p>
+      ) : (
+        <ul>
+          {d.facts.map((f) => (
+            <li key={`${f.claim_id}-${f.path}-${f.start}`}>
+              <a href={href(`/article/${f.article_id}`)}>{f.article}</a>: <code>{`${f.path}:${f.start}${f.end !== f.start ? `-${f.end}` : ""}`}</code> {OUTCOME[f.outcome]}
+              {f.to && f.outcome === "moved" && (
+                <>
+                  {" "}
+                  to <code>{`${f.to.path}:${f.to.start}-${f.to.end}`}</code>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {r.docs_applied_at ? (
+        <p className="muted">Merged: moved facts now cite their new lines; facts whose lines changed are marked stale for the next docs run.</p>
+      ) : r.docs_ack_by ? (
+        <p className="muted">Acknowledged by {r.docs_ack_by} for this commit.</p>
+      ) : (
+        look.length > 0 &&
+        canAcknowledge && (
+          <button
+            className="btn btn-small"
+            onClick={async () => {
+              setError(null);
+              try {
+                await api(`/scopes/${encodeURIComponent(slug)}/pr-briefings/${r.id}/acknowledge-docs`, { method: "POST" });
+                onChanged();
+              } catch (err) {
+                setError(err as Error);
+              }
+            }}
+          >
+            The docs are fine (or updated): pass the check
+          </button>
+        )
+      )}
+      <ErrorBox error={error} />
+    </div>
   );
 }
 
@@ -188,7 +322,7 @@ interface GitConnection {
 }
 
 /** Project admins: the mode, and each git connection's pull-request webhook. */
-function BriefingSettings({ slug, mode, onChanged }: { slug: string; mode: Mode; onChanged(): void }) {
+function BriefingSettings({ slug, mode, questions, docsMode, onChanged }: { slug: string; mode: Mode; questions: "off" | "on"; docsMode: DocsMode; onChanged(): void }) {
   const conns = useApi<{ connections: GitConnection[] }>(`/projects/${encodeURIComponent(slug)}/connections`);
   const [error, setError] = useState<Error | null>(null);
   const [hook, setHook] = useState<{ name: string; url: string; secret: string; how: string } | null>(null);
@@ -220,6 +354,52 @@ function BriefingSettings({ slug, mode, onChanged }: { slug: string; mode: Mode;
         <option value="relevant">When there's something to say</option>
         <option value="always">Always</option>
       </select>
+      <h3>Docs check</h3>
+      <p className="small muted">
+        A commit status (<code>thaliyola/docs</code>) on each pull request: which documented facts cite lines it changes, moves or deletes. When it merges, facts whose lines only moved follow
+        them and the others are marked stale. The token needs permission to write commit statuses.
+      </p>
+      <label className="small" htmlFor="pr-docs">
+        Docs check
+      </label>{" "}
+      <select
+        id="pr-docs"
+        value={docsMode}
+        onChange={async (e) => {
+          setError(null);
+          try {
+            await api(`/scopes/${encodeURIComponent(slug)}/pr-docs-check`, { method: "PUT", body: { mode: e.target.value } });
+            onChanged();
+          } catch (err) {
+            setError(err as Error);
+          }
+        }}
+      >
+        <option value="off">Off</option>
+        <option value="warn">Report, never block</option>
+        <option value="block">Block until the docs are checked</option>
+      </select>
+      <h3>Questions in pull requests</h3>
+      <label className="small pr-toggle">
+        <input
+          type="checkbox"
+          checked={questions === "on"}
+          onChange={async (e) => {
+            setError(null);
+            try {
+              await api(`/scopes/${encodeURIComponent(slug)}/pr-questions`, { method: "PUT", body: { on: e.target.checked } });
+              onChanged();
+            } catch (err) {
+              setError(err as Error);
+            }
+          }}
+        />{" "}
+        Answer comments that ask <code>@thaliyola</code>
+      </label>
+      <p className="small muted">
+        Thaliyola replies in the thread with short excerpts from this project's, Team and Library knowledge (never other projects'), how fresh they are and where they disagree, and asks this
+        project's Claude sessions; a session's answer is posted in the thread too. Everyone who can see the pull request reads the replies. The webhook also needs comment events.
+      </p>
       <h3>Pull-request webhook</h3>
       {git.length === 0 ? (
         <p className="small muted">

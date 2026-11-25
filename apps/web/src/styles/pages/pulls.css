@@ -10,3 +10,6 @@
 .pr-hook { margin-top: 0.6rem; display: grid; gap: 0.5rem; }
 .pr-error { color: var(--danger); margin: 0.3rem 0 0; }
 .pr-settings h2 { margin-top: 0; }
+.pr-section { font-size: 1.05rem; margin: 1.4rem 0 0.6rem; }
+.pr-toggle { display: flex; align-items: center; gap: 0.3rem; }
+.pr-badges { display: inline-flex; gap: 0.35rem; flex-wrap: wrap; }

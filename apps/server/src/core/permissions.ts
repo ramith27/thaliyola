@@ -36,6 +36,15 @@ export async function rolesIn(db: Queryable, scopeId: string, userId: string): P
 }
 
 const readableCache = new WeakMap<RequestContext, Promise<string[] | null>>();
+const restricted = new WeakMap<RequestContext, string[]>();
+
+/**
+ * Exactly these scopes are readable for this context, whoever the actor is: for replies posted where other people
+ * see them (a pull-request thread reads the repository's project, Team and Library only).
+ */
+export function restrictReading(ctx: RequestContext, scopeIds: string[]) {
+  restricted.set(ctx, [...scopeIds]);
+}
 
 /**
  * Scopes the caller may read: every team-visible scope plus members-only
@@ -43,6 +52,8 @@ const readableCache = new WeakMap<RequestContext, Promise<string[] | null>>();
  * scope except other people's personal spaces.
  */
 export function readableScopes(ctx: RequestContext): Promise<string[] | null> {
+  const only = restricted.get(ctx);
+  if (only) return Promise.resolve(only);
   let cached = readableCache.get(ctx);
   if (!cached) {
     cached = can(ctx, "read_all_projects") || can(ctx, "manage_all_projects")
@@ -62,6 +73,8 @@ export function readableScopes(ctx: RequestContext): Promise<string[] | null> {
 }
 
 export async function canReadScope(ctx: RequestContext, scopeId: string): Promise<boolean> {
+  const only = restricted.get(ctx);
+  if (only) return only.includes(scopeId);
   const readable = await readableScopes(ctx);
   if (readable === null || readable.includes(scopeId)) return true;
   // Not in the list read earlier for this request: the scope (or the caller's role in it) may be newer than the list.

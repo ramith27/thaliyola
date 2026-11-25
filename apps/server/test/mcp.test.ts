@@ -49,7 +49,7 @@ describe("MCP over streamable HTTP", () => {
     const client = await connect({ authorization: "Bearer secret-token" });
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
-      "ack_notice", "add_incident_note", "add_person", "add_source", "add_source_link", "answer_question", "approve_skill_import", "ask_session", "assign_skill", "brief_changes", "browse_kb", "call_api", "check_design_drift", "check_licenses", "claim_work", "complete_task", "create_article",
+      "ack_notice", "add_incident_note", "add_person", "add_source", "add_source_link", "answer_question", "answer_sources", "approve_skill_import", "ask_session", "assign_skill", "brief_changes", "browse_kb", "call_api", "check_design_drift", "check_licenses", "claim_work", "complete_task", "create_article",
       "create_project", "create_ticket", "decide_access_request", "decide_project_request", "declare_incident", "decline_question", "delete_role", "delete_team", "describe_columns", "docs_begin", "docs_finish",
       "docs_inspect_claims", "docs_next_page", "docs_skip_page", "docs_submit_page", "docs_submit_plan", "find_experts", "find_people", "get_agents_md_block", "get_answer", "get_article", "get_article_template", "get_asset",
       "get_design_system", "get_finding", "get_guide", "get_inbox_item", "get_incident", "get_person_access", "get_personal_context", "get_pr_briefing", "get_project_access", "get_project_brief", "get_project_context", "get_proposal", "get_sbom", "get_skill", "get_skill_file",

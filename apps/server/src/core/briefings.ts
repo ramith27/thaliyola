@@ -4,14 +4,17 @@ import type { Db, Queryable } from "../db/pool.js";
 import { audit } from "./audit.js";
 import { repoKey } from "./bootstrap.js";
 import { manageable } from "./connections/manage.js";
-import { prFiles, upsertPrComment } from "./connections/git.js";
+import { prChanges, setCommitStatus, upsertPrComment } from "./connections/git.js";
+import { applyDocsCheck, checkDocs, docsStatus, needsLook, type DocsCheck } from "./doc-check.js";
 import { driverEnv, openSecrets, targetOf, type ConnectionRow } from "./connections/sync.js";
 import { rateLimiter, verifyGitWebhook } from "./connections/webhooks.js";
 import { NotFoundError, ValidationError, type RequestContext } from "./context.js";
 import { emitChanged } from "./events.js";
-import { assertCanManage } from "./permissions.js";
+import { assertCanApprove, assertCanManage } from "./permissions.js";
 import { redact } from "./redaction.js";
 import { parseRepoUrl } from "./repo-detect.js";
+import { answerPrQuestion, questionOf } from "./pr-questions.js";
+import type { Embedder } from "./embeddings.js";
 import { getReadableScope } from "./scopes.js";
 import { canSeal, openJson, sealJson, SecretsUnavailableError } from "./secrets.js";
 
@@ -147,9 +150,17 @@ export async function buildBriefing(db: Queryable, scopeId: string, component: {
 }
 
 /** The comment: titles and links into Thaliyola, never article or finding text. */
-export function renderBriefing(b: Briefing, base: string, project: string): string {
+export function renderBriefing(b: Briefing, base: string, project: string, docs: DocsCheck | null = null): string {
   const link = (path: string) => (base ? `${base}/#${path}` : `#${path}`);
   const out: string[] = [MARKER, "### What Thaliyola knows about these changes", ""];
+  if (docs && needsLook(docs)) {
+    out.push("**Docs check: facts that cite lines this changes** (update the doc, or acknowledge it on the project's Pull requests page)");
+    const WHAT = { changed: "lines changed", removed: "file deleted", unknown: "diff too large to check", moved: "moved" } as const;
+    for (const f of docs.facts.filter((x) => x.outcome !== "moved").slice(0, 15))
+      out.push(`- [${f.article}](${link(`/article/${f.article_id}`)}): \`${f.path}:${f.start}${f.end !== f.start ? `-${f.end}` : ""}\` (${WHAT[f.outcome]})`);
+    if (docs.moved) out.push(`- ${docs.moved} more fact${docs.moved === 1 ? "" : "s"} cite lines that only move; ${docs.moved === 1 ? "it follows" : "they follow"} the code when this merges.`);
+    out.push("");
+  }
   if (b.docs.length) {
     out.push("**Docs that describe this code** (they may need updating; `update-docs` refreshes them)");
     for (const d of b.docs) out.push(`- [${d.title}](${link(`/article/${d.article_id}`)})${d.claims ? `: ${d.claims} fact${d.claims === 1 ? "" : "s"} cite` : ": covers"} ${d.paths.map((p) => `\`${p}\``).join(", ")}`);
@@ -187,7 +198,7 @@ export function renderBriefing(b: Briefing, base: string, project: string): stri
     for (const w of b.working_here) out.push(`- \`${w.session}\` (${w.owner}): ${w.paths.map((p) => `\`${p}\``).join(", ")}`);
     out.push("");
   }
-  if (briefingSize(b) === 0) out.push("Nothing recorded about these files yet.", "");
+  if (briefingSize(b) === 0 && !(docs && needsLook(docs))) out.push("Nothing recorded about these files yet.", "");
   out.push(`<sub>From [Thaliyola](${link(`/project/${project}`)}). Updated on every push.</sub>`);
   return redact(out.join("\n")).text;
 }
@@ -212,8 +223,8 @@ export async function setGitWebhook(ctx: RequestContext, connectionId: string) {
     url: `${base}${gitWebhookPath(row.id)}`,
     how:
       row.config.provider === "gitlab"
-        ? "GitLab: project → Settings → Webhooks → Add new webhook. URL: this URL; Secret token: the secret; Trigger: Merge request events."
-        : "GitHub: repository (or organisation) → Settings → Webhooks → Add webhook. Payload URL: this URL; Content type: application/json; Secret: the secret; events: Pull requests.",
+        ? "GitLab: project → Settings → Webhooks → Add new webhook. URL: this URL; Secret token: the secret; Triggers: Merge request events (and Comments, for questions asked with @thaliyola)."
+        : "GitHub: repository (or organisation) → Settings → Webhooks → Add webhook. Payload URL: this URL; Content type: application/json; Secret: the secret; events: Pull requests (and Issue comments and Pull request review comments, for questions asked with @thaliyola).",
   };
 }
 
@@ -236,6 +247,8 @@ interface PullRequest {
   author: string | null;
   head_sha: string | null;
   draft: boolean;
+  /** Closed by merging: the docs check applies what it found. */
+  merged: boolean;
 }
 
 const GITHUB_ACTIONS = new Set(["opened", "synchronize", "reopened", "ready_for_review"]);
@@ -243,7 +256,8 @@ const GITLAB_ACTIONS = new Set(["open", "update", "reopen"]);
 
 function pullRequestOf(event: string, p: Record<string, any>): PullRequest | null {
   if (event === "pull_request") {
-    if (!GITHUB_ACTIONS.has(p.action) || !p.pull_request || !p.repository?.full_name) return null;
+    const merged = p.action === "closed" && !!p.pull_request?.merged;
+    if ((!GITHUB_ACTIONS.has(p.action) && !merged) || !p.pull_request || !p.repository?.full_name) return null;
     const pr = p.pull_request;
     return {
       provider: "github",
@@ -255,11 +269,13 @@ function pullRequestOf(event: string, p: Record<string, any>): PullRequest | nul
       author: pr.user?.login ? String(pr.user.login) : null,
       head_sha: pr.head?.sha ? String(pr.head.sha) : null,
       draft: !!pr.draft,
+      merged,
     };
   }
   if (event === "merge request hook") {
     const a = p.object_attributes;
-    if (!a || !GITLAB_ACTIONS.has(a.action) || !p.project?.path_with_namespace) return null;
+    const merged = a?.action === "merge";
+    if (!a || (!GITLAB_ACTIONS.has(a.action) && !merged) || !p.project?.path_with_namespace) return null;
     return {
       provider: "gitlab",
       repository: String(p.project.path_with_namespace),
@@ -270,6 +286,7 @@ function pullRequestOf(event: string, p: Record<string, any>): PullRequest | nul
       author: p.user?.username ? String(p.user.username) : null,
       head_sha: a.last_commit?.id ? String(a.last_commit.id) : null,
       draft: !!(a.draft ?? a.work_in_progress),
+      merged,
     };
   }
   return null;
@@ -283,11 +300,19 @@ export interface WebhookAnswer {
 }
 
 /** A pull-request webhook for a git connection. Answers fast; the briefing is built and posted afterwards. */
-export async function receiveGitWebhook(db: Db, settings: Settings, id: string, headers: Record<string, string | undefined>, raw: Buffer, log: (m: string) => void = console.error): Promise<WebhookAnswer> {
+export async function receiveGitWebhook(
+  db: Db,
+  settings: Settings,
+  id: string,
+  headers: Record<string, string | undefined>,
+  raw: Buffer,
+  log: (m: string) => void = console.error,
+  embedder?: Embedder,
+): Promise<WebhookAnswer> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return { status: 404, body: { error: "not found" } };
   if (limiter.over(id)) return { status: 429, body: { error: "too many webhook calls for this connection; try again in a minute" } };
-  const row = (await db.query<ConnectionRow & { webhook_secret: string | null; scope_slug: string; pr_briefings: string }>(
-    "SELECT c.*, s.slug AS scope_slug, s.pr_briefings FROM connections c JOIN scopes s ON s.id = c.scope_id WHERE c.id = $1 AND s.status = 'active'",
+  const row = (await db.query<ConnectionRow & { webhook_secret: string | null; scope_slug: string; pr_briefings: string; pr_questions: string; pr_docs_check: string }>(
+    "SELECT c.*, s.slug AS scope_slug, s.pr_briefings, s.pr_questions, s.pr_docs_check FROM connections c JOIN scopes s ON s.id = c.scope_id WHERE c.id = $1 AND s.status = 'active'",
     [id],
   )).rows[0];
   if (!row || row.kind !== "git" || !row.webhook_secret) return { status: 404, body: { error: "not found" } };
@@ -307,9 +332,23 @@ export async function receiveGitWebhook(db: Db, settings: Settings, id: string, 
   } catch {
     return { status: 400, body: { error: "the body isn't JSON (GitHub: choose content type application/json)" } };
   }
+  // A comment asking @thaliyola something.
+  const question = questionOf(event, payload);
+  if (question) {
+    if (row.pr_questions !== "on") return { status: 202, body: { ignored: `questions in pull requests are off for ${row.scope_slug} (project → Pull requests)` } };
+    if (!row.enabled) return { status: 202, body: { ignored: "the connection is switched off" } };
+    const qKey = repoKey(question.repo_url);
+    const qComponent = (
+      await db.query<{ slug: string }>("SELECT slug FROM components WHERE scope_id = $1 AND repo_key = $2 AND ($3::uuid IS NULL OR id = $3) LIMIT 1", [row.scope_id, qKey, row.component_id])
+    ).rows[0];
+    if (!qComponent || !qKey) return { status: 202, body: { ignored: `${question.repository} isn't one of ${row.scope_slug}'s repositories` } };
+    const work = answerPrQuestion(db, settings, embedder, row, qComponent, qKey, question).catch((err: Error) => log(`[pr-questions] ${question.repository}#${question.number}: ${err.message}`));
+    return { status: 202, body: { queued: true }, work };
+  }
   const pr = pullRequestOf(event, payload);
-  if (!pr) return { status: 202, body: { ignored: "only opened or updated pull (merge) requests are briefed" } };
-  if (row.pr_briefings === "off") return { status: 202, body: { ignored: `PR briefings are off for ${row.scope_slug} (project settings → Repositories)` } };
+  if (!pr) return { status: 202, body: { ignored: "only opened or updated pull (merge) requests are briefed, and comments that ask @thaliyola" } };
+  if (row.pr_briefings === "off" && row.pr_docs_check === "off") return { status: 202, body: { ignored: `PR briefings are off for ${row.scope_slug} (project → Pull requests)` } };
+  if (pr.merged && row.pr_docs_check === "off") return { status: 202, body: { ignored: "merged; the docs check is off, so there's nothing to apply" } };
   if (!row.enabled) return { status: 202, body: { ignored: "the connection is switched off" } };
   const key = repoKey(pr.repo_url);
   const component = (
@@ -319,44 +358,149 @@ export async function receiveGitWebhook(db: Db, settings: Settings, id: string, 
     )
   ).rows[0];
   if (!component || !key) return { status: 202, body: { ignored: `${pr.repository} isn't one of ${row.scope_slug}'s repositories` } };
-  const work = briefPullRequest(db, settings, row, row.scope_slug, row.pr_briefings as "relevant" | "always", component, key, pr).catch((err: Error) => log(`[briefings] ${pr.repository}#${pr.number}: ${err.message}`));
+  const modes = { briefings: row.pr_briefings as "off" | "relevant" | "always", docs: row.pr_docs_check as "off" | "warn" | "block" };
+  const work = (pr.merged ? applyMerged(db, settings, row, component, key, pr) : briefPullRequest(db, settings, row, row.scope_slug, modes, component, key, pr)).catch((err: Error) => log(`[briefings] ${pr.repository}#${pr.number}: ${err.message}`));
   return { status: 202, body: { queued: true }, work };
 }
 
-/** Reads the changed files, builds the briefing, keeps it and posts (or updates) the comment. */
-async function briefPullRequest(db: Db, settings: Settings, conn: ConnectionRow, project: string, mode: "relevant" | "always", component: { id: string; slug: string; repo_url: string | null }, key: string, pr: PullRequest) {
+/**
+ * Reads the changes, builds the briefing and the docs check, keeps them, posts (or updates) the comment when briefings
+ * are on, and sets the thaliyola/docs commit status when the docs check is.
+ */
+async function briefPullRequest(
+  db: Db,
+  settings: Settings,
+  conn: ConnectionRow,
+  project: string,
+  modes: { briefings: "off" | "relevant" | "always"; docs: "off" | "warn" | "block" },
+  component: { id: string; slug: string; repo_url: string | null },
+  key: string,
+  pr: PullRequest,
+) {
   const target = targetOf(conn, await openSecrets(db, settings, conn));
   const env = driverEnv(settings);
   const repo = parseRepoUrl(component.repo_url ?? pr.repo_url)?.path ?? pr.repository;
-  const record = async (fields: { files?: string[]; briefing?: Briefing; items?: number; comment_id?: string | null; status: string; error?: string | null }) => {
+  const base = settings.publicUrl?.replace(/\/+$/, "") ?? "";
+  const record = async (fields: { files?: string[]; briefing?: Briefing; items?: number; comment_id?: string | null; status: string; error?: string | null; docs?: DocsCheck | null; docs_state?: string | null }) => {
     await db.query(
-      `INSERT INTO pr_briefings (scope_id, component, repo_key, provider, number, title, url, author, head_sha, files, briefing, items, comment_id, status, error)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, coalesce($10::text[], '{}'), coalesce($11::jsonb, '{}'), coalesce($12::int, 0), $13::text, $14, $15)
+      `INSERT INTO pr_briefings (scope_id, component, repo_key, provider, number, title, url, author, head_sha, files, briefing, items, comment_id, status, error, docs_check, docs_state)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, coalesce($10::text[], '{}'), coalesce($11::jsonb, '{}'), coalesce($12::int, 0), $13::text, $14, $15, $16::jsonb, $17::text)
        ON CONFLICT (repo_key, number) DO UPDATE SET scope_id = EXCLUDED.scope_id, component = EXCLUDED.component, title = EXCLUDED.title, url = EXCLUDED.url,
          author = EXCLUDED.author, head_sha = EXCLUDED.head_sha, files = coalesce($10::text[], pr_briefings.files), briefing = coalesce($11::jsonb, pr_briefings.briefing),
-         items = coalesce($12::int, pr_briefings.items), comment_id = coalesce($13::text, pr_briefings.comment_id), status = EXCLUDED.status, error = EXCLUDED.error, updated_at = now()`,
-      [conn.scope_id, component.slug, key, pr.provider, pr.number, pr.title, pr.url, pr.author, pr.head_sha, fields.files ?? null, fields.briefing ? JSON.stringify(fields.briefing) : null, fields.items ?? null, fields.comment_id ?? null, fields.status, fields.error ?? null],
+         items = coalesce($12::int, pr_briefings.items), comment_id = coalesce($13::text, pr_briefings.comment_id), status = EXCLUDED.status, error = EXCLUDED.error,
+         docs_check = coalesce($16::jsonb, pr_briefings.docs_check), docs_state = coalesce($17::text, pr_briefings.docs_state),
+         -- An acknowledgement covers the commit it was given for; a new push needs a new look.
+         docs_ack_by = CASE WHEN pr_briefings.docs_ack_sha IS DISTINCT FROM EXCLUDED.head_sha THEN NULL ELSE pr_briefings.docs_ack_by END,
+         updated_at = now()`,
+      [conn.scope_id, component.slug, key, pr.provider, pr.number, pr.title, pr.url, pr.author, pr.head_sha, fields.files ?? null, fields.briefing ? JSON.stringify(fields.briefing) : null, fields.items ?? null, fields.comment_id ?? null, fields.status, fields.error ?? null, fields.docs ? JSON.stringify(fields.docs) : null, fields.docs_state ?? null],
     );
     emitChanged();
   };
-  let files: string[];
+  let changes;
   try {
-    files = await prFiles(target, env, repo, pr.number);
+    changes = await prChanges(target, env, repo, pr.number);
   } catch (err) {
     return record({ status: "failed", error: `couldn't list the changed files: ${(err as Error).message}`.slice(0, 500) });
   }
+  const files = [...new Set(changes.map((c) => c.path).filter(Boolean))];
   const briefing = await buildBriefing(db, conn.scope_id, component, files);
   const items = briefingSize(briefing);
-  if (!items && mode !== "always") return record({ files, briefing, items, status: "skipped" });
+  const docs = modes.docs !== "off" ? await checkDocs(db, conn.scope_id, component.slug, changes) : null;
+  // The status first: it's what a reviewer sees next to the merge button.
+  let docsState: string | null = null;
+  let statusError: string | null = null;
+  if (docs && modes.docs !== "off" && pr.head_sha) {
+    const s = docsStatus(docs, modes.docs, null);
+    docsState = s.state;
+    try {
+      await setCommitStatus(target, env, repo, pr.head_sha, { ...s, context: "thaliyola/docs", target_url: base ? `${base}/#/scope/${project}/pulls` : undefined });
+    } catch (err) {
+      statusError = `couldn't set the docs check status: ${(err as Error).message}${/\b403\b|forbidden/i.test((err as Error).message) ? " (the token needs commit statuses: write)" : ""}`.slice(0, 500);
+    }
+  }
+  const worth = items > 0 || (docs !== null && needsLook(docs) > 0);
+  if (modes.briefings === "off" || (!worth && modes.briefings !== "always")) return record({ files, briefing, items, status: "skipped", error: statusError, docs, docs_state: docsState });
   const previous = (await db.query<{ comment_id: string | null }>("SELECT comment_id FROM pr_briefings WHERE repo_key = $1 AND number = $2", [key, pr.number])).rows[0]?.comment_id ?? null;
   try {
-    const commentId = await upsertPrComment(target, env, repo, pr.number, renderBriefing(briefing, settings.publicUrl?.replace(/\/+$/, "") ?? "", project), previous);
-    return record({ files, briefing, items, comment_id: commentId, status: "posted" });
+    const commentId = await upsertPrComment(target, env, repo, pr.number, renderBriefing(briefing, base, project, docs), previous);
+    return record({ files, briefing, items, comment_id: commentId, status: "posted", error: statusError, docs, docs_state: docsState });
   } catch (err) {
     const msg = (err as Error).message;
     const hint = /\b403\b|forbidden|not accessible/i.test(msg) ? " (the token needs permission to write pull-request comments: GitHub Pull requests: write, GitLab api)" : "";
-    return record({ files, briefing, items, status: "failed", error: `${msg}${hint}`.slice(0, 500) });
+    return record({ files, briefing, items, status: "failed", error: `${msg}${hint}`.slice(0, 500), docs, docs_state: docsState });
   }
+}
+
+/** A pull request merged: facts whose lines only moved follow them; facts whose lines changed are marked stale. */
+async function applyMerged(db: Db, settings: Settings, conn: ConnectionRow, component: { id: string; slug: string; repo_url: string | null }, key: string, pr: PullRequest) {
+  const done = (await db.query<{ docs_applied_at: Date | null }>("SELECT docs_applied_at FROM pr_briefings WHERE repo_key = $1 AND number = $2", [key, pr.number])).rows[0];
+  if (done?.docs_applied_at) return { skipped: "already applied" };
+  const target = targetOf(conn, await openSecrets(db, settings, conn));
+  const repo = parseRepoUrl(component.repo_url ?? pr.repo_url)?.path ?? pr.repository;
+  const changes = await prChanges(target, driverEnv(settings), repo, pr.number);
+  const docs = await checkDocs(db, conn.scope_id, component.slug, changes);
+  const label = `${pr.provider === "gitlab" ? "!" : "#"}${pr.number}`;
+  const applied = await applyDocsCheck(db, docs, `${component.slug}${label}`);
+  await db.query(
+    `INSERT INTO pr_briefings (scope_id, component, repo_key, provider, number, title, url, author, head_sha, status, docs_check, merged_at, docs_applied_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'skipped', $10, now(), now())
+     ON CONFLICT (repo_key, number) DO UPDATE SET docs_check = EXCLUDED.docs_check, merged_at = now(), docs_applied_at = now(), updated_at = now()`,
+    [conn.scope_id, component.slug, key, pr.provider, pr.number, pr.title, pr.url, pr.author, pr.head_sha, JSON.stringify(docs)],
+  );
+  if (applied.stale || applied.moved) await audit(db, null, "docs_check_applied", conn.scope_id, { targetKind: "project", details: { pull_request: label, ...applied } }).catch(() => undefined);
+  emitChanged();
+  return applied;
+}
+
+/** Turn the docs check on pull requests off, to warn, or to block until acknowledged. Project admins. */
+export async function setDocsCheckMode(ctx: RequestContext, project: string, mode: "off" | "warn" | "block") {
+  const scope = await getReadableScope(ctx, project);
+  await assertCanManage(ctx, scope);
+  await ctx.db.query("UPDATE scopes SET pr_docs_check = $2 WHERE id = $1", [scope.id, mode]);
+  await audit(ctx.db, ctx.actor.id, "set_pr_docs_check", scope.id, { targetKind: "project", targetLabel: scope.slug, details: { mode } });
+  return { project: scope.slug, pr_docs_check: mode };
+}
+
+/**
+ * A reviewer looked at the facts a pull request affects (the docs are fine, or updated): the docs check passes for
+ * its current commit. A new push needs a new look.
+ */
+export async function acknowledgeDocsCheck(ctx: RequestContext, project: string, id: string, settings: Settings = ctx.settings) {
+  const scope = await getReadableScope(ctx, project);
+  await assertCanApprove(ctx, scope.id);
+  const row = (
+    await ctx.db.query<{ id: string; repo_key: string; component: string; number: number; head_sha: string | null; docs_check: DocsCheck | null; provider: string }>(
+      "SELECT id, repo_key, component, number, head_sha, docs_check, provider FROM pr_briefings WHERE id = $1 AND scope_id = $2",
+      [id, scope.id],
+    )
+  ).rows[0];
+  if (!row) throw new NotFoundError("that pull request");
+  if (!row.docs_check || !row.head_sha) throw new ValidationError("this pull request has no docs check to acknowledge");
+  const who = ctx.actor.email ?? "a reviewer";
+  await ctx.db.query("UPDATE pr_briefings SET docs_ack_by = $2, docs_ack_sha = head_sha, docs_state = 'success', updated_at = now() WHERE id = $1", [row.id, ctx.actor.id]);
+  const conn = (
+    await ctx.db.query<ConnectionRow>(
+      "SELECT c.* FROM connections c JOIN components k ON k.scope_id = c.scope_id AND k.slug = $2 WHERE c.scope_id = $1 AND c.kind = 'git' AND c.enabled AND (c.component_id IS NULL OR c.component_id = k.id) ORDER BY c.component_id NULLS LAST LIMIT 1",
+      [scope.id, row.component],
+    )
+  ).rows[0];
+  if (conn) {
+    const comp = (await ctx.db.query<{ repo_url: string | null }>("SELECT repo_url FROM components WHERE scope_id = $1 AND slug = $2", [scope.id, row.component])).rows[0];
+    const repo = parseRepoUrl(comp?.repo_url ?? "")?.path;
+    const mode = (await ctx.db.query<{ pr_docs_check: "off" | "warn" | "block" }>("SELECT pr_docs_check FROM scopes WHERE id = $1", [scope.id])).rows[0]!.pr_docs_check;
+    if (repo && mode !== "off") {
+      const s = docsStatus(row.docs_check, mode, who);
+      const base = settings.publicUrl?.replace(/\/+$/, "") ?? "";
+      await setCommitStatus(targetOf(conn, await openSecrets(ctx.db, settings, conn)), driverEnv(settings), repo, row.head_sha, {
+        ...s,
+        context: "thaliyola/docs",
+        target_url: base ? `${base}/#/scope/${scope.slug}/pulls` : undefined,
+      });
+    }
+  }
+  await audit(ctx.db, ctx.actor.id, "acknowledge_docs_check", scope.id, { targetKind: "project", targetLabel: scope.slug, details: { pull_request: row.number } });
+  emitChanged();
+  return { id: row.id, acknowledged_by: who, commit: row.head_sha };
 }
 
 // ---- Reading briefings --------------------------------------------------------------------------------------------
@@ -380,10 +524,11 @@ export async function briefChanges(ctx: RequestContext, input: { project: string
 export async function listBriefings(ctx: RequestContext, project: string, opts: { number?: number; limit?: number } = {}) {
   const scope = await getReadableScope(ctx, project);
   const { rows } = await ctx.db.query(
-    `SELECT id, component AS repository, provider, number, title, url, author, head_sha, files, briefing, items, status, error, created_at, updated_at
-       FROM pr_briefings WHERE scope_id = $1 AND ($2::int IS NULL OR number = $2) ORDER BY updated_at DESC LIMIT $3`,
+    `SELECT b.id, b.component AS repository, b.provider, b.number, b.title, b.url, b.author, b.head_sha, b.files, b.briefing, b.items, b.status, b.error, b.created_at, b.updated_at,
+            b.docs_check, b.docs_state, b.merged_at, b.docs_applied_at, CASE WHEN b.docs_ack_sha = b.head_sha THEN coalesce(u.display_name, u.email) END AS docs_ack_by
+       FROM pr_briefings b LEFT JOIN users u ON u.id = b.docs_ack_by WHERE b.scope_id = $1 AND ($2::int IS NULL OR b.number = $2) ORDER BY b.updated_at DESC LIMIT $3`,
     [scope.id, opts.number ?? null, Math.min(Math.max(opts.limit ?? 50, 1), 200)],
   );
-  const mode = (await ctx.db.query<{ pr_briefings: string }>("SELECT pr_briefings FROM scopes WHERE id = $1", [scope.id])).rows[0]?.pr_briefings ?? "off";
-  return { project: scope.slug, mode, briefings: rows };
+  const s = (await ctx.db.query<{ pr_briefings: string; pr_questions: string; pr_docs_check: string }>("SELECT pr_briefings, pr_questions, pr_docs_check FROM scopes WHERE id = $1", [scope.id])).rows[0];
+  return { project: scope.slug, mode: s?.pr_briefings ?? "off", questions: s?.pr_questions ?? "off", docs_check: s?.pr_docs_check ?? "off", briefings: rows };
 }

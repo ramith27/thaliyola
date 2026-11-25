@@ -4,7 +4,9 @@ import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { adminCreateProject, adminSetMember } from "../src/core/admin.js";
 import { insertArticle, insertFinding, relate } from "../src/core/bootstrap.js";
-import { briefChanges, buildBriefing, listBriefings, receiveGitWebhook, renderBriefing, setBriefingMode, setGitWebhook } from "../src/core/briefings.js";
+import { answerQuestion } from "../src/core/sessions.js";
+import { questionOf, resetPrQuestionLimits, setPrQuestions } from "../src/core/pr-questions.js";
+import { acknowledgeDocsCheck, briefChanges, buildBriefing, listBriefings, receiveGitWebhook, renderBriefing, setBriefingMode, setDocsCheckMode, setGitWebhook } from "../src/core/briefings.js";
 import { createConnection } from "../src/core/connections/manage.js";
 import type { RequestContext } from "../src/core/context.js";
 import type { Settings } from "../src/config.js";
@@ -38,9 +40,15 @@ beforeAll(async () => {
       hits.push({ method: req.method ?? "", url: req.url ?? "", body });
       const url = req.url ?? "";
       const send = (status: number, b: unknown) => res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(b));
-      if (req.method === "GET" && url.startsWith("/repos/acme/shop-api/pulls/7/files")) return send(200, files.map((filename) => ({ filename })));
+      // handler.ts: two lines added after line 5 (the fact citing 10-40 moves), line 55 changed (the fact citing 50-60 changes).
+      const patch = "@@ -4,3 +4,5 @@\n line4\n line5\n+new a\n+new b\n line6\n@@ -54,3 +56,3 @@\n line54\n-line55\n+line55 changed\n line56";
+      if (req.method === "GET" && url.startsWith("/repos/acme/shop-api/pulls/7/files"))
+        return send(200, files.map((filename) => ({ filename, status: "modified", ...(filename === "src/refunds/handler.ts" ? { patch } : {}) })));
+      if (req.method === "POST" && /^\/repos\/acme\/shop-api\/statuses\/[0-9a-f]+$/.test(url)) return send(201, { id: 1 });
       if (req.method === "POST" && url === "/repos/acme/shop-api/issues/7/comments") return send(201, { id: ++commentSeq });
       if (req.method === "PATCH" && url.startsWith("/repos/acme/shop-api/issues/comments/")) return send(200, { id: Number(url.split("/").pop()) });
+      if (req.method === "POST" && /^\/repos\/acme\/shop-api\/pulls\/7\/comments\/\d+\/replies$/.test(url)) return send(201, { id: ++commentSeq });
+      if (req.method === "POST" && url === "/gl/api/v4/projects/acme%2Fshop-web/merge_requests/3/discussions/abc123/notes") return send(201, { id: 556 });
       if (req.method === "GET" && url.startsWith("/gl/api/v4/projects/acme%2Fshop-web/merge_requests/3/changes")) return send(200, { changes: [{ new_path: "src/refunds/handler.ts" }] });
       if (req.method === "POST" && url === "/gl/api/v4/projects/acme%2Fshop-web/merge_requests/3/notes") return send(201, { id: 555 });
       send(404, { message: "Not Found" });
@@ -211,5 +219,143 @@ describe("GitLab", () => {
     expect(await prFiles(gl, driverEnv(settings()), "acme/shop-web", 3)).toEqual(["src/refunds/handler.ts"]);
     expect(await upsertPrComment(gl, driverEnv(settings()), "acme/shop-web", 3, "hello", null)).toBe("555");
     expect(hits.some((h) => h.method === "POST" && h.url === "/gl/api/v4/projects/acme%2Fshop-web/merge_requests/3/notes" && JSON.parse(h.body).body === "hello")).toBe(true);
+  });
+});
+
+describe("questions asked in a pull request", () => {
+  const sign = (body: string) => `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`;
+  let commentId = 9000;
+  const comment = (text: string, extra: Record<string, unknown> = {}) =>
+    JSON.stringify({
+      action: "created",
+      repository: { full_name: "acme/shop-api", html_url: "https://github.com/acme/shop-api" },
+      issue: { number: 7, title: "Retry refunds safely", pull_request: {} },
+      comment: { id: ++commentId, body: text, user: { login: "carol", type: "User" } },
+      ...extra,
+    });
+  const deliver = (body: string, event = "issue_comment") =>
+    receiveGitWebhook(db, settings(), connId, { "x-github-event": event, "x-hub-signature-256": sign(body) }, Buffer.from(body), (m) => { throw new Error(m); });
+  const posts = () => hits.filter((h) => h.method === "POST" && (h.url.endsWith("/issues/7/comments") || h.url.endsWith("/replies")));
+
+  beforeAll(async () => {
+    resetPrQuestionLimits();
+    const other = (await db.query("SELECT id FROM scopes WHERE slug = 'secret-app'")).rows[0].id;
+    await insertArticle(db, { scopeId: other, type: "system", title: "Secret refunds ledger", body: "## Purpose\nRefunds are retried by the secret ledger." });
+  });
+
+  it("reads only comments that ask @thaliyola, not its own or a bot's", () => {
+    const p = (body: string, user = { login: "carol", type: "User" }) => ({ action: "created", repository: { full_name: "a/b" }, issue: { number: 1, pull_request: {} }, comment: { id: 1, body, user } });
+    expect(questionOf("issue_comment", p("@thaliyola how are refunds retried?"))?.question).toBe("how are refunds retried?");
+    expect(questionOf("issue_comment", p("looks good to me"))).toBeNull();
+    expect(questionOf("issue_comment", p("<!-- thaliyola-answer -->\n@thaliyola"))).toBeNull();
+    expect(questionOf("issue_comment", p("@thaliyola why?", { login: "ci[bot]", type: "Bot" }))).toBeNull();
+    const review = questionOf("pull_request_review_comment", {
+      action: "created",
+      repository: { full_name: "a/b" },
+      pull_request: { number: 2, title: "t" },
+      comment: { id: 50, in_reply_to_id: 40, body: "@thaliyola is this retried?", path: "src/refunds/retry.ts", line: 12, user: { login: "dan" } },
+    });
+    expect(review).toMatchObject({ path: "src/refunds/retry.ts", line: 12, review_comment_id: "40" });
+    const gl = questionOf("note hook", {
+      object_attributes: { id: 7, noteable_type: "MergeRequest", note: "@thaliyola what calls this?", discussion_id: "abc123" },
+      merge_request: { iid: 3, title: "x" },
+      project: { path_with_namespace: "acme/shop-web", web_url: "https://gitlab.com/acme/shop-web" },
+      user: { username: "eve" },
+    });
+    expect(gl).toMatchObject({ provider: "gitlab", number: 3, discussion_id: "abc123" });
+  });
+
+  it("is off until a Project admin turns it on", async () => {
+    expect((await deliver(comment("@thaliyola how are refunds retried?"))).body).toMatchObject({ ignored: expect.stringMatching(/off for shop/) });
+    await expect(setPrQuestions(await as("bob@example.com"), "shop", true)).rejects.toThrow();
+    expect(await setPrQuestions(await as("owner@example.com"), "shop", true)).toEqual({ project: "shop", pr_questions: "on" });
+    expect((await listBriefings(await as("owner@example.com"), "shop")).questions).toBe("on");
+  });
+
+  it("replies with what the project knows, never another project's, and relays the question to its sessions", async () => {
+    const before = posts().length;
+    const r = await deliver(comment("@thaliyola how are refunds retried?"));
+    expect(r.status).toBe(202);
+    await r.work;
+    const sent = posts().slice(before);
+    expect(sent).toHaveLength(1);
+    const text = JSON.parse(sent[0]!.body).body as string;
+    expect(text).toMatch(/^<!-- thaliyola-answer -->/);
+    expect(text).toMatch(/What Thaliyola knows/);
+    expect(text).toMatch(/\[Double refund on timeout\]\(https:\/\/kb\.example\.com\/#\/finding\//);
+    expect(text).not.toMatch(/Secret|ledger/i);
+    expect(text).toMatch(/asked shop's Claude sessions/);
+    const row = (await db.query("SELECT status, question, session_question_id, author FROM pr_questions ORDER BY created_at DESC LIMIT 1")).rows[0];
+    expect(row).toMatchObject({ status: "relayed", question: "how are refunds retried?", author: "carol" });
+    // Bob's session answers: the answer is posted in the thread.
+    const bob = await as("bob@example.com");
+    await answerQuestion(bob, { session: "bob/shop-api", id: row.session_question_id, answer: "retry.ts retries 3 times; it reuses the idempotency key since #88." });
+    const answer = posts().slice(before + 1);
+    expect(answer).toHaveLength(1);
+    expect(JSON.parse(answer[0]!.body).body).toMatch(/\*\*bob\/shop-api\*\* answered:[\s\S]*reuses the idempotency key/);
+    expect((await db.query("SELECT status FROM pr_questions WHERE session_question_id = $1", [row.session_question_id])).rows[0].status).toBe("answered");
+  });
+
+  it("answers a review comment in its thread, and only once per comment", async () => {
+    const body = JSON.stringify({
+      action: "created",
+      repository: { full_name: "acme/shop-api", html_url: "https://github.com/acme/shop-api" },
+      pull_request: { number: 7, title: "Retry refunds safely" },
+      comment: { id: 777, body: "@thaliyola is this retried safely?", path: "src/refunds/retry.ts", line: 30, user: { login: "carol" } },
+    });
+    await (await deliver(body, "pull_request_review_comment")).work;
+    expect(hits.at(-1)!.url).toBe("/repos/acme/shop-api/pulls/7/comments/777/replies");
+    expect(JSON.parse(hits.at(-1)!.body).body).toMatch(/about `src\/refunds\/retry\.ts:30`/);
+    const n = hits.length;
+    await (await deliver(body, "pull_request_review_comment")).work;
+    expect(hits.length).toBe(n);
+  });
+});
+
+describe("the docs check", () => {
+  const sign = (body: string) => `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`;
+  const pr = (action: string, sha: string, merged = false) =>
+    JSON.stringify({
+      action,
+      repository: { full_name: "acme/shop-api", html_url: "https://github.com/acme/shop-api" },
+      pull_request: { number: 7, title: "Retry refunds safely", html_url: "https://github.com/acme/shop-api/pull/7", user: { login: "alice" }, head: { sha }, draft: false, merged },
+    });
+  const deliver = (body: string) =>
+    receiveGitWebhook(db, settings(), connId, { "x-github-event": "pull_request", "x-hub-signature-256": sign(body) }, Buffer.from(body), (m) => { throw new Error(m); });
+  const statuses = () => hits.filter((h) => h.method === "POST" && h.url.startsWith("/repos/acme/shop-api/statuses/"));
+
+  it("finds the facts whose cited lines change or move, blocks until acknowledged, and says so on the pull request", async () => {
+    await setDocsCheckMode(await as("owner@example.com"), "shop", "block");
+    await (await deliver(pr("synchronize", "fff1111"))).work;
+    const s = statuses().at(-1)!;
+    expect(s.url).toBe("/repos/acme/shop-api/statuses/fff1111");
+    expect(JSON.parse(s.body)).toMatchObject({ state: "failure", context: "thaliyola/docs", target_url: "https://kb.example.com/#/scope/shop/pulls" });
+    const row = (await listBriefings(await as("owner@example.com"), "shop", { number: 7 })).briefings[0] as Record<string, any>;
+    expect(row.docs_state).toBe("failure");
+    const facts = row.docs_check.facts.map((f: Record<string, any>) => [f.start, f.end, f.outcome, f.to?.start ?? null]);
+    expect(facts).toEqual(expect.arrayContaining([[10, 40, "moved", 12], [50, 60, "changed", null]]));
+    const comment = hits.filter((h) => h.method === "PATCH" && h.url.startsWith("/repos/acme/shop-api/issues/comments/")).at(-1)!;
+    expect(JSON.parse(comment.body).body).toMatch(/Docs check[\s\S]*`src\/refunds\/handler\.ts:50-60` \(lines changed\)/);
+    // Acknowledging: reviewers only; it passes for this commit.
+    await expect(acknowledgeDocsCheck(await as("bob@example.com"), "shop", row.id, settings())).rejects.toThrow();
+    const ack = await acknowledgeDocsCheck(await as("owner@example.com"), "shop", row.id, settings());
+    expect(ack.commit).toBe("fff1111");
+    expect(JSON.parse(statuses().at(-1)!.body)).toMatchObject({ state: "success", description: expect.stringMatching(/acknowledged by owner@example.com/) });
+    // A new push needs a new look.
+    await (await deliver(pr("synchronize", "aaa2222"))).work;
+    expect(JSON.parse(statuses().at(-1)!.body).state).toBe("failure");
+    expect(((await listBriefings(await as("owner@example.com"), "shop", { number: 7 })).briefings[0] as Record<string, any>).docs_ack_by).toBeNull();
+  });
+
+  it("when merged, moves the facts that only moved and marks the changed ones stale, once", async () => {
+    await (await deliver(pr("closed", "aaa2222", true))).work;
+    const claims = (await db.query("SELECT text, status, stale_reason, evidence FROM claims ORDER BY text")).rows;
+    const moved = claims.find((c) => c.text === "Refunds are idempotent");
+    const changed = claims.find((c) => c.text === "Partial refunds allowed");
+    expect(moved.status).toBe("ok");
+    expect(moved.evidence[0]).toMatchObject({ path: "src/refunds/handler.ts", start: 12, end: 42 });
+    expect(changed).toMatchObject({ status: "stale", stale_reason: "the cited lines changed in api#7" });
+    await (await deliver(pr("closed", "aaa2222", true))).work;
+    expect((await db.query("SELECT evidence FROM claims WHERE text = 'Refunds are idempotent'")).rows[0].evidence[0].start).toBe(12);
   });
 });

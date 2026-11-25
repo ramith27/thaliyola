@@ -4,6 +4,7 @@ import type { Db, Queryable } from "../db/pool.js";
 import { claimsBySession, transferClaims } from "./coordination.js";
 import { onProjectEvent, openIncidentsIn } from "./incidents.js";
 import { findExperts } from "./expertise.js";
+import { replyInPullRequest } from "./pr-questions.js";
 import { replyInSlack } from "./slack-app.js";
 import { recordJob } from "./jobs.js";
 import { ForbiddenError, NotFoundError, ValidationError, type RequestContext } from "./context.js";
@@ -70,6 +71,7 @@ interface QuestionRow {
   group_id: string | null;
   saved_item_id: string | null;
   reply_slack: { channel?: string; thread_ts?: string; response_url?: string } | null;
+  reply_pr: { connection_id: string; repository: string; number: number; review_comment_id?: string | null; discussion_id?: string | null } | null;
 }
 
 const slugPart = (s: string) =>
@@ -573,6 +575,7 @@ export async function answerQuestion(
   if (q.kind === "handoff" && q.from_session_id) await transferClaims(ctx.db, q.from_session_id, session?.id ?? null);
   await incidentEvent(ctx.db, q, "answer", `${session?.handle ?? "Answered"}${session ? " answered" : ""}: ${q.question.split("\n")[0]!.slice(0, 160)}`);
   if (q.reply_slack) await replyInSlack(ctx.settings, q.reply_slack, `*${session?.handle ?? ctx.actor.email ?? "Someone"}* answered:\n${answer}`);
+  if (q.reply_pr) await replyInPullRequest(ctx.db, ctx.settings, q.reply_pr, q.group_id ?? q.id, `**${session?.handle ?? "A teammate"}** answered:\n\n${answer}`, "answered");
   wake([`q:${q.id}`, q.from_session_id && `a:${q.from_session_id}`, `au:${q.from_user_id}`]);
   emitChanged();
   let saved: unknown = null;
@@ -621,6 +624,7 @@ export async function declineQuestion(ctx: RequestContext, input: { session?: st
   wake([`q:${q.id}`, q.from_session_id && `a:${q.from_session_id}`, `au:${q.from_user_id}`]);
   emitChanged();
   if (q.reply_slack) await replyInSlack(ctx.settings, q.reply_slack, `*${session?.handle ?? ctx.actor.email ?? "Someone"}* couldn't answer: ${reason}`);
+  if (q.reply_pr) await replyInPullRequest(ctx.db, ctx.settings, q.reply_pr, q.group_id ?? q.id, `**${session?.handle ?? "A teammate"}** couldn't answer: ${reason}`, "declined");
   return { id: q.id, status: "declined" };
 }
 

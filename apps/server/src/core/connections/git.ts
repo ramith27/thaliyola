@@ -207,22 +207,74 @@ export async function readRepo(c: ConnTarget, env: DriverEnv, repository: string
 /** At most this many changed files are read from a pull request (GitHub lists up to 3,000; briefings need the gist). */
 export const MAX_PR_FILES = 300;
 
-/** The paths a pull (merge) request changes, renames included under their new name. */
-export async function prFiles(c: ConnTarget, env: DriverEnv, repository: string, number: number): Promise<string[]> {
+/** One file a pull (merge) request changes, with its unified diff when the host gives one (not for huge or binary files). */
+export interface PrChange {
+  path: string;
+  previous_path: string | null;
+  status: "added" | "modified" | "removed" | "renamed";
+  patch: string | null;
+}
+
+/** The files a pull (merge) request changes, with their diffs. */
+export async function prChanges(c: ConnTarget, env: DriverEnv, repository: string, number: number): Promise<PrChange[]> {
   const repo = repoPathOf(c, repository);
   const b = repoBase(c, env, repo);
   const headers = gitHeaders(c);
   if (c.config.provider === "gitlab") {
-    const r = await callJson<{ changes?: { new_path?: string; old_path?: string }[] }>(`${b}/merge_requests/${number}/changes`, "http", env, "GitLab", { headers, maxBytes: 20 * 1024 * 1024, truncate: false });
-    return [...new Set((r.changes ?? []).map((f) => f.new_path ?? f.old_path ?? "").filter(Boolean))].slice(0, MAX_PR_FILES);
+    const r = await callJson<{ changes?: { new_path?: string; old_path?: string; diff?: string; new_file?: boolean; deleted_file?: boolean; renamed_file?: boolean }[] }>(
+      `${b}/merge_requests/${number}/changes`,
+      "http",
+      env,
+      "GitLab",
+      { headers, maxBytes: 20 * 1024 * 1024, truncate: false },
+    );
+    return (r.changes ?? [])
+      .filter((f) => f.new_path || f.old_path)
+      .slice(0, MAX_PR_FILES)
+      .map((f) => ({
+        path: (f.deleted_file ? f.old_path : f.new_path) ?? f.old_path ?? "",
+        previous_path: f.renamed_file ? (f.old_path ?? null) : null,
+        status: f.deleted_file ? "removed" : f.new_file ? "added" : f.renamed_file ? "renamed" : "modified",
+        patch: typeof f.diff === "string" && f.diff ? f.diff : null,
+      }));
   }
-  const out: string[] = [];
+  const out: PrChange[] = [];
   for (let page = 1; out.length < MAX_PR_FILES && page <= 3; page++) {
-    const list = await callJson<{ filename: string }[]>(`${b}/pulls/${number}/files?per_page=100&page=${page}`, "http", env, "GitHub", { headers });
-    out.push(...list.map((f) => f.filename));
+    const list = await callJson<{ filename: string; previous_filename?: string; status?: string; patch?: string }[]>(`${b}/pulls/${number}/files?per_page=100&page=${page}`, "http", env, "GitHub", { headers });
+    for (const f of list)
+      out.push({
+        path: f.filename,
+        previous_path: f.previous_filename ?? null,
+        status: f.status === "removed" ? "removed" : f.status === "added" ? "added" : f.status === "renamed" ? "renamed" : "modified",
+        patch: f.patch ?? null,
+      });
     if (list.length < 100) break;
   }
-  return [...new Set(out)].slice(0, MAX_PR_FILES);
+  return out.slice(0, MAX_PR_FILES);
+}
+
+/** The paths a pull (merge) request changes, renames included under their new name. */
+export async function prFiles(c: ConnTarget, env: DriverEnv, repository: string, number: number): Promise<string[]> {
+  return [...new Set((await prChanges(c, env, repository, number)).map((f) => f.path).filter(Boolean))];
+}
+
+/** A commit status (GitHub "statuses", GitLab "commit statuses"): the docs check's verdict on a pull request's head. */
+export async function setCommitStatus(
+  c: ConnTarget,
+  env: DriverEnv,
+  repository: string,
+  sha: string,
+  s: { state: "success" | "failure" | "pending"; description: string; target_url?: string; context: string },
+) {
+  if (!/^[0-9a-f]{7,64}$/i.test(sha)) throw new Error("not a commit sha");
+  const repo = repoPathOf(c, repository);
+  const b = repoBase(c, env, repo);
+  const headers = { ...gitHeaders(c), "content-type": "application/json" };
+  const gitlab = c.config.provider === "gitlab";
+  const body = gitlab
+    ? { state: s.state === "failure" ? "failed" : s.state, name: s.context, description: s.description.slice(0, 140), ...(s.target_url ? { target_url: s.target_url } : {}) }
+    : { state: s.state, context: s.context, description: s.description.slice(0, 140), ...(s.target_url ? { target_url: s.target_url } : {}) };
+  await callJson(`${b}/statuses/${sha}`, "http", env, gitlab ? "GitLab" : "GitHub", { method: "POST", headers, body: JSON.stringify(body) });
 }
 
 /**
@@ -243,5 +295,32 @@ export async function upsertPrComment(c: ConnTarget, env: DriverEnv, repository:
   }
   const url = gitlab ? `${b}/merge_requests/${number}/notes` : `${b}/issues/${number}/comments`;
   const created = await callJson<{ id: number | string }>(url, "http", env, what, { method: "POST", headers, body: JSON.stringify({ body }) });
+  return String(created.id);
+}
+
+/**
+ * A reply in a pull (merge) request: in the review thread it answers (GitHub review comment, GitLab discussion), or as
+ * a new comment. Returns the new comment's id.
+ */
+export async function replyOnPr(
+  c: ConnTarget,
+  env: DriverEnv,
+  repository: string,
+  number: number,
+  body: string,
+  thread: { review_comment_id?: string | null; discussion_id?: string | null } = {},
+): Promise<string> {
+  const repo = repoPathOf(c, repository);
+  const b = repoBase(c, env, repo);
+  const headers = { ...gitHeaders(c), "content-type": "application/json" };
+  const gitlab = c.config.provider === "gitlab";
+  const url = gitlab
+    ? thread.discussion_id && /^[0-9a-f]+$/i.test(thread.discussion_id)
+      ? `${b}/merge_requests/${number}/discussions/${thread.discussion_id}/notes`
+      : `${b}/merge_requests/${number}/notes`
+    : thread.review_comment_id && /^\d+$/.test(thread.review_comment_id)
+      ? `${b}/pulls/${number}/comments/${thread.review_comment_id}/replies`
+      : `${b}/issues/${number}/comments`;
+  const created = await callJson<{ id: number | string }>(url, "http", env, gitlab ? "GitLab" : "GitHub", { method: "POST", headers, body: JSON.stringify({ body }) });
   return String(created.id);
 }

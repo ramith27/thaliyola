@@ -39,13 +39,15 @@ import { checkPath, claimWork, listClaims, releaseWork, touchPath } from "../cor
 import { checkDesignDrift, latestDrift } from "../core/design-drift.js";
 import { exportSbom, licenceReport } from "../core/sbom.js";
 import { guideProgress } from "../core/guide.js";
-import { listBriefings, setBriefingMode, setGitWebhook } from "../core/briefings.js";
+import { acknowledgeDocsCheck, listBriefings, setBriefingMode, setDocsCheckMode, setGitWebhook } from "../core/briefings.js";
+import { listPrQuestions, setPrQuestions } from "../core/pr-questions.js";
 import { addIncidentNote, declareIncident, getIncident, listIncidents, updateIncident } from "../core/incidents.js";
 import { findExperts, knowsAbout } from "../core/expertise.js";
 import { resolveConflict, setRevisitDate } from "../core/decisions.js";
 import { getProjectBrief } from "../core/brief.js";
 import { systemHealth } from "../core/health.js";
 import { lastReset, nextReset } from "../core/demo.js";
+import { gatherAnswer } from "../core/answer.js";
 import { getReadableScope, personalScope } from "../core/scopes.js";
 import { hideAdvisory, latestAdvisories, publishAdvisory, setAdvisoryResponse, setProjectTechnologies, stackOf, TECHNOLOGIES } from "../core/advisories.js";
 import { beginDependencyScan, detectProjectStack, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, securityOverview, updateVulnerability, uploadWithAuth } from "../core/security.js";
@@ -739,6 +741,13 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
       findExperts(ctx, z.object({ topic: z.string().max(200).optional(), project: z.string().optional(), component: z.string().optional(), limit: z.coerce.number().int().optional() }).parse(req.query)),
     ),
   );
+  router.get(
+    "/answer",
+    handle("answer_sources", (ctx, req) => {
+      const q = z.object({ q: z.string().min(3).max(1000), project: z.string().optional(), limit: z.coerce.number().int().optional() }).parse(req.query);
+      return gatherAnswer(ctx, { question: q.q, project: q.project, limit: q.limit, source: "web" });
+    }),
+  );
   router.get("/users/:id/expertise", handle("knows_about", async (ctx, req) => ({ topics: await knowsAbout(ctx, uuid.parse(req.params.id)) })));
   // Incidents.
   router.get("/incidents", handle("list_incidents", (ctx, req) => listIncidents(ctx, z.object({ project: z.string().optional(), status: z.enum(["open", "all"]).optional(), limit: z.coerce.number().int().optional() }).parse(req.query))));
@@ -761,6 +770,10 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
   );
   // PR briefings.
   router.get("/scopes/:slug/pr-briefings", handle("list_pr_briefings", (ctx, req) => listBriefings(ctx, String(req.params.slug), z.object({ number: z.coerce.number().int().optional(), limit: z.coerce.number().int().optional() }).parse(req.query))));
+  router.get("/scopes/:slug/pr-questions", handle("list_pr_questions", (ctx, req) => listPrQuestions(ctx, String(req.params.slug), z.coerce.number().int().optional().parse(req.query.limit))));
+  router.put("/scopes/:slug/pr-questions", handle("set_pr_questions", (ctx, req) => setPrQuestions(ctx, String(req.params.slug), z.object({ on: z.boolean() }).parse(req.body).on)));
+  router.put("/scopes/:slug/pr-docs-check", handle("set_pr_docs_check", (ctx, req) => setDocsCheckMode(ctx, String(req.params.slug), z.object({ mode: z.enum(["off", "warn", "block"]) }).parse(req.body).mode)));
+  router.post("/scopes/:slug/pr-briefings/:id/acknowledge-docs", handle("acknowledge_docs_check", (ctx, req) => acknowledgeDocsCheck(ctx, String(req.params.slug), uuid.parse(req.params.id))));
   router.put("/scopes/:slug/pr-briefings", handle("set_pr_briefings", (ctx, req) => setBriefingMode(ctx, String(req.params.slug), z.object({ mode: z.enum(["off", "relevant", "always"]) }).parse(req.body).mode)));
   router.post("/connections/:id/webhook", handle("set_git_webhook", (ctx, req) => setGitWebhook(ctx, uuid.parse(req.params.id))));
   router.post("/sources/:id/webhook", handle("rotate_source_webhook", (ctx, req) => rotateWebhook(ctx, uuid.parse(req.params.id))));

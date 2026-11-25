@@ -2,6 +2,7 @@ import { NotFoundError, ValidationError, type RequestContext } from "./context.j
 import { getArticle, getFinding } from "./items.js";
 import { readableScopes } from "./permissions.js";
 import { searchKnowledge, type SearchHit } from "./search.js";
+import { cautionsFor } from "./answer.js";
 import { findItem } from "./writes.js";
 
 /**
@@ -33,7 +34,9 @@ export async function ask(ctx: RequestContext, question: string, opts: { project
     answer_md = [`**Symptoms.** ${f.symptoms}`, `**Root cause.** ${f.root_cause}`, f.fix ? `**Fix.** ${f.fix}` : ""].filter(Boolean).join("\n\n");
   }
   const truncated = answer_md.length > ANSWER_CHARS;
+  const cautions = await cautionsFor(ctx, hits, q, opts.project).catch(() => null);
   return {
+    cautions,
     question: q,
     best: {
       ...best,

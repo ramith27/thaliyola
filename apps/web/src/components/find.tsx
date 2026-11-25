@@ -824,6 +824,13 @@ export function HomeSearch() {
 interface AskResult {
   question: string;
   best: (SearchHit & { answer_md: string; truncated: boolean; confidence: "strong" | "weak" }) | null;
+  /** How fresh the answer is, sources that disagree with it, and open incidents on the topic. */
+  cautions?: {
+    freshness: "fresh" | "old" | "possibly_stale" | "facts_drifted";
+    note: string | null;
+    disagreements: { kind: string; why: string; other: { kind: "article" | "finding"; id: string; title: string; project: string } }[];
+    incidents: { id: string; title: string; severity: string; status: string; link: string }[];
+  } | null;
 }
 
 /**
@@ -883,6 +890,26 @@ export function AnswerCard({ q, onResult }: { q: string; /** The link of the ans
       <div className="answer-body">
         <Markdown text={b.answer_md} />
       </div>
+      {res.cautions && (res.cautions.note || res.cautions.disagreements.length > 0 || res.cautions.incidents.length > 0) && (
+        <ul className="answer-cautions small">
+          {res.cautions.freshness !== "fresh" && res.cautions.note && (
+            <li>
+              <I name="alert" size={14} /> {res.cautions.note}
+            </li>
+          )}
+          {res.cautions.disagreements.map((d) => (
+            <li key={d.other.id}>
+              <I name="alert" size={14} /> {d.why}:{" "}
+              <a href={href(`/${d.other.kind}/${d.other.id}`)}>{d.other.title}</a>
+            </li>
+          ))}
+          {res.cautions.incidents.map((i) => (
+            <li key={i.id}>
+              <I name="alert" size={14} /> Open incident ({i.severity}): <a href={`${i.link}`}>{i.title}</a>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="answer-foot muted small">
         {b.warning && <span className="warn">{b.warning} · </span>}
         Quoted from your knowledge base, not generated.{" "}

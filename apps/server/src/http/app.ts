@@ -191,7 +191,7 @@ export function createApp({ db, authenticate, settings, webDist = DEFAULT_WEB_DI
     try {
       const headers: Record<string, string | undefined> = {};
       for (const name of ["x-gitlab-token", "x-gitlab-event", "x-hub-signature-256", "x-github-event"]) headers[name] = req.header(name) ?? undefined;
-      const out = await receiveGitWebhook(db, settings, String(req.params.id), headers, Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0));
+      const out = await receiveGitWebhook(db, settings, String(req.params.id), headers, Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0), undefined, embedder);
       res.status(out.status).json(out.body);
     } catch (err) {
       console.error(`[briefings] webhook failed: ${(err as Error).message}`);
