@@ -147,7 +147,7 @@ function NewRule({ scope, onSaved }: { scope: ScopeInfo; onSaved(): void }) {
     >
       <h3>Add a rule</h3>
       <label>
-        Kind{" "}
+        <span>Kind</span>
         <select value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
           {(Object.keys(KIND) as Kind[]).map((k) => (
             <option key={k} value={k}>
@@ -158,12 +158,14 @@ function NewRule({ scope, onSaved }: { scope: ScopeInfo; onSaved(): void }) {
       </label>
       <p className="muted small">{KIND[kind].help}</p>
       <label>
-        Paths (globs, one per line or comma-separated: <code>src/payments/**</code>, <code>migrations/*.sql</code>, <code>infra/</code>)
+        <span>
+          Paths (globs, one per line or comma-separated: <code>src/payments/**</code>, <code>migrations/*.sql</code>, <code>infra/</code>)
+        </span>
         <textarea rows={2} value={paths} onChange={(e) => setPaths(e.target.value)} required />
       </label>
       {scope.components.length > 1 && (
         <label>
-          Repository{" "}
+          <span>Repository</span>
           <select value={component} onChange={(e) => setComponent(e.target.value)}>
             <option value="">All</option>
             {scope.components.map((c) => (
@@ -186,7 +188,8 @@ function NewRule({ scope, onSaved }: { scope: ScopeInfo; onSaved(): void }) {
           ) : (
             <>
               <label>
-                Page to read first <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search this project's pages" />
+                <span>Page to read first</span>
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search this project's pages" />
               </label>
               <ul className="plain small">
                 {(found.data?.articles ?? []).map((a) => (
@@ -202,7 +205,7 @@ function NewRule({ scope, onSaved }: { scope: ScopeInfo; onSaved(): void }) {
         </div>
       )}
       <label>
-        What Claude should know or do
+        <span>What Claude should know or do</span>
         <textarea rows={2} maxLength={500} value={message} onChange={(e) => setMessage(e.target.value)} required />
       </label>
       <button className="btn btn-primary" type="submit" disabled={kind === "read_first" && !article}>
