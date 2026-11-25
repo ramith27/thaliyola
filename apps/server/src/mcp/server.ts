@@ -42,6 +42,7 @@ import { addIncidentNote, declareIncident, getIncident, listIncidents, updateInc
 import { gatherAnswer } from "../core/answer.js";
 import { rateSource, recordRead } from "../core/usefulness.js";
 import { setValidDates } from "../core/validity.js";
+import { deleteRule, listRules, setRule } from "../core/rules.js";
 import { findExperts } from "../core/expertise.js";
 import { resolveConflict, setRevisitDate, similarDecisions } from "../core/decisions.js";
 import { getProjectBrief } from "../core/brief.js";
@@ -276,6 +277,41 @@ export function buildMcpServer(callerCtx: RequestContext, opts: { skills?: Skill
         recordRead(ctx.db, "finding", args.id);
         return f;
       }),
+  );
+  const ruleKind = z.enum(["read_first", "never_edit", "heads_up"]);
+  server.registerTool(
+    "list_project_rules",
+    {
+      title: "A project's rules for agents",
+      description: "Paths with something to know before editing: read_first (read a page before the first edit), never_edit (the person decides each time), heads_up (keep something in mind). The Claude Code plugin enforces them; follow them in other clients too.",
+      inputSchema: { project: z.string() },
+      annotations: { readOnlyHint: true },
+    },
+    ({ project }) => run("list_project_rules", null, () => listRules(ctx, project)),
+  );
+  server.registerTool(
+    "set_project_rule",
+    {
+      title: "Add or change a rule for agents",
+      description:
+        "Project admins. paths are globs in the repository (src/payments/**, migrations/*.sql, a folder/). read_first needs article_id (the page to read). message: what the agent should know or do. Pass id to change one.",
+      inputSchema: {
+        project: z.string(),
+        id: z.string().uuid().optional(),
+        kind: ruleKind,
+        paths: z.array(z.string().max(200)).min(1).max(20),
+        component: z.string().nullable().optional().describe("Only this repository (default: all of the project's)"),
+        article_id: z.string().uuid().nullable().optional(),
+        message: z.string().min(1).max(500),
+        enabled: z.boolean().optional(),
+      },
+    },
+    (args) => run("set_project_rule", args.id ?? null, () => setRule(ctx, args)),
+  );
+  server.registerTool(
+    "delete_project_rule",
+    { title: "Delete a rule for agents", description: "Project admins.", inputSchema: { project: z.string(), id: z.string().uuid() } },
+    ({ project, id }) => run("delete_project_rule", id, () => deleteRule(ctx, project, id)),
   );
   server.registerTool(
     "set_valid_dates",

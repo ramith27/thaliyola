@@ -4,6 +4,7 @@ import { NotFoundError, ValidationError, type RequestContext } from "./context.j
 import { emitChanged } from "./events.js";
 import { readableScopes } from "./permissions.js";
 import { redact } from "./redaction.js";
+import { rulesForEdit } from "./rules.js";
 import { findOwnSession, ownSession, type SessionRow } from "./sessions.js";
 
 /**
@@ -146,10 +147,12 @@ type HookRef = { session?: string; client?: string; client_session_id?: string }
 export async function checkPath(ctx: RequestContext, input: HookRef & { path: string }) {
   const s = await findOwnSession(ctx, input);
   const repo = repoKey(s.repo_url);
-  if (!repo) return { conflicts: [] };
   const path = cleanPath(input.path);
+  // The project's rules for agents (read first, never edit, heads-up), whether or not the repository is known.
+  const rules = await rulesForEdit(ctx.db, s, path);
+  if (!repo) return { path, conflicts: [], rules };
   const found = await conflicts(ctx, s, repo, [path]);
-  return { path, conflicts: found.map((c) => ({ session: c.session, owner: c.mine ? "you" : c.owner, claimed: c.claimed, note: c.note, auto: c.auto, since: c.updated_at, text: describe(c) })) };
+  return { path, conflicts: found.map((c) => ({ session: c.session, owner: c.mine ? "you" : c.owner, claimed: c.claimed, note: c.note, auto: c.auto, since: c.updated_at, text: describe(c) })), rules };
 }
 
 /** After an edit: claim the file automatically for 30 minutes. */

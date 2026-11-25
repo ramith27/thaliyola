@@ -1451,6 +1451,16 @@ button.switch:disabled .switch-thumb { background: var(--border-strong); }
 .useful-form textarea { width: 100%; }
 .useful-reports { margin: 0; padding-left: 1.1rem; }
 .rv-unused li { padding: 0.25rem 0; }
-.it-valid { display: inline-flex; gap: 0.3rem; align-items: baseline; font-size: 0.85rem; }
+.it-valid { display: inline-flex; gap: 0.3rem; align-items: baseline; font-size: var(--fs-md); }
 .it-valid.is-due { color: var(--warn); }
-.it-valid-form { display: inline-flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; font-size: 0.85rem; }
+.it-valid-form { display: inline-flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; font-size: var(--fs-md); }
+.rules-list { display: grid; gap: var(--space-2); margin: var(--space-3) 0; }
+.rules-row { padding: var(--space-3); display: grid; gap: 0.35rem; }
+.rules-row.is-off { opacity: 0.6; }
+.rules-head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.rules-row p { margin: 0; }
+.rules-actions { display: flex; gap: 0.4rem; }
+.rules-new { padding: var(--space-3); display: grid; gap: 0.5rem; margin: var(--space-4) 0; }
+.rules-new label { display: grid; gap: 0.25rem; font-size: var(--fs-md); }
+.rules-new textarea, .rules-new input { width: 100%; }
+.rules-events { display: grid; gap: 0.3rem; }

@@ -1,3 +1,4 @@
+import { rulesFor } from "./rules.js";
 import type { RequestContext } from "./context.js";
 import { projectHierarchy } from "./hierarchy.js";
 import { ValidationError } from "./context.js";
@@ -104,6 +105,8 @@ export async function getProjectContext(ctx: RequestContext, projectSlug?: strin
     // Where it sits: the projects above it (their members have roles here too) and its sub-projects.
     ...(await projectHierarchy(ctx, project.id).then((h) => (h.path.length || h.sub_projects.length ? { hierarchy: h } : {}))),
     open_impact_notices: notices.rows,
+    // Rules for agents: paths with something to know before editing (the plugin's edit hook enforces them).
+    rules: (await rulesFor(db, project.id, comp?.slug)).map((r) => ({ kind: r.kind, paths: r.paths, repository: r.component, message: r.message, read_first: r.article })),
     overview: overview
       ? {
           id: overview.id,

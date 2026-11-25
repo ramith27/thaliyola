@@ -55,6 +55,7 @@ import { useApi } from "../hooks";
 import { href, navigate, type Route } from "../router";
 import { ConnectionsSettings } from "./connections";
 import { NotificationRoutes } from "./notification-routes";
+import { RulesSettings } from "./project-rules";
 import { ExportButton } from "./setup";
 
 const KINDS = ["backend", "frontend", "mobile", "data", "infra", "other"];
@@ -150,7 +151,7 @@ function ScopeNotFound() {
  * without it, Access only.
  */
 export function settingsTabs(settings: boolean, project: boolean): string[] {
-  return settings ? (project ? ["general", "access", "repos", "connections", "notifications", "docs"] : ["general", "access"]) : ["access"];
+  return settings ? (project ? ["general", "access", "repos", "connections", "notifications", "docs", "rules"] : ["general", "access"]) : ["access"];
 }
 
 export function ScopeSettingsPage({ slug, scopes, me, route }: { slug: string; scopes: ScopeInfo[]; me: Me; route: Route }) {
@@ -195,6 +196,7 @@ export function ScopeSettingsPage({ slug, scopes, me, route }: { slug: string; s
     { id: "connections", label: "Connections", href: tabHref("connections"), hidden: !settings || !project },
     { id: "notifications", label: "Notifications", href: tabHref("notifications"), hidden: !settings || !project },
     { id: "docs", label: "Documentation", href: tabHref("docs"), hidden: !settings || !project },
+    { id: "rules", label: "Rules for agents", href: tabHref("rules"), hidden: !settings || !project },
   ];
 
   return (
@@ -229,6 +231,7 @@ export function ScopeSettingsPage({ slug, scopes, me, route }: { slug: string; s
       {tab === "connections" && <ConnectionsSettings scope={scope} />}
       {tab === "notifications" && <NotificationRoutes scope={scope} />}
       {tab === "docs" && <DocsSettings scope={scope} />}
+      {tab === "rules" && <RulesSettings scope={scope} />}
     </Page>
   );
 }

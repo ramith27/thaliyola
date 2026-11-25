@@ -7,7 +7,8 @@
 //                  wait for one (the wait costs no tokens; only an arriving question starts a turn)
 //   prompt         when you type: hand over answers to this session's earlier questions
 //   session-end    mark the session ended
-//   pre-edit       before Claude edits a file: if another session is working on it, ask you first
+//   pre-edit       before Claude edits a file: the project's rules (read a page first, ask you, or a heads-up), and
+//                  if another session is working on it, ask you first
 //   post-edit      after an edit: claim the file for 30 minutes, so other sessions are told
 //
 // Reads THALIYOLA_URL and THALIYOLA_TOKEN (the same as the plugin's MCP config). Never blocks Claude on
@@ -169,22 +170,37 @@ try {
     const path = repoPath();
     if (path) {
       const r = await api("GET", `/agent-sessions/check-path?${ref}&path=${encodeURIComponent(path)}`, undefined, 4000);
+      const rules = r.rules ?? [];
+      const stop = rules.filter((x) => x.action === "stop");
+      const ask = rules.filter((x) => x.action === "ask");
+      const tell = rules.filter((x) => x.action === "tell");
+      // Another session on the file: ask once per file until that session works on it again.
+      let conflict = null;
       if (r.conflicts?.length) {
-        // Ask once per file until the other session works on it again.
         const state = readState();
         const seen = (state.warned ||= {});
         const stamp = r.conflicts.map((c) => `${c.session}@${c.since}`).sort().join(",");
         if (seen[path] !== stamp) {
           seen[path] = stamp;
           writeState(state);
-          out({
-            hookSpecificOutput: {
-              hookEventName: "PreToolUse",
-              permissionDecision: "ask",
-              permissionDecisionReason: `Thaliyola: ${r.conflicts.map((c) => c.text).join("; ")}. Edit ${path} anyway? (Or ask that session first with /thaliyola:ask.)`,
-            },
-          });
+          conflict = `${r.conflicts.map((c) => c.text).join("; ")} (or ask that session first with /thaliyola:ask)`;
         }
+      }
+      if (stop.length) {
+        // A project rule: read something before the first edit here. Claude reads it, then edits again.
+        out({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: `Thaliyola project rule for ${path}: ${stop.map((x) => x.text).join(" ")}` } });
+      } else if (ask.length || conflict) {
+        const why = [...ask.map((x) => x.text), ...(conflict ? [conflict] : [])].join("; ");
+        out({
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            permissionDecision: "ask",
+            permissionDecisionReason: `Thaliyola: ${why}. Edit ${path} anyway?`,
+            ...(tell.length ? { additionalContext: `Thaliyola: ${tell.map((x) => x.text).join(" ")}` } : {}),
+          },
+        });
+      } else if (tell.length) {
+        out({ hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: `Thaliyola, about ${path}: ${tell.map((x) => x.text).join(" ")}` } });
       }
     }
   } else if (event === "post-edit") {

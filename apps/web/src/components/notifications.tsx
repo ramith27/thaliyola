@@ -42,6 +42,9 @@ export const KIND_ICON: Record<string, IconName> = {
   skill: "sparkle",
   // A question for the caller or their sessions, like the Sessions link.
   question: "chat",
+  // Something broken right now, like the Incidents link; health alerts for Administrators.
+  incident: "alert",
+  system: "alert",
 };
 
 /** "Review: Orders API v1" → "Orders API v1" (the icon already says it's a review). Pure, for tests. */

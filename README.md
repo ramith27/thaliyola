@@ -481,6 +481,16 @@ Thaliyola can keep a living wiki for every repository, written by your own codin
 - **Reading:** pages render Mermaid diagrams; a Sources panel lists each fact with a link to the exact lines on GitHub, GitLab or Bitbucket and flags stale ones. Pages refresh live while an agent writes (`/api/events`, server-sent events; nginx needs buffering off for it, see `deploy/native/nginx-thaliyola.conf`).
 - **Static site:** project settings → General → Download as a static site gives a zip with a self-contained reader (search, folders, diagrams, sources) to host anywhere (`GET /api/export/site?scope=`). The Markdown export follows the Open Knowledge Format (front matter with `kind` and provenance, `index.md`, `log.md`).
 
+## Rules for agents
+
+Paths in a project's repositories with something an agent must know before editing them, set by Project admins in project **Settings › Rules for agents** (or `set_project_rule`). The Claude Code plugin (0.5.0) checks every edit:
+- **Read first** (with a page): the first edit under it in a session is stopped and Claude is told to read the page (`get_article`); the next edit goes ahead. For code where a runbook or decision matters.
+- **Never edit:** you're asked every time Claude edits a matching file, with the reason. It's your call, and each time is recorded. For generated code, migrations, vendored files.
+- **Heads-up:** Claude is told something (who to talk to, what to keep in mind) as it edits; nothing is stopped.
+- Paths are globs: `src/payments/**`, `migrations/*.sql`, `**/secrets.ts`, a folder like `infra/`. A rule can be limited to one repository.
+- Agents see a project's rules in `get_project_context` (and `list_project_rules`) before they start, so clients without the plugin follow them too. The settings tab shows what happened lately: stopped until read, edited after reading, person asked, Claude told.
+- API: `GET`/`POST /api/scopes/:slug/rules`, `PUT`/`DELETE /api/scopes/:slug/rules/:id`, `GET /api/scopes/:slug/rules/events`. Migration `087_project_rules.sql`.
+
 ## Facts with dates
 
 Articles and findings can say when they're true: **valid from** (inclusive) and **valid until** (exclusive). Set them on the page (*When is this true?*, for people who may verify it) or with `set_valid_dates`.

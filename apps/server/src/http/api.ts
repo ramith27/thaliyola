@@ -50,6 +50,7 @@ import { lastReset, nextReset } from "../core/demo.js";
 import { gatherAnswer } from "../core/answer.js";
 import { rateSource, recordRead, usefulnessOf } from "../core/usefulness.js";
 import { setValidDates } from "../core/validity.js";
+import { deleteRule, listRules, ruleEvents, setRule } from "../core/rules.js";
 import { getReadableScope, personalScope } from "../core/scopes.js";
 import { hideAdvisory, latestAdvisories, publishAdvisory, setAdvisoryResponse, setProjectTechnologies, stackOf, TECHNOLOGIES } from "../core/advisories.js";
 import { beginDependencyScan, detectProjectStack, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, securityOverview, updateVulnerability, uploadWithAuth } from "../core/security.js";
@@ -1173,6 +1174,20 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
       return f;
     }),
   );
+  // Rules for agents.
+  const ruleBody = z.object({
+    kind: z.enum(["read_first", "never_edit", "heads_up"]),
+    paths: z.array(z.string().max(200)).min(1).max(20),
+    component: z.string().nullable().optional(),
+    article_id: z.string().uuid().nullable().optional(),
+    message: z.string().min(1).max(500),
+    enabled: z.boolean().optional(),
+  });
+  router.get("/scopes/:slug/rules", handle("list_project_rules", (ctx, req) => listRules(ctx, String(req.params.slug))));
+  router.get("/scopes/:slug/rules/events", handle("rule_events", (ctx, req) => ruleEvents(ctx, String(req.params.slug))));
+  router.post("/scopes/:slug/rules", handle("set_project_rule", (ctx, req) => setRule(ctx, { project: String(req.params.slug), ...ruleBody.parse(req.body) })));
+  router.put("/scopes/:slug/rules/:id", handle("set_project_rule", (ctx, req) => setRule(ctx, { project: String(req.params.slug), id: uuid.parse(req.params.id), ...ruleBody.parse(req.body) })));
+  router.delete("/scopes/:slug/rules/:id", handle("delete_project_rule", (ctx, req) => deleteRule(ctx, String(req.params.slug), uuid.parse(req.params.id))));
   router.put(
     "/items/:id/validity",
     handle("set_valid_dates", (ctx, req) =>
