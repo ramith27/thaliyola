@@ -3,6 +3,7 @@ import { ValidationError } from "./context.js";
 import { findExperts } from "./expertise.js";
 import { readableScopes } from "./permissions.js";
 import { searchKnowledge, type SearchHit } from "./search.js";
+import { recordRead } from "./usefulness.js";
 
 /**
  * Evidence for answering a question, without a model on the server: the best sections of what the team knows, each
@@ -56,6 +57,7 @@ export async function gatherAnswer(ctx: RequestContext, input: { question: strin
   // Source of truth first, then findings, best match first within each; then keep the strongest overall.
   const hits = [...found.articles, ...found.findings].sort((a, b) => b.score - a.score).slice(0, limit);
   const sources = await withSections(ctx, hits);
+  for (const s of sources) recordRead(ctx.db, s.kind, s.id, "quoted");
   const disagreements = await disagreementsAmong(ctx, sources);
   for (const d of disagreements) {
     if (d.kind === "decisions_disagree") for (const n of d.sources) sources[n - 1]!.note ??= "Another decision covers the same question; see disagreements.";

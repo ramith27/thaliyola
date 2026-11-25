@@ -40,6 +40,7 @@ import { exportSbom, licenceReport } from "../core/sbom.js";
 import { briefChanges, listBriefings } from "../core/briefings.js";
 import { addIncidentNote, declareIncident, getIncident, listIncidents, updateIncident } from "../core/incidents.js";
 import { gatherAnswer } from "../core/answer.js";
+import { rateSource, recordRead } from "../core/usefulness.js";
 import { findExperts } from "../core/expertise.js";
 import { resolveConflict, setRevisitDate, similarDecisions } from "../core/decisions.js";
 import { getProjectBrief } from "../core/brief.js";
@@ -250,7 +251,12 @@ export function buildMcpServer(callerCtx: RequestContext, opts: { skills?: Skill
       },
       annotations: { readOnlyHint: true },
     },
-    (args) => run("get_article", args.id, () => getArticle(ctx, args.id, args.section)),
+    (args) =>
+      run("get_article", args.id, async () => {
+        const a = await getArticle(ctx, args.id, args.section);
+        recordRead(ctx.db, "article", args.id);
+        return a;
+      }),
   );
 
   server.registerTool(
@@ -261,7 +267,23 @@ export function buildMcpServer(callerCtx: RequestContext, opts: { skills?: Skill
       inputSchema: { id: z.string().uuid() },
       annotations: { readOnlyHint: true },
     },
-    (args) => run("get_finding", args.id, () => getFinding(ctx, args.id)),
+    (args) =>
+      run("get_finding", args.id, async () => {
+        const f = await getFinding(ctx, args.id);
+        recordRead(ctx.db, "finding", args.id);
+        return f;
+      }),
+  );
+  server.registerTool(
+    "rate_source",
+    {
+      title: "Say whether a source helped",
+      description:
+        "After you used an article or finding: helpful (it answered the question), or outdated / wrong (with a note saying what's out of date: the owner is told, and two reports mark it possibly stale). " +
+        "Helpful sources rank higher in search for everyone. Rate what you actually relied on, once.",
+      inputSchema: { id: z.string().uuid(), verdict: z.enum(["helpful", "outdated", "wrong"]), note: z.string().max(1000).optional().describe("Required for outdated or wrong: what's no longer true") },
+    },
+    (args) => run("rate_source", args.id, () => rateSource(ctx, args)),
   );
 
   server.registerTool(

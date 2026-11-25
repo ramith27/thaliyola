@@ -1,3 +1,4 @@
+import { UsefulnessBar } from "../components/usefulness";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { isLineage, lineageText, repoOfLabel } from "../components/lineage";
 import { api, ApiError, type Article, type Finding, type ItemTickets, type Me, type Related, type ScopeInfo, type SearchHit, type WriteResult } from "../api";
@@ -451,6 +452,7 @@ function ItemView({ kind, item, me, scopes, live }: { kind: Kind; item: Item; me
       <Page width="reading" rail={narrow ? undefined : rail} railLabel="About this page">
         <div className="it-body">{body}</div>
         {article && <ClaimsPanel articleId={id} canEdit={!deleted} openSignal={openClaims} onCounts={setClaims} />}
+        {verifiable && <UsefulnessBar id={id} />}
         <RelationsPanel id={id} />
         {finding && <Activity finding={finding} />}
       </Page>

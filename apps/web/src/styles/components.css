@@ -1444,3 +1444,10 @@ button.switch:disabled .switch-thumb { background: var(--border-strong); }
 @media (max-width: 640px) {
   .saved-views-button > span { max-width: 9rem; }
 }
+.useful { margin: var(--space-4) 0; padding: var(--space-3); display: grid; gap: var(--space-2); }
+.useful-row { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.useful-reads { margin-left: auto; }
+.useful-form { display: grid; gap: 0.35rem; }
+.useful-form textarea { width: 100%; }
+.useful-reports { margin: 0; padding-left: 1.1rem; }
+.rv-unused li { padding: 0.25rem 0; }

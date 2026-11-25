@@ -48,6 +48,7 @@ import { getProjectBrief } from "../core/brief.js";
 import { systemHealth } from "../core/health.js";
 import { lastReset, nextReset } from "../core/demo.js";
 import { gatherAnswer } from "../core/answer.js";
+import { rateSource, recordRead, usefulnessOf } from "../core/usefulness.js";
 import { getReadableScope, personalScope } from "../core/scopes.js";
 import { hideAdvisory, latestAdvisories, publishAdvisory, setAdvisoryResponse, setProjectTechnologies, stackOf, TECHNOLOGIES } from "../core/advisories.js";
 import { beginDependencyScan, detectProjectStack, getVulnerability, listVulnerabilities, recordSecurityReview, reportVulnerability, securityOverview, updateVulnerability, uploadWithAuth } from "../core/security.js";
@@ -1155,9 +1156,27 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
   );
   router.get(
     "/articles/:id",
-    handle("get_article", (ctx, req) => getArticle(ctx, uuid.parse(req.params.id), z.string().optional().parse(req.query.section))),
+    handle("get_article", async (ctx, req) => {
+      const a = await getArticle(ctx, uuid.parse(req.params.id), z.string().optional().parse(req.query.section));
+      recordRead(ctx.db, "article", String(req.params.id));
+      return a;
+    }),
   );
-  router.get("/findings/:id", handle("get_finding", (ctx, req) => getFinding(ctx, uuid.parse(req.params.id))));
+  router.get(
+    "/findings/:id",
+    handle("get_finding", async (ctx, req) => {
+      const f = await getFinding(ctx, uuid.parse(req.params.id));
+      recordRead(ctx.db, "finding", String(req.params.id));
+      return f;
+    }),
+  );
+  router.get("/items/:id/usefulness", handle("usefulness", (ctx, req) => usefulnessOf(ctx, uuid.parse(req.params.id))));
+  router.post(
+    "/items/:id/feedback",
+    handle("rate_source", (ctx, req) =>
+      rateSource(ctx, { id: uuid.parse(req.params.id), ...z.object({ verdict: z.enum(["helpful", "outdated", "wrong"]), note: z.string().max(1000).optional() }).parse(req.body) }),
+    ),
+  );
   router.get(
     "/templates/:type",
     handle("get_template", async (_ctx, req) => {

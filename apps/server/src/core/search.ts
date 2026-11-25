@@ -165,13 +165,32 @@ export async function searchKnowledge(ctx: RequestContext, input: SearchInput): 
              v.sim, k.id IS NOT NULL AS keyword_match
         FROM fts_n k FULL OUTER JOIN vec_n v ON k.id = v.id
     ),
+    -- Usefulness: read or quoted in the last 90 days, and what people said (only the current version's reports count).
+    use AS (
+      SELECT u.item_id, sum(u.reads + 2 * u.quoted)::float AS used FROM item_usage u
+       WHERE u.day > current_date - 90 AND u.item_id IN (SELECT c.parent_id FROM fused JOIN chunks c ON c.id = fused.id)
+       GROUP BY u.item_id
+    ),
+    said AS (
+      SELECT fb.item_id, count(*) FILTER (WHERE fb.verdict = 'helpful')::float AS helpful,
+             count(*) FILTER (WHERE fb.verdict <> 'helpful' AND fb.item_version = coalesce(fa.version, ff.version))::float AS bad
+        FROM item_feedback fb
+        LEFT JOIN articles fa ON fa.id = fb.item_id LEFT JOIN findings ff ON ff.id = fb.item_id
+       WHERE fb.item_id IN (SELECT c.parent_id FROM fused JOIN chunks c ON c.id = fused.id)
+       GROUP BY fb.item_id
+    ),
     scored AS (
       SELECT DISTINCT ON (c.parent_kind, c.parent_id)
              c.parent_kind, c.parent_id, c.heading, c.ord, c.text, c.scope_id, (${usesLinked}) AS via_uses_link, fused.sim, fused.keyword_match,
              fused.rrf
                * CASE coalesce(a.status, f.status) WHEN 'published' THEN 1.0 WHEN 'possibly_stale' THEN 0.6 ELSE 0.4 END
-               * CASE WHEN c.scope_id = ${currentProject} THEN 1.15 ELSE 1.0 END AS score
+               * CASE WHEN c.scope_id = ${currentProject} THEN 1.15 ELSE 1.0 END
+               -- Used items up to 10% higher; helpful up to 10% higher, reported outdated or wrong up to 25% lower.
+               * least(1.10, 1 + 0.02 * ln(1 + coalesce(use.used, 0)))
+               * greatest(0.75, least(1.10, 1 + 0.03 * coalesce(said.helpful, 0) - 0.1 * coalesce(said.bad, 0))) AS score
         FROM fused JOIN chunks c ON c.id = fused.id
+        LEFT JOIN use ON use.item_id = c.parent_id
+        LEFT JOIN said ON said.item_id = c.parent_id
         LEFT JOIN articles a ON c.parent_kind = 'article' AND a.id = c.parent_id
         LEFT JOIN findings f ON c.parent_kind = 'finding' AND f.id = c.parent_id
        ORDER BY c.parent_kind, c.parent_id, score DESC, c.ord

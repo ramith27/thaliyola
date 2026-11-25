@@ -2158,6 +2158,7 @@ interface Suggestions {
   }[];
   duplicates: { similarity: number; a: { id: string; title: string; scope: string }; b: { id: string; title: string; scope: string } }[];
   conflicts?: { similarity: number; a: { id: string; title: string; scope: string }; b: { id: string; title: string; scope: string } }[];
+  unused?: { kind: "article" | "finding"; id: string; title: string; type: string; scope: string; created_at: string }[];
   note?: string;
 }
 
@@ -2339,6 +2340,18 @@ function SuggestionsTab({ sugg, tasks, refresh }: { sugg: ApiResult<Suggestions>
               );
             })}
           </div>
+        </Section>
+      )}
+
+      {data && (data.unused?.length ?? 0) > 0 && (
+        <Section title="Nobody reads these" description="Published over six months ago and not opened, found or quoted since, and nothing depends on them. Retire them, merge them into a page people use, or confirm they're still needed.">
+          <ul className="plain rv-unused">
+            {data.unused!.map((u) => (
+              <li key={u.id}>
+                <a href={href(`/${u.kind}/${u.id}`)}>{u.title}</a> <LocationLabel scope={u.scope} />
+              </li>
+            ))}
+          </ul>
         </Section>
       )}
     </div>

@@ -47,6 +47,7 @@ A project can declare that it **uses** an item from the library or from another 
 | Tool | Purpose |
 |---|---|
 | `search_knowledge` | Hybrid keyword and semantic search over article sections and findings. Defaults to the current project + team + library |
+| `rate_source` | After using an article or finding: helpful, or outdated / wrong with what's changed. Helpful items rank higher; the owner hears about reports, and two people's reports mark it possibly stale |
 | `answer_sources` | Evidence for answering a question: the best sections, numbered for citing, each with how fresh it is (possibly stale, old, or facts that no longer match the code), where sources disagree (two decisions on the same question, a project item and a Library one, a known issue newer than the doc), open incidents and pull requests on the topic, and the experts when little is known. Claude writes the answer from them |
 | `get_article` | One article, or one section of it, with relations, source links and entities |
 | `get_finding` | One finding with relations, source links and review history |
@@ -478,6 +479,14 @@ Thaliyola can keep a living wiki for every repository, written by your own codin
 - **Settings:** project settings → Documentation holds instructions for agents (audience, required pages, things to leave out) and gitignore-style ignore rules, shows each repository's documented commit, and gives the managed AGENTS.md block.
 - **Reading:** pages render Mermaid diagrams; a Sources panel lists each fact with a link to the exact lines on GitHub, GitLab or Bitbucket and flags stale ones. Pages refresh live while an agent writes (`/api/events`, server-sent events; nginx needs buffering off for it, see `deploy/native/nginx-thaliyola.conf`).
 - **Static site:** project settings → General → Download as a static site gives a zip with a self-contained reader (search, folders, diagrams, sources) to host anywhere (`GET /api/export/site?scope=`). The Markdown export follows the Open Knowledge Format (front matter with `kind` and provenance, `index.md`, `log.md`).
+
+## Usefulness
+
+Thaliyola counts how often each article and finding is read (in the app, over MCP) and quoted by `answer_sources`, and what people and their agents say about it.
+- **Was this useful?** under every published page: *Helpful*, or *Outdated* / *Wrong* with what's changed. Agents do the same with `rate_source` after relying on a source. The owner (else the project's reviewers) is told about every report; two different people reporting the current version mark it possibly stale.
+- **Search** ranks items people use up to 10% higher, helpful ones up to 10% higher, and reported ones up to 25% lower; other signals (matching, published, current project) still come first.
+- **Review › Suggestions › Nobody reads these:** published over six months ago, not opened, found or quoted since, and nothing depends on them (decisions are records and never listed).
+- API: `GET /api/items/:id/usefulness`, `POST /api/items/:id/feedback`. Migration `085_usefulness.sql`.
 
 ## Pull request briefings
 

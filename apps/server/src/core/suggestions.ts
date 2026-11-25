@@ -1,3 +1,4 @@
+import { rarelyUsed } from "./usefulness.js";
 import type { RequestContext } from "./context.js";
 import { resolveScopeFilter } from "./scopes.js";
 import { decisionConflicts } from "./decisions.js";
@@ -81,8 +82,10 @@ export async function listSuggestions(ctx: RequestContext, opts: { scope?: strin
   });
 
   const conflicts = await decisionConflicts(ctx, scopeIds, limit);
+  const unused = await rarelyUsed(ctx, scopeIds, limit);
   return {
     conflicts,
+    unused,
     promote: clusters.map((r) => ({
       finding: { id: r.id, title: r.title, scope: r.scope },
       recurrences: r.recurrences,
