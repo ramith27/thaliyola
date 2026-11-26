@@ -368,6 +368,7 @@ const STATUS_LABELS: [string, string][] = [
   ["notion_source", "Notion source"],
   ["confluence_source", "Confluence source"],
   ["linear_source", "Linear source"],
+  ["clickup_source", "ClickUp source"],
   ["gdrive_source", "Google Drive source"],
   ["web_search_source", "Web search source"],
   ["dependency_scan", "Dependency scanning"],

@@ -129,7 +129,7 @@ const entities = z.array(z.object({ kind: z.enum(["system", "table", "metric", "
 const sourceLinks = z
   .array(
     z.object({
-      system: z.enum(["slack", "sentry", "trello", "pr", "figma", "dashboard", "repo", "jira", "linear", "other"]),
+      system: z.enum(["slack", "sentry", "trello", "pr", "figma", "dashboard", "repo", "jira", "linear", "clickup", "other"]),
       url: z.string().url().refine((u) => /^https?:\/\//.test(u), "must be http(s)"),
       label: z.string().optional(),
     }),
@@ -1406,7 +1406,7 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
     "/items/:id/links",
     handle("add_source_link", (ctx, req) => {
       const body = z
-        .object({ system: z.enum(["slack", "sentry", "trello", "pr", "figma", "dashboard", "repo", "jira", "linear", "other"]), url: z.string().url(), label: z.string().max(200).optional() })
+        .object({ system: z.enum(["slack", "sentry", "trello", "pr", "figma", "dashboard", "repo", "jira", "linear", "clickup", "other"]), url: z.string().url(), label: z.string().max(200).optional() })
         .parse(req.body);
       return addSourceLinkTo(ctx, uuid.parse(req.params.id), body);
     }),
@@ -1581,6 +1581,7 @@ export function apiRouter({ db, settings, embedder, onWrite, viewerDir = "" }: {
           notion_source: !!src?.notionToken,
           confluence_source: !!src?.confluence,
           linear_source: !!src?.linearKey,
+          clickup_source: !!src?.clickupToken,
           gdrive_source: !!src?.googleServiceAccount,
           web_search_source: !!src?.tavilyKey,
           dependency_scan: !!sec?.enabled,

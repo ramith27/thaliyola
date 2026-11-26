@@ -281,6 +281,7 @@ export const LINK_SYSTEM: Record<string, string> = {
   repo: "Repository",
   jira: "Jira",
   linear: "Linear",
+  clickup: "ClickUp",
   other: "Other",
 };
 
@@ -298,6 +299,7 @@ export const CONNECTION_KIND: Record<string, string> = {
   trello: "Trello",
   jira: "Jira",
   linear: "Linear",
+  clickup: "ClickUp",
 };
 
 /** What a notification route carries (Settings › Notifications, Admin › Notifications), short. */
@@ -329,6 +331,7 @@ export const SOURCE_KIND: Record<string, string> = {
   sentry_issues: "Sentry resolved issues",
   confluence: "Confluence",
   linear: "Linear",
+  clickup: "ClickUp",
   gdrive: "Google Drive",
 };
 

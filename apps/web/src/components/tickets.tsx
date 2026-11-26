@@ -15,9 +15,13 @@ export function trackerLine(t: TrackerOption): string {
   return `${t.label} issue in ${t.destination ?? "the default project"}`;
 }
 
-/** Whether the URL looks like a Jira or Linear issue (the server decides; this only catches typos early). */
+/** Whether the URL looks like a Jira, Linear or ClickUp issue (the server decides; this only catches typos early). */
 export function looksLikeTicketUrl(url: string): boolean {
-  return /^https:\/\/[a-z0-9-]+\.(atlassian\.net|jira\.com)\/\S*[A-Z][A-Z0-9_]*-\d+/i.test(url) || /^https:\/\/linear\.app\/[^/\s]+\/issue\/[A-Za-z0-9_]+-\d+/i.test(url);
+  return (
+    /^https:\/\/[a-z0-9-]+\.(atlassian\.net|jira\.com)\/\S*[A-Z][A-Z0-9_]*-\d+/i.test(url) ||
+    /^https:\/\/linear\.app\/[^/\s]+\/issue\/[A-Za-z0-9_]+-\d+/i.test(url) ||
+    /^https:\/\/app\.clickup\.com\/t\/(\d+\/[A-Za-z0-9_]+-\d+|[A-Za-z0-9]{5,20})\/?$/i.test(url)
+  );
 }
 
 function TicketRow({ t }: { t: Ticket }) {
@@ -72,7 +76,7 @@ export function TicketsCard({ result, canLink, onLink }: { result: { data: ItemT
       ) : !result.data && result.error ? (
         <p className="it-rail-empty">Couldn't load tickets.</p>
       ) : !tickets.length ? (
-        <p className="it-rail-empty">No tickets yet. Create one from the ⋯ menu, or link a Jira or Linear issue.</p>
+        <p className="it-rail-empty">No tickets yet. Create one from the ⋯ menu, or link a Jira, Linear or ClickUp issue.</p>
       ) : (
         <ul className="it-rail-list">
           {tickets.map((t) => (
@@ -207,7 +211,7 @@ export function LinkTicketDialog({ id, open, onClose, onLinked }: { id: string; 
   async function submit(e: FormEvent) {
     e.preventDefault();
     const v = url.trim();
-    const bad = !v ? "Paste the issue's address" : !looksLikeTicketUrl(v) ? "Use a Jira issue (…atlassian.net/browse/OPS-12) or Linear issue (linear.app/…/issue/ENG-42) address" : null;
+    const bad = !v ? "Paste the issue's address" : !looksLikeTicketUrl(v) ? "Use a Jira issue (…atlassian.net/browse/OPS-12), Linear issue (linear.app/…/issue/ENG-42) or ClickUp task (app.clickup.com/t/…) address" : null;
     setUrlError(bad);
     if (bad) return requestAnimationFrame(() => focusFirstInvalid(form.current));
     setBusy(true);
@@ -232,7 +236,7 @@ export function LinkTicketDialog({ id, open, onClose, onLinked }: { id: string; 
       onClose={close}
       dismissible={!busy}
       title="Link a ticket"
-      description="Attach a Jira or Linear issue that's about this page. Its status shows here, read through the project's tracker connection."
+      description="Attach a Jira, Linear or ClickUp issue that's about this page. Its status shows here, read through the project's tracker connection."
       footer={
         <>
           <Button variant="ghost" onClick={close} disabled={busy}>

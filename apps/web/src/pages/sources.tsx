@@ -56,7 +56,7 @@ import { pickFilters, SavedViews } from "../components/saved-views";
 import { draftArticle, draftFinding, setPrefill } from "../paste";
 import { href, navigate, type Route } from "../router";
 
-type Kind = "rss" | "web" | "hackernews" | "slack" | "notion" | "tavily" | "github_prs" | "sentry_issues" | "confluence" | "linear" | "gdrive";
+type Kind = "rss" | "web" | "hackernews" | "slack" | "notion" | "tavily" | "github_prs" | "sentry_issues" | "confluence" | "linear" | "gdrive" | "clickup";
 
 interface KindInfo {
   kind: Kind;
@@ -134,6 +134,7 @@ const KIND_ICON: Record<Kind, IconName> = {
   sentry_issues: "alert",
   confluence: "doc",
   linear: "check-circle",
+  clickup: "check-circle",
   gdrive: "doc",
 };
 const PUSH: ReadonlySet<string> = new Set(["github_prs", "sentry_issues"]);
@@ -178,6 +179,7 @@ const KIND_DESCRIPTION: Record<Kind, string> = {
   sentry_issues: "Errors as they're resolved in Sentry, sent by a webhook: where, how often and what fixed them.",
   confluence: "Pages of a Confluence space as they change. Pages with view restrictions are never imported.",
   linear: "Issues as a Linear team completes them, with their comments (by label, if you like). Private teams aren't imported.",
+  clickup: "Tasks as a ClickUp list closes them, with their comments (by tag, if you like). Only lists the token's account can see.",
   gdrive: "Google Docs in a Drive folder shared with Thaliyola's service account, as they change.",
 };
 

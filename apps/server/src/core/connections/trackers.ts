@@ -4,14 +4,14 @@ import { base, call, failWith, reasonOf, RemoteError, retryAfterMs } from "./rem
 import type { ConnTarget, DriverEnv, TestResult } from "./types.js";
 
 /**
- * Issue trackers: Jira Cloud (site URL, email and API token, a default project and issue type) and Linear (an API key
- * and a team). Thaliyola opens issues from findings and articles, and reads linked issues' status. Nothing else: no
+ * Issue trackers: Jira Cloud (site URL, email and API token, a default project and issue type), Linear (an API key
+ * and a team) and ClickUp (an API token and a list). Thaliyola opens issues from findings and articles, and reads linked issues' status. Nothing else: no
  * comments, transitions or deletes. Credentials only ever go to the tracker the connection was set up for (Jira: its
  * Atlassian site; Linear: api.linear.app), and redirects aren't followed.
  */
 
-export type Tracker = "jira" | "linear";
-export const TRACKERS: readonly Tracker[] = ["jira", "linear"];
+export type Tracker = "jira" | "linear" | "clickup";
+export const TRACKERS: readonly Tracker[] = ["jira", "linear", "clickup"];
 export const isTracker = (kind: string): kind is Tracker => (TRACKERS as readonly string[]).includes(kind);
 
 /** Where an issue stands, in one vocabulary for both trackers. */
@@ -42,9 +42,12 @@ export interface ParsedTicketUrl {
   /** Canonical: https://<site>/browse/KEY-1, or https://linear.app/<workspace>/issue/KEY-1. */
   url: string;
   host: string;
-  /** Linear: the workspace's URL key. */
+  /** Linear: the workspace's URL key. ClickUp: the Workspace (team) ID of a custom task ID. */
   workspace?: string;
 }
+
+/** ClickUp task IDs (86a1b2c3d) as they appear in https://app.clickup.com/t/<id>. */
+export const CLICKUP_TASK = /^[a-z0-9]{5,20}$/;
 
 /** Jira issue keys (PROJ-123) and Linear identifiers (ENG-42). */
 export const ISSUE_KEY = /^[A-Z][A-Z0-9_]{0,19}-[1-9]\d{0,9}$/;
@@ -74,13 +77,28 @@ export function parseTicketUrl(raw: string): ParsedTicketUrl | null {
     const workspace = m[1]!.toLowerCase();
     return { tracker: "linear", key, url: `https://linear.app/${workspace}/issue/${key}`, host, workspace };
   }
+  if (host === "app.clickup.com") {
+    // /t/<task id>, or /t/<workspace id>/<custom task id> when the Workspace uses custom task IDs.
+    const custom = /^\/t\/(\d{1,20})\/([A-Za-z0-9_]+-\d+)\/?$/.exec(u.pathname);
+    if (custom) {
+      const key = custom[2]!.toUpperCase();
+      if (!ISSUE_KEY.test(key)) return null;
+      return { tracker: "clickup", key, url: `https://app.clickup.com/t/${custom[1]}/${key}`, host, workspace: custom[1] };
+    }
+    const m = /^\/t\/([A-Za-z0-9]+)\/?$/.exec(u.pathname);
+    const key = m?.[1]?.toLowerCase() ?? "";
+    if (!CLICKUP_TASK.test(key)) return null;
+    return { tracker: "clickup", key, url: `https://app.clickup.com/t/${key}`, host };
+  }
   return null;
 }
 
 /** Whether a connection is for this issue's tracker and site: Jira on its own site; Linear any (its key decides). */
-export function reachesSite(c: Pick<ConnTarget, "kind" | "config">, t: Pick<ParsedTicketUrl, "tracker" | "host">): boolean {
+export function reachesSite(c: Pick<ConnTarget, "kind" | "config">, t: Pick<ParsedTicketUrl, "tracker" | "host"> & { workspace?: string }): boolean {
   if (c.kind !== t.tracker) return false;
   if (t.tracker === "jira") return jiraHost(c) === t.host;
+  // ClickUp: a custom task ID names its Workspace; it must be the connection's.
+  if (t.tracker === "clickup" && t.workspace && c.config.team_id) return t.workspace === c.config.team_id;
   return true;
 }
 
@@ -89,14 +107,18 @@ export function reachesSite(c: Pick<ConnTarget, "kind" | "config">, t: Pick<Pars
  * a Project admin allowed on it (allowed_projects / allowed_teams; "*" for any the account can see).
  */
 export function readKeys(c: Pick<ConnTarget, "kind" | "config" | "options">): string[] {
+  // ClickUp: list IDs (a task's ID doesn't say which list it's in; reading it checks).
+  if (c.kind === "clickup") return [...new Set([c.config.list_id, ...(c.options?.allowed_lists ?? [])].filter((k): k is string => !!k))];
   const own = c.kind === "jira" ? c.config.project_key : c.config.team;
   const extra = (c.kind === "jira" ? c.options?.allowed_projects : c.options?.allowed_teams) ?? [];
   return [...new Set([own, ...extra].filter((k): k is string => !!k).map((k) => k.toUpperCase()))];
 }
 
 /** Whether a connection may read an issue at this URL: its tracker and site, and a key in a project it reads. */
-export function servesTicket(c: Pick<ConnTarget, "kind" | "config" | "options">, t: Pick<ParsedTicketUrl, "tracker" | "host" | "key">): boolean {
+export function servesTicket(c: Pick<ConnTarget, "kind" | "config" | "options">, t: Pick<ParsedTicketUrl, "tracker" | "host" | "key"> & { workspace?: string }): boolean {
   if (!reachesSite(c, t)) return false;
+  // ClickUp: which list a task is in is only known by reading it; fetchClickup refuses tasks outside the lists.
+  if (t.tracker === "clickup") return true;
   const keys = readKeys(c);
   const prefix = t.key.slice(0, t.key.lastIndexOf("-")).toUpperCase();
   return keys.includes("*") || keys.includes(prefix);
@@ -424,9 +446,106 @@ export async function fetchLinear(c: ConnTarget, env: DriverEnv, keys: string[])
   });
 }
 
-// ---- One interface for both ------------------------------------------------------------------------------------
+// ---- ClickUp ---------------------------------------------------------------------------------------------------
+
+interface ClickUpTask {
+  id: string;
+  custom_id?: string | null;
+  name: string;
+  url: string;
+  status?: { status?: string; type?: string } | null;
+  list?: { id?: string; name?: string } | null;
+  team_id?: string | null;
+}
+
+async function clickup(c: ConnTarget, env: DriverEnv, path: string, init: { method?: string; body?: unknown } = {}): Promise<PinnedResponse> {
+  const res = await call(`${base(env, "clickup", "https://api.clickup.com/api/v2")}${path}`, "http", env, {
+    method: init.method ?? "GET",
+    headers: { authorization: c.secret.api_token ?? "", accept: "application/json", ...(init.body ? { "content-type": "application/json" } : {}) },
+    body: init.body ? JSON.stringify(init.body) : undefined,
+    followRedirects: false,
+  });
+  if (res.status === 401) throw new RemoteError("ClickUp didn't accept the API token. Check it, and that it hasn't been regenerated.", 401);
+  if (res.status === 429) throw new RemoteError("ClickUp is rate limiting the token; Thaliyola tries again later.", 429, retryAfterMs(res));
+  return res;
+}
+
+function clickupJson<T>(res: PinnedResponse, what: string): T {
+  if (res.status < 200 || res.status >= 300) {
+    let err = "";
+    try {
+      err = (JSON.parse(res.text) as { err?: string }).err ?? "";
+    } catch {
+      /* not JSON */
+    }
+    if (err) throw new RemoteError(`ClickUp said: ${clip(err, 200)}`, res.status);
+    failWith(res, what);
+  }
+  return JSON.parse(res.text) as T;
+}
+
+function clickupCategory(s: ClickUpTask["status"]): TicketCategory {
+  const name = (s?.status ?? "").toLowerCase();
+  if (/cancel|won.?t do|wontfix|rejected/.test(name)) return "canceled";
+  if (s?.type === "open") return "todo";
+  if (s?.type === "custom") return "in_progress";
+  if (s?.type === "done" || s?.type === "closed") return "done";
+  return "unknown";
+}
+
+function clickupInfo(t: ClickUpTask, teamId?: string): TicketInfo {
+  const custom = t.custom_id && (teamId ?? t.team_id) ? `https://app.clickup.com/t/${teamId ?? t.team_id}/${t.custom_id}` : null;
+  return { key: t.custom_id || t.id, url: custom ?? `https://app.clickup.com/t/${t.id}`, title: t.name ?? "", status: t.status?.status ?? "", category: clickupCategory(t.status) };
+}
+
+export async function testClickup(c: ConnTarget, env: DriverEnv): Promise<TestResult> {
+  const user = clickupJson<{ user?: { username?: string } }>(await clickup(c, env, "/user"), "ClickUp");
+  const list = clickupJson<{ name?: string; space?: { name?: string } }>(await clickup(c, env, `/list/${encodeURIComponent(c.config.list_id!)}`), "ClickUp");
+  return { detail: `Connected to ClickUp${user.user?.username ? ` as ${user.user.username}` : ""}. New tasks go to ${list.name ?? "the list"}${list.space?.name ? ` (${list.space.name})` : ""}.` };
+}
+
+export function clickupDescription(t: NewTicket): string {
+  const label = t.linkLabel.replace(/[[\]]/g, "");
+  return `${t.description.trim()}${t.description.trim() ? "\n\n" : ""}From Thaliyola: [${label}](${t.link})`;
+}
+
+export async function createClickup(c: ConnTarget, env: DriverEnv, t: NewTicket): Promise<TicketInfo> {
+  const task = clickupJson<ClickUpTask>(
+    await clickup(c, env, `/list/${encodeURIComponent(c.config.list_id!)}/task`, { method: "POST", body: { name: t.title, markdown_description: clickupDescription(t) } }),
+    "ClickUp",
+  );
+  return clickupInfo(task, c.config.team_id);
+}
+
+/** Each task by its ID (or custom ID, with the Workspace ID); one outside the lists the connection reads is refused. */
+export async function fetchClickup(c: ConnTarget, env: DriverEnv, keys: string[], deadline?: number): Promise<(TicketInfo | Error | null)[]> {
+  const lists = readKeys(c);
+  const out: (TicketInfo | Error | null)[] = [];
+  for (const key of keys) {
+    if (deadline && Date.now() > deadline) {
+      out.push(null);
+      continue;
+    }
+    try {
+      const custom = ISSUE_KEY.test(key);
+      if (custom && !c.config.team_id) throw new ValidationError(`${key} is a custom task ID; set the Workspace ID on the connection to read it`);
+      const res = await clickup(c, env, `/task/${encodeURIComponent(key)}${custom ? `?${new URLSearchParams({ custom_task_ids: "true", team_id: c.config.team_id! })}` : ""}`);
+      if (res.status === 404 || res.status === 401) throw new ValidationError(`ClickUp has no task ${key} that the token can see`);
+      const task = clickupJson<ClickUpTask>(res, "ClickUp");
+      if (!lists.includes("*") && !lists.includes(task.list?.id ?? "")) throw new ValidationError(`Not in a list this connection reads: it reads list ${lists.join(", ")} only (a Project admin can allow more).`);
+      out.push(clickupInfo(task, c.config.team_id));
+    } catch (err) {
+      if (err instanceof RemoteError && (err.status === 429 || err.status === 401)) throw err;
+      out.push(err as Error);
+    }
+  }
+  return out;
+}
+
+// ---- One interface for all ---------------------------------------------------------------------------------------
 
 export const TRACKER_DRIVERS: Record<Tracker, { label: string; create: typeof createJira; fetch: typeof fetchJira }> = {
   jira: { label: "Jira", create: createJira, fetch: fetchJira },
   linear: { label: "Linear", create: createLinear, fetch: fetchLinear },
+  clickup: { label: "ClickUp", create: createClickup, fetch: fetchClickup },
 };

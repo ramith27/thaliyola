@@ -38,6 +38,7 @@ export function connectorEnv(settings: Settings): ConnectorEnv {
     tavilyKey: s?.tavilyKey,
     confluence: s?.confluence,
     linearKey: s?.linearKey,
+    clickupToken: s?.clickupToken,
     googleServiceAccount: s?.googleServiceAccount,
     allowPrivate: s?.allowPrivate ?? false,
   };

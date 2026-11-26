@@ -269,7 +269,7 @@ export type TicketCategory = "todo" | "in_progress" | "done" | "canceled" | "unk
 export interface Ticket {
   /** The source link's id. */
   id: string;
-  tracker: "jira" | "linear";
+  tracker: "jira" | "linear" | "clickup";
   label: string;
   key: string;
   url: string;
@@ -288,7 +288,7 @@ export interface Ticket {
 export interface TrackerOption {
   id: string;
   name: string;
-  kind: "jira" | "linear";
+  kind: "jira" | "linear" | "clickup";
   label: string;
   /** Null for a project above that the viewer can't read (scope_name then says "a project above"). */
   scope: string | null;

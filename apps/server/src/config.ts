@@ -107,6 +107,8 @@ const Env = z
     CONFLUENCE_TOKEN: z.string().optional(),
     // Linear sources: a personal API key (Settings › API) of an account in the teams to import.
     LINEAR_API_KEY: z.string().optional(),
+    // ClickUp sources: a personal API token (pk_…) of an account in the lists to import.
+    CLICKUP_API_TOKEN: z.string().optional(),
     // Google Drive sources: a service account's JSON key; share the folders to import with its email.
     GOOGLE_SERVICE_ACCOUNT_JSON: z.string().optional(),
     TAVILY_API_KEY: z.string().optional(),
@@ -271,6 +273,7 @@ export function settingsFrom(config: Config): Settings {
       tavilyKey: config.TAVILY_API_KEY || undefined,
       confluence: config.CONFLUENCE_URL && config.CONFLUENCE_EMAIL && config.CONFLUENCE_TOKEN ? { url: config.CONFLUENCE_URL, email: config.CONFLUENCE_EMAIL, token: config.CONFLUENCE_TOKEN } : undefined,
       linearKey: config.LINEAR_API_KEY || undefined,
+      clickupToken: config.CLICKUP_API_TOKEN || undefined,
       googleServiceAccount: config.GOOGLE_SERVICE_ACCOUNT_JSON || undefined,
       allowPrivate: config.SOURCES_ALLOW_PRIVATE === "true",
     },
@@ -363,6 +366,7 @@ export interface Settings {
     tavilyKey?: string;
     confluence?: { url: string; email: string; token: string };
     linearKey?: string;
+    clickupToken?: string;
     googleServiceAccount?: string;
     allowPrivate: boolean;
   };

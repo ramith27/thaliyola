@@ -39,6 +39,9 @@ describe("ticket labels", () => {
     expect(looksLikeTicketUrl("https://acme.atlassian.net/browse/OPS-12")).toBe(true);
     expect(looksLikeTicketUrl("https://acme.atlassian.net/jira/software/projects/OPS/boards/1?selectedIssue=OPS-7")).toBe(true);
     expect(looksLikeTicketUrl("https://linear.app/acme/issue/ENG-42/fix-it")).toBe(true);
+    expect(looksLikeTicketUrl("https://app.clickup.com/t/86a1b2c3d")).toBe(true);
+    expect(looksLikeTicketUrl("https://app.clickup.com/t/9000/ENG-42")).toBe(true);
+    expect(looksLikeTicketUrl("https://app.clickup.com/9000/v/li/901")).toBe(false);
     expect(looksLikeTicketUrl("https://github.com/acme/shop/issues/1")).toBe(false);
     expect(looksLikeTicketUrl("http://acme.atlassian.net/browse/OPS-12")).toBe(false);
   });

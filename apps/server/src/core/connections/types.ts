@@ -1,6 +1,6 @@
 import type { NetPolicy } from "./network.js";
 
-export const CONNECTION_KINDS = ["postgres", "redshift", "mysql", "clickhouse", "snowflake", "bigquery", "http_api", "git", "slack", "trello", "jira", "linear"] as const;
+export const CONNECTION_KINDS = ["postgres", "redshift", "mysql", "clickhouse", "snowflake", "bigquery", "http_api", "git", "slack", "trello", "jira", "linear", "clickup"] as const;
 export type ConnectionKind = (typeof CONNECTION_KINDS)[number];
 
 export const DATABASE_KINDS: readonly ConnectionKind[] = ["postgres", "redshift", "mysql", "clickhouse", "snowflake", "bigquery"];
@@ -25,6 +25,8 @@ export interface ConnectionOptions {
    */
   allowed_projects?: string[];
   allowed_teams?: string[];
+  /** ClickUp: other lists whose linked tasks the connection reads ("*": any the token can see). */
+  allowed_lists?: string[];
 }
 
 /** A connection as a driver sees it: config, opened secret and options. Never sent anywhere. */

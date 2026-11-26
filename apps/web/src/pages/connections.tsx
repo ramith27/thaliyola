@@ -145,11 +145,18 @@ const ONLY_COPY: Partial<Record<Group, { title: string; description: string; ico
   tracker: {
     title: "Issue trackers",
     description:
-      "Jira and Linear connections every team-visible project can open tickets with, from a finding or article (a project's own trackers come first; members-only projects only use their own). Test checks the account and where new issues go; it creates nothing. Tokens are encrypted and never shown again.",
+      "Jira, Linear and ClickUp connections every team-visible project can open tickets with, from a finding or article (a project's own trackers come first; members-only projects only use their own). Test checks the account and where new issues go; it creates nothing. Tokens are encrypted and never shown again.",
     icon: "ticket",
-    emptyTitle: "No Jira or Linear connection yet",
-    emptyDescription: "Add a Jira Cloud site or a Linear team, so people who can propose in a project can open tickets from its findings and articles.",
+    emptyTitle: "No Jira, Linear or ClickUp connection yet",
+    emptyDescription: "Add a Jira Cloud site, a Linear team or a ClickUp list, so people who can propose in a project can open tickets from its findings and articles.",
   },
+};
+
+/** Per issue tracker: which option lists the other projects, teams or lists a connection reads, and how they look. */
+const TRACKER_READS: Record<string, { option: string; one: string; many: string; pattern: RegExp; error: string; hint: string; placeholder: string; upper: boolean }> = {
+  jira: { option: "allowed_projects", one: "project", many: "projects", pattern: /^(\*|[A-Za-z][A-Za-z0-9_]{0,19})$/, error: "Project keys, separated by commas (e.g. HR, SEC), or * for any.", hint: "Project keys, separated by commas; * for every project the account can see.", placeholder: "SUP, INFRA", upper: true },
+  linear: { option: "allowed_teams", one: "team", many: "teams", pattern: /^(\*|[A-Za-z0-9][A-Za-z0-9_]{0,9})$/, error: "Team keys, separated by commas (e.g. DES, OPS), or * for any.", hint: "Team keys, separated by commas; * for every team the key can see.", placeholder: "DES, OPS", upper: true },
+  clickup: { option: "allowed_lists", one: "list", many: "lists", pattern: /^(\*|\d{1,20})$/, error: "List IDs, separated by commas (e.g. 901234567891), or * for any.", hint: "List IDs, separated by commas; * for every list the token can see.", placeholder: "901234567891, 901234567892", upper: false },
 };
 
 const GROUP_ICON: Record<Group, IconName> = { database: "database", api: "globe", git: "git-branch", tracker: "ticket", notify: "bell" };
@@ -192,6 +199,8 @@ export function target(c: Connection): string {
       return `${x.project_key} · ${x.issue_type ?? "Task"} on ${(x.site_url ?? "").replace(/^https:\/\/|\/+$/g, "")}`;
     case "linear":
       return `Team ${x.team}`;
+    case "clickup":
+      return `List ${x.list_id}${x.team_id ? ` · Workspace ${x.team_id}` : ""}`;
     default:
       return "";
   }
@@ -209,9 +218,10 @@ function syncedText(c: Connection): string | null {
 
 /** Issue trackers: the other projects or teams whose linked issues a connection reads, for the row's meta line. */
 export function alsoReadsText(c: Pick<Connection, "kind" | "options">): string | null {
-  const keys = c.kind === "jira" ? c.options?.allowed_projects : c.kind === "linear" ? c.options?.allowed_teams : undefined;
-  if (!Array.isArray(keys) || !keys.length) return null;
-  return keys.includes("*") ? `Reads every ${c.kind === "jira" ? "project" : "team"}'s issues` : `Also reads ${(keys as string[]).join(", ")}`;
+  const t = TRACKER_READS[c.kind];
+  const keys = t ? c.options?.[t.option] : undefined;
+  if (!t || !Array.isArray(keys) || !keys.length) return null;
+  return keys.includes("*") ? `Reads every ${t.one}'s issues` : `Also reads ${(keys as string[]).join(", ")}`;
 }
 
 /** Which calls an API connection allows, for the row's meta line. */
@@ -565,7 +575,7 @@ function ConnectionSheet({
         allowCalls: o.allow_calls !== false,
         writeMethods: Array.isArray(o.allow_write_methods) ? (o.allow_write_methods as string[]) : [],
         prefixes: listText(o.path_prefixes),
-        alsoReads: listText(connection.kind === "jira" ? o.allowed_projects : o.allowed_teams),
+        alsoReads: listText(o[TRACKER_READS[connection.kind]?.option ?? "allowed_teams"]),
         spec: "",
         specAction: "keep",
       };
@@ -602,7 +612,8 @@ function ConnectionSheet({
   const dirty = JSON.stringify(form) !== JSON.stringify(initial);
   const intervals = INTERVALS.some(([m]) => m === form.every) ? INTERVALS : [...INTERVALS, [form.every, intervalText(form.every)] as [number, string]];
   const fields = info.fields.filter((f) => applies(f.when, form.config));
-  const tracker = form.kind === "jira" || form.kind === "linear";
+  const reads = TRACKER_READS[form.kind];
+  const tracker = !!reads;
   const secretFields = info.secret_fields.filter((f) => applies(f.when, form.config));
   const needsKey = !info.configured && secretFields.some((f) => form.secrets[f.key]?.trim() || f.required);
   const blocked = needsKey ? `${info.label} needs a password, token or key, and the server can't store one until an Administrator sets ${info.needs}.` : undefined;
@@ -650,9 +661,7 @@ function ConnectionSheet({
         if (listOf(value).some((x) => !/^[A-Za-z0-9_$.*-]{1,128}$/.test(x))) errs[key] = "Schema names, separated by commas (* matches anything).";
       }
     }
-    if (tracker && listOf(form.alsoReads).some((x) => !(form.kind === "jira" ? /^(\*|[A-Za-z][A-Za-z0-9_]{0,19})$/ : /^(\*|[A-Za-z0-9][A-Za-z0-9_]{0,9})$/).test(x))) {
-      errs.alsoReads = form.kind === "jira" ? "Project keys, separated by commas (e.g. HR, SEC), or * for any." : "Team keys, separated by commas (e.g. DES, OPS), or * for any.";
-    }
+    if (reads && listOf(form.alsoReads).some((x) => !reads.pattern.test(x))) errs.alsoReads = reads.error;
     setErrors(errs);
     if (Object.keys(errs).length) {
       requestAnimationFrame(() => formRef.current && focusFirstInvalid(formRef.current));
@@ -712,7 +721,7 @@ function ConnectionSheet({
                 ...(form.maxObjects.trim() ? { max_objects: Number(form.maxObjects) } : {}),
               }
             : tracker
-              ? { [form.kind === "jira" ? "allowed_projects" : "allowed_teams"]: listOf(form.alsoReads).map((x) => x.toUpperCase()) }
+              ? { [reads!.option]: listOf(form.alsoReads).map((x) => (reads!.upper ? x.toUpperCase() : x)) }
               : undefined;
       // A pasted spec: typed in replaces, "Remove" removes, otherwise the stored one stays.
       const spec = info.sync_kind !== "api" ? undefined : form.spec.trim() ? form.spec : form.specAction === "remove" ? null : undefined;
@@ -880,14 +889,14 @@ function ConnectionSheet({
             }}
           />
         )}
-        {tracker && (
+        {reads && (
           <fieldset className="cn-options">
             <legend className="cn-secret-label">Linked issues</legend>
             <p className="cn-kind-note cn-spec-note">
-              Linked issues from the {form.kind === "jira" ? "project" : "team"} above show their title and status to everyone who can read the page they're on. Issues from other {form.kind === "jira" ? "projects" : "teams"} stay plain links unless you add them here.
+              Linked issues from the {reads.one} above show their title and status to everyone who can read the page they're on. Issues from other {reads.many} stay plain links unless you add them here.
             </p>
-            <Field label={form.kind === "jira" ? "Other projects it reads" : "Other teams it reads"} optional hint={form.kind === "jira" ? "Project keys, separated by commas; * for every project the account can see." : "Team keys, separated by commas; * for every team the key can see."} error={errors.alsoReads || null}>
-              <TextInput value={form.alsoReads} onChange={(e) => (setForm((f) => ({ ...f, alsoReads: e.target.value })), setErrors((x) => ({ ...x, alsoReads: "" })), touch())} placeholder={form.kind === "jira" ? "SUP, INFRA" : "DES, OPS"} autoCapitalize="characters" spellCheck={false} />
+            <Field label={`Other ${reads.many} it reads`} optional hint={reads.hint} error={errors.alsoReads || null}>
+              <TextInput value={form.alsoReads} onChange={(e) => (setForm((f) => ({ ...f, alsoReads: e.target.value })), setErrors((x) => ({ ...x, alsoReads: "" })), touch())} placeholder={reads.placeholder} autoCapitalize={reads.upper ? "characters" : "off"} spellCheck={false} />
             </Field>
           </fieldset>
         )}

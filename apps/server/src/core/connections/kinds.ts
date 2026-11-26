@@ -11,7 +11,7 @@ import type { Dialect, GuardedSql } from "./sql-guard.js";
 import { SLACK_WEBHOOK, testSlack } from "./slack.js";
 import { introspectSnowflake, querySnowflake, testSnowflake } from "./snowflake.js";
 import { testTrello } from "./trello.js";
-import { JIRA_SITE, testJira, testLinear } from "./trackers.js";
+import { JIRA_SITE, testJira, testClickup, testLinear } from "./trackers.js";
 import { CONNECTION_KINDS, DATABASE_KINDS, type ConnectionKind, type ConnectionOptions, type ConnTarget, type DriverEnv, type QueryLimits, type RawResult, type TestResult } from "./types.js";
 
 /**
@@ -352,6 +352,23 @@ export const KINDS: Record<ConnectionKind, KindSpec> = {
     },
     test: testLinear,
   },
+  clickup: {
+    label: "ClickUp",
+    group: "tracker",
+    description: "A ClickUp list where findings and articles can open tasks, and whose linked tasks show their status.",
+    network: "http",
+    scheduled: true,
+    targetFields: [],
+    fields: [
+      { key: "list_id", label: "List ID", required: true, placeholder: "901234567890", hint: "Where new tasks go: the number in the list's link (…/li/901234567890).", pattern: /^\d{1,20}$/, patternMessage: "List ID is the number in the list's link" },
+      { key: "team_id", label: "Workspace ID", hint: "Only if the Workspace uses custom task IDs (ENG-42): the first number in any ClickUp link.", pattern: /^\d{1,20}$/, patternMessage: "Workspace ID is a number" },
+    ],
+    secretFields: [{ key: "api_token", label: "API token", required: true, hint: "ClickUp › Settings › Apps › API token (pk_…). Tasks are created as its account.", showTail: true }],
+    checkSecret(key, value) {
+      if (key === "api_token" && !/^pk_[A-Za-z0-9_]+$/.test(value.trim())) throw new ValidationError("a ClickUp personal API token starts with pk_");
+    },
+    test: testClickup,
+  },
 };
 
 export function isKind(kind: string): kind is ConnectionKind {
@@ -455,6 +472,11 @@ export function validateOptions(kind: ConnectionKind, input: Record<string, unkn
     if (prefixes?.some((p) => !/^\/[^\s?#]*$/.test(p) || p.includes(".."))) throw new ValidationError("path_prefixes start with / (e.g. /v1/orders)");
     if (prefixes?.length) out.path_prefixes = prefixes;
   }
+  if (kind === "clickup") {
+    const ids = list(o.allowed_lists);
+    if (ids?.some((x) => !/^(\*|\d{1,20})$/.test(x))) throw new ValidationError("allowed_lists lists ClickUp list IDs (or * for any)");
+    if (ids?.length) out.allowed_lists = [...new Set(ids)];
+  }
   if (kind === "jira" || kind === "linear") {
     const k = kind === "jira" ? "allowed_projects" : "allowed_teams";
     const keys = list(o[k])?.map((x) => x.toUpperCase());
@@ -473,7 +495,7 @@ export function targetChanged(kind: ConnectionKind, before: Record<string, strin
 /** A default name from the config, e.g. "PostgreSQL: orders". */
 export function defaultName(kind: ConnectionKind, config: Record<string, string>): string {
   const label = KINDS[kind].label;
-  const what = config.database && config.database !== "default" ? config.database : config.base_url ? new URL(config.base_url).host : config.account || config.project_id || config.channel || config.project_key || config.team || "";
+  const what = config.database && config.database !== "default" ? config.database : config.base_url ? new URL(config.base_url).host : config.account || config.project_id || config.channel || config.project_key || config.team || config.list_id || "";
   return what ? `${label}: ${what}` : label;
 }
 

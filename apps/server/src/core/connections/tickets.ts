@@ -60,7 +60,7 @@ const BACKGROUND_MS = 30_000;
 export const JOB_BUDGET_MS = 60_000;
 /** A tracker that says it's rate limiting, without saying for how long, is left alone this long. */
 const BACKOFF_MS = 60_000;
-const LABEL: Record<Tracker, string> = { jira: "Jira", linear: "Linear" };
+const LABEL: Record<Tracker, string> = { jira: "Jira", linear: "Linear", clickup: "ClickUp" };
 /** Per-person lock for the ticket budgets (creating and linking share it). */
 const BUDGET_LOCK = 7402219;
 
@@ -226,7 +226,7 @@ const trackerView = (c: TrackerRow, readable: Set<string>) => ({
   health: c.health,
   enabled: c.enabled,
   // Where new issues go (not secret: the project or team key).
-  destination: c.kind === "jira" ? c.config.project_key ?? null : c.config.team ?? null,
+  destination: c.kind === "jira" ? c.config.project_key ?? null : c.kind === "clickup" ? c.config.list_id ?? null : c.config.team ?? null,
   site: c.kind === "jira" ? jiraHost(c) : null,
 });
 
@@ -253,7 +253,7 @@ async function pickTracker(ctx: RequestContext, item: TicketItem, ref: string | 
   if (!enabled.length) {
     if (all.some((c) => c.enabled && !usable.includes(c)))
       throw new ValidationError(`${where} is members-only, so its findings and articles don't go to the Team space's issue trackers: a Project admin adds the project's own under Settings › Connections`);
-    throw new ValidationError(`no Jira or Linear connection reaches ${where}${usable.length ? " (they're paused)" : ""}: a Project admin adds one in the project's settings, under Connections`);
+    throw new ValidationError(`no Jira, Linear or ClickUp connection reaches ${where}${usable.length ? " (they're paused)" : ""}: a Project admin adds one in the project's settings, under Connections`);
   }
   const nearest = enabled.filter((c) => c.depth === enabled[0]!.depth);
   if (nearest.length > 1) throw new ValidationError(`${where} can use several issue trackers; pass connection (one of: ${names(nearest, readable)})`);
@@ -270,7 +270,7 @@ function matchTracker(all: TrackerRow[], t: Pick<ParsedTicketUrl, "tracker" | "h
 function outsideWhy(all: TrackerRow[], t: Pick<ParsedTicketUrl, "tracker" | "host" | "key">): string | null {
   const near = all.find((c) => reachesSite(c, t));
   if (!near) return null;
-  const what = t.tracker === "jira" ? "project" : "team";
+  const what = t.tracker === "jira" ? "project" : t.tracker === "clickup" ? "list" : "team";
   return `Not in this tracker's ${what}: the connection reads ${readKeys(near).join(", ")} issues only (a Project admin can allow more).`;
 }
 
@@ -623,7 +623,7 @@ export async function listTickets(ctx: RequestContext, itemId: string, opts: { r
             ? null
             : all.length
               ? "This project is members-only, so its findings and articles don't go to the Team space's issue trackers. A Project admin adds the project's own under Settings › Connections."
-              : "No Jira or Linear connection reaches this project. A Project admin adds one under Settings › Connections.",
+              : "No Jira, Linear or ClickUp connection reaches this project. A Project admin adds one under Settings › Connections.",
   };
 }
 
@@ -717,7 +717,10 @@ export interface LinkTicketInput {
 export async function linkTicket(ctx: RequestContext, input: LinkTicketInput) {
   const item = await ticketItem(ctx, input.item, true);
   const parsed = parseTicketUrl(input.url);
-  if (!parsed) throw new ValidationError("that isn't a Jira issue link (https://<site>.atlassian.net/browse/OPS-12) or a Linear issue link (https://linear.app/<workspace>/issue/ENG-42)");
+  if (!parsed)
+    throw new ValidationError(
+      "that isn't a Jira issue link (https://<site>.atlassian.net/browse/OPS-12), a Linear issue link (https://linear.app/<workspace>/issue/ENG-42) or a ClickUp task link (https://app.clickup.com/t/86a1b2c3d)",
+    );
   const all = await trackersFor(ctx.db, item.scope_id);
   let conn: TrackerRow | null | undefined;
   if (input.connection?.trim()) {

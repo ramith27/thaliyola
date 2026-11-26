@@ -11,7 +11,7 @@ import { htmlToMarkdown } from "./importer.js";
  * Credentials live in the server's environment, never in the database.
  */
 
-export const SOURCE_KINDS = ["rss", "web", "hackernews", "slack", "notion", "tavily", "github_prs", "sentry_issues", "confluence", "linear", "gdrive"] as const;
+export const SOURCE_KINDS = ["rss", "web", "hackernews", "slack", "notion", "tavily", "github_prs", "sentry_issues", "confluence", "linear", "gdrive", "clickup"] as const;
 /** Kinds that receive webhooks at a secret URL instead of being fetched on a schedule. */
 export const PUSH_KINDS: readonly SourceKind[] = ["github_prs", "sentry_issues"];
 export type SourceKind = (typeof SOURCE_KINDS)[number];
@@ -36,6 +36,7 @@ export interface ConnectorEnv {
   tavilyKey?: string;
   confluence?: { url: string; email: string; token: string };
   linearKey?: string;
+  clickupToken?: string;
   /** A Google service account's JSON key. */
   googleServiceAccount?: string;
   /** Allow feeds and pages on private networks (intranet wikis). Off by default. */
@@ -108,6 +109,14 @@ export const SOURCE_FIELDS: Record<SourceKind, { label: string; needs?: keyof Co
       { key: "label", label: "Only issues with this label", hint: "optional, e.g. postmortem or decision" },
     ],
   },
+  clickup: {
+    label: "ClickUp closed tasks",
+    needs: "clickupToken",
+    fields: [
+      { key: "list_id", label: "List ID", required: true, hint: "the number in the list's link (…/li/901234567890); only lists the token's account can see" },
+      { key: "tag", label: "Only tasks with this tag", hint: "optional, e.g. postmortem or decision" },
+    ],
+  },
   gdrive: {
     label: "Google Drive folder (Docs)",
     needs: "googleServiceAccount",
@@ -149,6 +158,7 @@ export function validateConfig(kind: SourceKind, config: Record<string, unknown>
   if (out.reaction && !/^[a-z0-9_+-]{1,60}$/.test(out.reaction)) throw new ValidationError("Reaction is an emoji name, like pushpin");
   if (out.space && !/^~?[A-Za-z0-9_-]{1,255}$/.test(out.space)) throw new ValidationError("Space key looks like ENG");
   if (out.team && !/^[A-Za-z0-9]{1,10}$/.test(out.team)) throw new ValidationError("Team key looks like ENG");
+  if (out.list_id && !/^\d{1,20}$/.test(out.list_id)) throw new ValidationError("List ID is the number in the list's link");
   if (out.folder_id) out.folder_id = out.folder_id.replace(/^.*\/folders\/([A-Za-z0-9_-]+).*$/, "$1");
   if (out.folder_id && !/^[A-Za-z0-9_-]{10,100}$/.test(out.folder_id)) throw new ValidationError("Folder ID is the part after /folders/ in the folder's link");
   return out;
@@ -160,6 +170,7 @@ export const ENV_NAME: Record<string, string> = {
   tavilyKey: "TAVILY_API_KEY",
   confluence: "CONFLUENCE_URL, CONFLUENCE_EMAIL and CONFLUENCE_TOKEN",
   linearKey: "LINEAR_API_KEY",
+  clickupToken: "CLICKUP_API_TOKEN",
   googleServiceAccount: "GOOGLE_SERVICE_ACCOUNT_JSON",
 };
 
@@ -562,6 +573,51 @@ const linear: Fetcher = async (config, state, env) => {
   return { items, state: { since: newest } };
 };
 
+// ---- ClickUp -------------------------------------------------------------------------------------------------
+
+interface ClickUpSourceTask {
+  id: string;
+  custom_id?: string | null;
+  name: string;
+  text_content?: string | null;
+  url: string;
+  date_done?: string | null;
+  date_closed?: string | null;
+  creator?: { username?: string } | null;
+  tags?: { name: string }[];
+}
+
+/** A ClickUp list's tasks closed since last time, with their comments. */
+const clickup: Fetcher = async (config, state, env) => {
+  if (!env.clickupToken) throw new ValidationError("CLICKUP_API_TOKEN isn't set on this server");
+  const auth = { Authorization: env.clickupToken };
+  const since = typeof state.since === "string" ? Number(state.since) : Date.now() - 30 * 86_400_000;
+  const params = new URLSearchParams({ include_closed: "true", subtasks: "true", order_by: "updated", reverse: "true", date_updated_gt: String(since) });
+  if (config.tag) params.append("tags[]", config.tag);
+  const list = await getJson<{ tasks: ClickUpSourceTask[] }>(env, `https://api.clickup.com/api/v2/list/${encodeURIComponent(config.list_id!)}/task?${params}`, { headers: auth });
+  const done = list.tasks.filter((t) => Number(t.date_done ?? t.date_closed ?? 0) > since).slice(0, 25);
+  const items: RawItem[] = [];
+  for (const t of done) {
+    let comments: string[] = [];
+    try {
+      const c = await getJson<{ comments: { comment_text: string; user?: { username?: string } }[] }>(env, `https://api.clickup.com/api/v2/task/${encodeURIComponent(t.id)}/comment`, { headers: auth });
+      comments = c.comments.slice(0, 20).reverse().map((x) => `**${x.user?.username ?? "Someone"}:** ${x.comment_text.trim()}`);
+    } catch {
+      /* comments are optional */
+    }
+    items.push({
+      external_id: t.id,
+      title: `${t.custom_id ? `${t.custom_id}: ` : ""}${t.name}`.slice(0, 300),
+      url: t.url,
+      author: t.creator?.username ?? null,
+      body: clip([t.text_content?.trim() ?? "", ...comments].filter(Boolean).join("\n\n")),
+      published_at: new Date(Number(t.date_done ?? t.date_closed)).toISOString(),
+    });
+  }
+  const newest = Math.max(since, ...done.map((t) => Number(t.date_done ?? t.date_closed ?? 0)));
+  return { items, state: { since: String(newest) } };
+};
+
 // ---- Google Drive --------------------------------------------------------------------------------------
 
 /** An access token for a service account (JWT bearer grant), read-only Drive. */
@@ -612,7 +668,7 @@ const gdrive: Fetcher = async (config, state, env) => {
   return { items, state: newest ? { since: newest } : {} };
 };
 
-const FETCHERS: Record<SourceKind, Fetcher> = { rss, web, hackernews, slack, notion, tavily, github_prs: pushed, sentry_issues: pushed, confluence, linear, gdrive };
+const FETCHERS: Record<SourceKind, Fetcher> = { rss, web, hackernews, slack, notion, tavily, github_prs: pushed, sentry_issues: pushed, confluence, linear, gdrive, clickup };
 
 export async function fetchSource(kind: SourceKind, config: Record<string, string>, state: Record<string, unknown>, env: ConnectorEnv): Promise<FetchResult> {
   const r = await FETCHERS[kind](config, state, env);

@@ -165,7 +165,7 @@ describe("managing connections", () => {
 
     const mine = await listConnections(o, "billing");
     expect(mine).toMatchObject({ can_manage: true, enabled: true, key_set: true });
-    expect(mine.kinds!.map((k) => k.kind)).toEqual(["postgres", "redshift", "mysql", "clickhouse", "snowflake", "bigquery", "http_api", "git", "slack", "trello", "jira", "linear"]);
+    expect(mine.kinds!.map((k) => k.kind)).toEqual(["postgres", "redshift", "mysql", "clickhouse", "snowflake", "bigquery", "http_api", "git", "slack", "trello", "jira", "linear", "clickup"]);
     expect(mine.kinds!.find((k) => k.kind === "postgres")!.secret_fields).toEqual([{ key: "password", label: "Password", required: true, hint: undefined, multiline: false, when: undefined }]);
     await deleteConnection(o, c.id);
   });

@@ -329,7 +329,7 @@ describe("create_ticket", () => {
     await expect(createTicket(await reader(), { item: finding })).rejects.toThrow(/can't propose/);
     await expect(createTicket(await outsider(), { item: finding })).rejects.toThrow(/not found/);
     const lonely = await newFinding(await writer(), "lonely", "Nothing to file it in");
-    await expect(createTicket(await writer(), { item: lonely })).rejects.toThrow(/no Jira or Linear connection reaches lonely/);
+    await expect(createTicket(await writer(), { item: lonely })).rejects.toThrow(/no Jira, Linear or ClickUp connection reaches lonely/);
     await expect(createTicket(await writer(), { item: finding, connection: "Eng Linear" })).rejects.toThrow(/Ops Jira \(billing\)/);
     // The Team space's trackers reach every team-visible project; the project's own come first.
     const a = await admin();

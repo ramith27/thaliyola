@@ -488,7 +488,7 @@ export async function projectDataSources(ctx: RequestContext, scopeId: string) {
     [scopeId, DATABASE_KINDS],
   );
   const { rows: trackers } = await ctx.db.query<{ name: string; kind: string; health: string; enabled: boolean }>(
-    "SELECT name, kind, health, enabled FROM connections WHERE scope_id = $1 AND kind IN ('jira', 'linear') ORDER BY lower(name)",
+    "SELECT name, kind, health, enabled FROM connections WHERE scope_id = $1 AND kind IN ('jira', 'linear', 'clickup') ORDER BY lower(name)",
     [scopeId],
   );
   if (!conns.length && !apis.length && !trackers.length) return null;
